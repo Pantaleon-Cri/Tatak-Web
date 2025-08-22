@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TATAK - Designee</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="view.css" />
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <img src="../../logo.png" alt="Logo" class="logo" />
+      <div class="titled">
+        <span class="system-name">TATAK</span>
+        <span class="divider">|</span>
+        <span class="dashboard-title">Student - View Clearance Status</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="user-dropdown" id="userDropdownToggle">
+        <div class="user-info">
+          <div class="username">Loading...</div>
+          <div class="email">Student</div>
+        </div>
+        <i class="fas fa-angle-down dropdown-arrow"></i>
+      </div>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="settings/settings.html">Settings</a>
+        <a href="#" id="logoutBtn">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <div class="content-wrapper">
+    <aside class="sidebar">
+      <div class="sidebar-header"></div>
+      <nav>
+        <ul>
+          <li><a href="../student.html"><i class="fas fa-tachometer-alt"></i>Home Page</a></li>
+          <li><a href="#" class="active"><i class="fas fa-table"></i>View Clearance Status</a></li>
+          <li><a href="../view_past_clearance_log/view_past.html"><i class="fas fa-table"></i>View Past Clearance Logs</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <div class="clearance-container">
+
+      <div class="head">
+        <div class="head-left">
+          <img src="../../ndmu_logo.png" alt="University Logo" />
+        </div>
+        <div class="head-center">
+          <h3>JMJ Marist Brothers</h3>
+          <h1>Notre Dame of Marbel University</h1>
+          <p>City of Koronadal South Cotabato</p>
+        </div>
+        <div class="head-right">
+          <img src="../../green_univ.png" alt="Learning Icon" />
+        </div>
+      </div>
+
+      <div class="title">
+        CLEARANCE
+        <p style="font-size: 16px; margin-top: 5px;" class="sem">Loading semester...</p>
+      </div>
+
+      <div class="info-section">
+        <div>I.D No.: <span id="studentId">Loading...</span></div>
+        <div>Name: <span id="studentName">Loading...</span></div>
+        <div>Status: <span id="status">Completed</span></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Dynamic Academic Office Sections Container -->
+      <div class="sections-grid" id="officeSectionsGrid"></div>
+
+      <!-- Dynamic Non-Academic Sections Container -->
+      <div class="non-academic-section" id="nonAcademicSectionsGrid"></div>
+
+      <div class="note">
+        NOTE: The <strong>RECORDS SECTION</strong> will release your <strong>EXAM PERMIT</strong> for the <strong>FINALS</strong> if you can present this clearance fully accomplished.
+      </div>
+    </div>
+  </div>
+
+  <!-- Your existing view.js (contains firestore init etc.) -->
+  <script src="view.js"></script>
+  <script src="firebase.js"></script>
+  <script src="utils.js"></script>
+  <script src="auth.js"></script>
+  <script src="ui.js"></script>
+ 
+  <!-- Dynamic data population -->
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const schoolID = localStorage.getItem("schoolID");
+      const studentName = localStorage.getItem("studentName");
+
+      // Update header username (first name only)
+      if (studentName) {
+        const firstName = studentName.split(" ")[0];
+        document.querySelector(".username").textContent = firstName;
+      } else {
+        document.querySelector(".username").textContent = "Student";
+      }
+
+      // Update I.D No.
+      if (schoolID) {
+        document.getElementById("studentId").textContent = schoolID;
+      }
+
+      // Update full name
+      if (studentName) {
+        document.getElementById("studentName").textContent = studentName;
+      }
+
+      // Load Semester dynamically
+      if (schoolID) {
+        try {
+          const studentDoc = await db.collection("Students").doc(schoolID).get();
+          if (studentDoc.exists) {
+            const studentData = studentDoc.data();
+            const semesterId = studentData.semester;
+
+            if (semesterId) {
+              const semDoc = await db.collection("semesterTable").doc(semesterId).get();
+              if (semDoc.exists) {
+                document.querySelector(".sem").innerText = semDoc.data().semester;
+              } else {
+                document.querySelector(".sem").innerText = "Semester not found";
+              }
+            } else {
+              document.querySelector(".sem").innerText = "Not Assigned";
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching semester:", err);
+          document.querySelector(".sem").innerText = "Error loading semester";
+        }
+      }
+    });
+  </script>
+</body>
+</html>

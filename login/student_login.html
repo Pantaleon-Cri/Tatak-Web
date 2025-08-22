@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Designee Registration</title>
+    <!-- Link to the external CSS file -->
+    <link rel="stylesheet" href="login.css">
+</head>
+<body>
+    <div class="registration-container">
+        <h2>Student - Login</h2>
+        <form id="registrationForm">
+            <!-- School ID Text Field -->
+            <div class="form-group">
+                <label for="schoolID">School ID:</label>
+                <input type="text" id="schoolID" name="schoolID" required>
+            </div>
+
+            <!-- Password Field -->
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+    
+
+            <!-- Register Button -->
+            <button type="submit">Login</button>
+            <p>Don't have an account? <a href="../create_account.html">Create Account</a></p>
+        </form>
+        <div id="messageBox" class="message-box" style="display: none;"></div>
+    </div>
+
+    <!-- Link to the external JavaScript file -->
+     <!-- Add this before your script -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script src="student_login.js"></script>
+</body>
+</html>

@@ -1,0 +1,281 @@
+
+.container {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 1500px;
+    padding: 15px;
+    margin: 20px auto 0 auto; /* Top margin added to separate from header */
+}
+
+
+.search-box {
+    display: flex;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-left: auto;         /* Pushes it to the right */
+    width: 250px;              /* Controls the width (adjust as needed) */
+}
+
+.search-input {
+    border: none;
+    padding: 10px 15px;
+    font-size: 16px;
+    outline: none;
+    width: 250px; /* Adjust search input width */
+}
+
+.search-button {
+    background-color: #fff;
+    border: none;
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 16px;
+    color: #555;
+}
+
+.search-button:hover {
+    background-color: #f0f0f0;
+}
+
+.table-container {
+    overflow-x: auto; /* For responsive tables on smaller screens */
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+thead th {
+    background-color: #f8f8f8;
+    color: #666;
+    font-weight: bold;
+    text-align: left;
+    padding: 12px 15px;
+    border-bottom: 2px solid #ddd;
+    text-transform: uppercase;
+    font-size: 13px;
+}
+
+tbody tr {
+    border-bottom: 1px solid #eee;
+}
+
+tbody tr:last-child {
+    border-bottom: none;
+}
+
+tbody td {
+    padding: 12px 15px;
+    font-size: 14px;
+    color: #555;
+}
+
+/* Button Styling */
+.status-button {
+    padding: 8px 15px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.validate-button {
+    background-color: #4CAF50; /* Green */
+    color: white;
+}
+
+.validate-button:hover {
+    background-color: #45a049;
+}
+
+.action-button {
+    padding: 8px 15px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.view-button {
+    background-color: #6495ED; /* Cornflower Blue */
+    color: white;
+}
+
+.view-button:hover {
+    background-color: #5a85dc;
+}
+
+/* Modal Overlay */
+       .modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  z-index: 1000;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+        /* Modal Content */
+        .modal-content {
+            background-color: #fff;
+            border-radius: 0.75rem; /* Equivalent to Tailwind rounded-xl */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); /* Equivalent to Tailwind shadow-2xl */
+            width: 100%;
+            max-width: 32rem; /* Adjusted for a good default size, similar to Tailwind max-w-lg or md:max-w-md */
+            overflow: hidden;
+            transform: translateY(20px); /* For a subtle entry animation */
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            margin: 2rem auto; /* Center with margin */
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        /* Modal Header */
+        .modal-header {
+            background-color: #15803d; /* Deeper green for the header */
+            padding: 1rem; /* Equivalent to Tailwind p-4 */
+            color: #fff;
+            text-align: center;
+            border-top-left-radius: 0.75rem;
+            border-top-right-radius: 0.75rem;
+        }
+
+        .modal-header h2 {
+            font-size: 1.5rem; /* Equivalent to Tailwind text-2xl */
+            font-weight: bold;
+            margin: 0;
+        }
+
+        /* Modal Body */
+        .modal-body {
+            padding: 1.5rem; /* Equivalent to Tailwind p-6 */
+            display: flex;
+            flex-direction: column;
+            gap: 1rem; /* Equivalent to Tailwind space-y-4 */
+            max-height: 60vh; /* Adjust as needed */
+            overflow-y: auto;
+        }
+
+        /* Hide scrollbar for Webkit browsers (Chrome, Safari) */
+        .modal-body::-webkit-scrollbar {
+            display: none;
+        }
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .modal-body {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+
+        /* Checklist Item */
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            background-color: #f9fafb; /* Equivalent to Tailwind bg-gray-50 */
+            padding: 1rem; /* Equivalent to Tailwind p-4 */
+            border-radius: 0.5rem; /* Equivalent to Tailwind rounded-lg */
+            border: 1px solid #e5e7eb; /* Equivalent to Tailwind border border-gray-200 */
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* Equivalent to Tailwind shadow-sm */
+            cursor: pointer;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .checkbox-item:hover {
+            background-color: #f3f4f6; /* Lighter gray on hover */
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            display: none; /* Hide the default checkbox */
+        }
+
+        .checkbox-item .checkbox-icon {
+            font-size: 1.5rem; /* Equivalent to Tailwind text-2xl */
+            color: #d1d5db; /* Default gray for unchecked, equivalent to Tailwind text-gray-400 */
+            transition: color 0.2s ease;
+        }
+
+        .checkbox-item.checked .checkbox-icon {
+            color: #10b981; /* Equivalent to Tailwind green-500 when checked */
+        }
+
+        .checkbox-item span {
+            margin-left: 1rem; /* Equivalent to Tailwind ml-4 */
+            font-size: 1.125rem; /* Equivalent to Tailwind text-lg */
+            color: #374151; /* Equivalent to Tailwind text-gray-800 */
+            flex-grow: 1;
+        }
+
+        /* Modal Footer */
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            padding: 1rem; /* Equivalent to Tailwind p-4 */
+            background-color: #f3f4f6; /* Equivalent to Tailwind bg-gray-100 */
+            border-top: 1px solid #e5e7eb; /* Equivalent to Tailwind border-t border-gray-200 */
+            gap: 0.75rem; /* Equivalent to Tailwind space-x-3 */
+            border-bottom-left-radius: 0.75rem;
+            border-bottom-right-radius: 0.75rem;
+        }
+
+        /* Buttons */
+        .modal-footer button {
+            padding: 0.625rem 1.5rem; /* Equivalent to Tailwind px-6 py-2 */
+            border-radius: 0.5rem; /* Equivalent to Tailwind rounded-lg */
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* Equivalent to Tailwind shadow-md */
+            color: #fff;
+            font-weight: normal; /* Default button font weight */
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.3s ease;
+        }
+
+        .modal-footer button:hover {
+            opacity: 0.9; /* Slightly dim on hover */
+        }
+
+        .btn-cancel {
+            background-color: #9ca3af; /* Equivalent to Tailwind bg-gray-400 */
+        }
+
+        .btn-cancel:hover {
+            background-color: #6b7280; /* Equivalent to Tailwind hover:bg-gray-500 */
+        }
+
+        .btn-save {
+            background-color: #2563eb; /* Equivalent to Tailwind bg-blue-600 */
+        }
+
+        .btn-save:hover {
+            background-color: #1d4ed8; /* Equivalent to Tailwind hover:bg-blue-700 */
+        }
+
+        .btn-approve {
+            background-color: #16a34a; /* Equivalent to Tailwind bg-green-600 */
+        }
+
+        .btn-approve:hover {
+            background-color: #148041; /* Equivalent to Tailwind hover:bg-green-700 */
+        }

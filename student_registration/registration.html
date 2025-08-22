@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Registration</title>
+
+  <!-- Google Fonts - Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Your CSS -->
+  <link rel="stylesheet" href="registration.css">
+  <link rel="preload" as="image" href="../background.png">
+</head>
+<body>
+  <div class="container">
+    <h2 class="text-3xl font-bold text-center text-gray-800 mb-8">Student Registration</h2>
+
+    <form id="registrationForm" class="space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+         <div class="input-group">
+          <label for="semester">Semester</label>
+          <select id="semester" name="semester" required class="rounded-lg"></select>
+        </div>
+        <div class="input-group">
+          <label for="schoolId">School ID</label>
+          <input type="text" id="schoolId" name="schoolId" placeholder="e.g., 123456" required class="rounded-lg">
+        </div>
+        <div class="input-group">
+          <label for="firstName">First Name</label>
+          <input type="text" id="firstName" name="firstName" placeholder="John" required class="rounded-lg">
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label for="lastName">Last Name</label>
+        <input type="text" id="lastName" name="lastName" placeholder="Doe" required class="rounded-lg">
+      </div>
+
+      <div class="input-group">
+         <div class="input-group">
+          <label for="yearLevel">Year Level</label>
+          <select id="yearLevel" name="yearLevel" required class="rounded-lg"></select>
+        </div>
+        <label for="course">Course</label>
+        <select id="course" name="course" required class="rounded-lg"></select>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+       
+        <div class="input-group">
+          <label for="department">Department</label>
+          <input type="text" id="department" name="department" readonly class="bg-gray-100 cursor-not-allowed rounded-lg">
+        </div>
+        <div class="input-group">
+          <label for="clubs">Clubs</label>
+          <input type="text" id="clubs" name="clubs" readonly class="bg-gray-100 cursor-not-allowed rounded-lg">
+        </div>
+       
+     
+
+      <div class="input-group">
+        <label for="institutionalEmail">Institutional Email</label>
+        <input type="email" id="institutionalEmail" name="institutionalEmail" placeholder="your.name@school.edu" required class="rounded-lg">
+      </div>
+
+      <div class="input-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="********" required class="rounded-lg">
+      </div>
+
+      <div class="input-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input type="password" id="confirmPassword" name="confirmPassword" placeholder="********" required class="rounded-lg">
+      </div>
+
+      <button type="submit" class="btn-primary">Register</button>
+
+      <p class="login-link">
+        Already have an account? <a href="../logout.html">Login</a>
+      </p>
+    </form>
+
+    <div id="messageBox" class="message-box mt-4 text-sm text-center font-medium"></div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- Your custom JS -->
+  <script src="registration.js"></script>
+</body>
+</html>

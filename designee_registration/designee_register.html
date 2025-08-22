@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Designee Registration</title>
+  <link rel="stylesheet" href="designee_register.css" />
+</head>
+<body>
+  <div class="registration-container">
+    <h2>Designee Registration</h2>
+    <form id="registrationForm">
+      <!-- User ID -->
+      <div class="form-group">
+        <label for="userID">User ID:</label>
+        <input type="text" id="userID" name="userID" required />
+      </div>
+      <div class="form-group">
+        <label for="firstName">First Name:</label>
+        <input type="text" id="firstName" name="firstName" required />
+      </div>
+       <div class="form-group">
+        <label for="lastName">Last Name:</label>
+        <input type="text" id="lastName" name="lastName" required />
+      </div>
+
+      <!-- Office Dropdown (from Firestore) -->
+      <div class="form-group">
+        <label for="office">Type of Office:</label>
+        <select id="office" name="office" required>
+          <option value="">Select Office</option>
+          <!-- Dynamically filled from Firestore -->
+        </select>
+      </div>
+
+      <!-- Department Dropdown (for IDs 307,308,309) -->
+      <div class="form-group" id="departmentGroup" style="display: none;">
+        <label for="department">Department:</label>
+        <select id="department" name="department">
+          <option value="">Select Department</option>
+          <!-- Dynamically filled from departmentTable -->
+        </select>
+      </div>
+
+      <!-- Club Category (from groupTable or acadClubTable depending on context) -->
+      <div class="form-group" id="categoryGroup" style="display: none;">
+        <label for="category">Category:</label>
+        <select id="category" name="category">
+          <option value="">Select Category</option>
+          <!-- Dynamically filled -->
+        </select>
+      </div>
+
+      <!-- Institutional Email -->
+      <div class="form-group">
+        <label for="institutionalEmail">Institutional Email:</label>
+        <input type="email" id="institutionalEmail" name="institutionalEmail" required />
+      </div>
+
+      <!-- Password -->
+      <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required />
+      </div>
+
+      <!-- Confirm Password -->
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password:</label>
+        <input type="password" id="confirmPassword" name="confirmPassword" required />
+      </div>
+
+      <!-- Submit -->
+      <button type="submit">Register</button>
+      <p class="login-link">
+        Already have an account? <a href="../logout.html">Login</a>
+      </p>
+    </form>
+
+    <div id="messageBox" class="message-box" style="display: none;"></div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- JS logic -->
+  <script src="designee_register.js"></script>
+</body>
+</html>

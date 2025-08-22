@@ -1,0 +1,284 @@
+ @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+        /* CSS Variables for consistent theming */
+        :root {
+            --primary-green: #4CAF50; /* Main accent color */
+            --dark-green: #388E3C;   /* Darker shade for hover/active states */
+            --light-grey-bg: #f5f6fa; /* Light background for the dashboard main area */
+            --medium-grey-text: #616161; /* General text color */
+            --dark-grey-text: #333;   /* Heading and strong text color */
+            --card-bg: #fff;         /* Background for cards and panels */
+            --border-color: #e0e0e0; /* Subtle border color */
+            --box-shadow: 0 2px 4px rgba(0,0,0,0.08); /* Soft shadow for depth */
+            --action-icon-color: #757575; /* Color for action icons */
+            --add-item-bg: #fcfcfc; /* Background for new item input */
+        }
+
+
+        /* Main Content for Add Requirements */
+        .add-requirements-main {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column; /* Use column layout for sections */
+        }
+
+       .requirements-grid {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  flex-wrap: wrap;
+  padding: 20px 0;
+}
+
+.add-requirements-panel,
+.add-notes-panel {
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: var(--box-shadow);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  width: 750px; /* Make panel wider */
+  max-width: 100%; /* Responsive for smaller screens */
+}
+
+
+        .panel-header {
+            background-color: var(--primary-green);
+            color: var(--card-bg);
+            padding: 10px 15px;
+            margin: -20px -20px 20px -20px; /* Adjust to sit at top of card */
+            border-radius: 8px 8px 0 0;
+            font-size: 1.1em;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notes-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .notes-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--card-bg);
+            font-size: 1.1em;
+            transition: color 0.2s;
+        }
+
+        .notes-actions button:hover {
+            color: rgba(255,255,255,0.8);
+        }
+
+        .add-item-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            font-size: 1em;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            background-color: var(--add-item-bg);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .add-item-input:focus {
+            border-color: var(--primary-green);
+        }
+
+        .current-items {
+            flex-grow: 1; /* Allow content to fill space */
+            margin-bottom: 20px; /* Space before potential add item field */
+            overflow-y: auto; /* Allow scrolling for items */
+        }
+
+        .item-row {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 1em;
+            color: var(--dark-grey-text);
+        }
+
+        .item-row:last-child {
+            border-bottom: none;
+        }
+
+        .item-row input[type="text"] {
+            flex-grow: 1;
+            border: none;
+            outline: none;
+            background-color: transparent;
+            font-size: 1em;
+            padding: 0;
+            margin: 0;
+            color: inherit;
+        }
+
+        .item-row .item-actions {
+            display: flex;
+            gap: 5px;
+            margin-left: 10px;
+        }
+
+        .item-row .item-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: var(--action-icon-color);
+            transition: color 0.2s;
+            padding: 3px;
+        }
+
+        .item-row .item-actions button:hover {
+            color: var(--primary-green);
+        }
+
+        .item-row .item-actions .delete-item-btn:hover {
+            color: #e53935;
+        }
+
+        /* Notes (Optional) Panel specific styles */
+        .add-notes-panel .current-items {
+            white-space: pre-wrap; /* Preserve whitespace and line breaks */
+            line-height: 1.6;
+            color: var(--dark-grey-text);
+        }
+
+        .add-notes-panel .current-items p {
+            margin-bottom: 10px;
+        }
+
+        .notes-content-editable {
+            min-height: 150px; /* Ensure editable area is visible */
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 10px;
+            background-color: var(--add-item-bg);
+            outline: none;
+            transition: border-color 0.2s;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .notes-content-editable:focus {
+            border-color: var(--primary-green);
+        }
+
+        .add-button-bottom {
+            background-color: var(--primary-green);
+            color: var(--card-bg);
+            padding: 10px 25px;
+            border: none;
+            border-radius: 20px;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            align-self: flex-end; /* Align to the right bottom of its container */
+            margin-top: 20px; /* Space above button */
+            box-shadow: var(--box-shadow);
+            transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+
+        .add-button-bottom:hover {
+            background-color: var(--dark-green);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+
+        /* Responsive Design - Media Queries */
+
+        /* Tablets and smaller desktops */
+    .modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+/* -----------------------------------------
+  Modal Box
+------------------------------------------ */
+.modal {
+  background-color: #fff;
+  width: 500px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+/* -----------------------------------------
+  Modal Header
+------------------------------------------ */
+.modal-header {
+  background-color: #28a745;
+  color: white;
+  padding: 12px 20px;
+  font-size: 1.1rem;
+}
+
+/* -----------------------------------------
+  Modal Content
+------------------------------------------ */
+.modal-content {
+  padding: 20px;
+}
+
+.modal-content label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* -----------------------------------------
+  Modal Footer Buttons
+------------------------------------------ */
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+     margin-top: 15px;
+}
+
+.cancel-btn, .save-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background-color: #ccc;
+}
+
+.save-btn {
+  background-color: #28a745;
+  color: white;
+}
+
+.save-btn:hover {
+  background-color: #218838;
+}

@@ -1,0 +1,552 @@
+
+:root {
+            --primary-green: #4CAF50; /* Main accent color */
+            --dark-green: #388E3C;   /* Darker shade for hover/active states */
+            --light-grey-bg: #f5f6fa; /* Light background for the dashboard main area */
+            --medium-grey-text: #616161; /* General text color */
+            --dark-grey-text: #333;   /* Heading and strong text color */
+            --card-bg: #fff;         /* Background for cards and panels */
+            --border-color: #e0e0e0; /* Subtle border color */
+            --box-shadow: 0 2px 4px rgba(0,0,0,0.08); /* Soft shadow for depth */
+        }
+/* =======================
+   GENERAL STYLES
+======================= */
+html, body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #D9D9D9;
+  height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* =======================
+   HEADER STYLES
+======================= */
+.header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #008000;
+  padding: 12px 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.system-name {
+  color: #fff;
+}
+
+.divider {
+  color: #bbb;
+}
+
+.header-right {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 50px;
+  max-width: 100%;
+  overflow: visible;
+}
+
+/* =======================
+   USER INFO (HEADER)
+======================= */
+.user-info {
+  text-align: right;
+  line-height: 1.1;
+}
+
+.username {
+  font-weight: 600;
+  color: #000000;
+}
+
+.email {
+  font-size: 12px;
+  color: #ffffff;
+}
+
+.avatar {
+  position: relative;
+}
+
+.avatar img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #26a69a;
+}
+
+.status {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  background-color: green;
+  border: 2px solid #fff;
+  border-radius: 50%;
+}
+
+/* =======================
+   DROPDOWN MENU STYLES
+======================= */
+.user-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-radius: 6px;
+  padding: 8px 0;
+  display: none;
+  min-width: 160px;
+  z-index: 100;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.dropdown-menu a {
+  display: block;
+  padding: 10px 16px;
+  text-decoration: none;
+  color: #333;
+  transition: background 0.2s;
+}
+
+.dropdown-menu a:hover {
+  background-color: #f0f0f0;
+}
+
+.dropdown-arrow {
+  font-size: 14px;
+  color: #ffffff;
+  transition: transform 0.3s ease;
+}
+
+.user-dropdown.active .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 400px) {
+  .dropdown-menu {
+    right: auto;
+    left: 0;
+  }
+}
+
+/* =======================
+   SIDEBAR + MAIN WRAPPER
+======================= */
+.content-wrapper {
+  display: flex;
+  flex-grow: 1;
+  min-height: calc(100vh - 72px); /* adjust if header height differs */
+  margin-top: 0; /* ensure no top margin */
+  padding-top: 0;
+}
+
+.logs-container {
+  display: flex;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.activity-log {
+  flex: 1;
+  background-color: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.activity-log h3 {
+  margin-bottom: 12px;
+}
+
+.activity-log ul {
+  list-style-type: disc;
+  padding-left: 20px;
+}
+
+.activity-log ul li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+/* =======================
+   SIDEBAR STYLES
+======================= */
+.sidebar {
+  width: 250px;
+  background-color: #ffffff;
+  padding: 24px;
+  box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  overflow: hidden; /* no scroll allowed */
+}
+
+.sidebar-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.sidebar-header img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin-bottom: 8px;
+}
+
+.sidebar nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar nav ul li {
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.sidebar nav ul li a {
+  text-decoration: none;
+  color: #333;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Active & hover state - text and icon turn white */
+.sidebar nav ul li a.active,
+.sidebar nav ul li a:hover {
+  background-color: #008000;
+  color: #fff;
+}
+
+.sidebar nav ul li a.active i,
+.sidebar nav ul li a:hover i {
+  color: #fff;
+}
+
+/* Arrow icon aligned to right */
+.sidebar nav ul li a .arrow {
+  margin-left: auto;
+  font-size: 0.8rem;
+  transition: transform 0.3s ease, color 0.2s ease;
+  color: #333;
+}
+
+/* Arrow icon turns white too on hover/active */
+.sidebar nav ul li a.active .arrow,
+.sidebar nav ul li a:hover .arrow {
+  color: #fff;
+}
+nav ul ul.submenu > li:first-child {
+  margin-top: 8px; /* Adjust the value as needed */
+}
+/* Submenu hidden by default */
+.submenu {
+  display: none;
+  padding-left: 20px;
+  margin-top: 4px;
+}
+
+/* Show submenu when parent is open */
+.has-submenu.open > .submenu {
+  display: block;
+}
+
+/* Rotate arrow when open */
+.has-submenu.open > a .arrow {
+  transform: rotate(180deg);
+}
+
+/* Nested submenu styling */
+.submenu .has-submenu > a {
+  padding-left: 10px;
+}
+
+.submenu .submenu {
+  padding-left: 16px;
+}
+
+
+
+
+/* =======================
+   MAIN CONTENT STYLES
+======================= */
+.main {
+  flex: 1;
+  padding: 32px;
+  margin-top: 0; /* Remove top margin if exists */
+  box-sizing: border-box;
+}
+
+
+
+/* =======================
+   RESPONSIVE STYLES
+======================= */
+@media (max-width: 1024px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .content-wrapper {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    box-shadow: none;
+  }
+
+  .main {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .title {
+    font-size: 16px;
+    flex-wrap: wrap;
+  }
+
+  .header-right {
+    gap: 8px;
+  }
+
+  .logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .username {
+    font-size: 14px;
+  }
+
+  .email {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 12px 16px;
+  }
+
+  .header-right {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .main {
+    padding: 16px;
+  }
+
+  .sidebar nav ul li a {
+    font-size: 14px;
+    padding: 8px;
+  }
+
+  .cards {
+    gap: 16px;
+  }
+
+  .activity-log h3 {
+    font-size: 18px;
+  }
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.show-all-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  background-color: transparent;
+  color: #28a745; /* Bootstrap green */
+  border: 1px solid #28a745;
+  border-radius: 9999px; /* fully rounded */
+  text-decoration: none;
+  transition: all 0.3s ease;
+  margin-left: 20px; /* spacing from the heading */
+}
+
+.show-all-btn:hover {
+  background-color: #28a745;
+  color: #fff;
+}
+/* Main Content for Student Clearance */
+.student-main-content {
+    flex: 1;
+    padding: 25px;
+    overflow-y: auto; /* Allow scrolling for content */
+    display: flex;
+    flex-direction: column;
+    gap: 20px; /* Space between clearance sections */
+}
+
+.clearance-section-card {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: var(--box-shadow);
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 2fr 1fr; /* Requirements on left, Notes on right */
+    gap: 20px;
+}
+
+.section-header {
+    grid-column: 1 / -1; /* Spans across both columns */
+    font-size: 1.4em;
+    font-weight: 600;
+    color: var(--dark-grey-text);
+    margin-bottom: 10px;
+}
+
+.requirements-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.requirement-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 1em;
+    color: var(--medium-grey-text);
+}
+
+.requirement-item:last-child {
+    margin-bottom: 0;
+}
+
+.requirement-item input[type="checkbox"] {
+    margin-right: 10px;
+    transform: scale(1.2);
+    accent-color: green; /* Temporary explicit color */
+    cursor: default; /* Since disabled */
+    filter: none; /* Remove any inherited filter */
+    opacity: 1; /* Make sure it’s not faded */
+}
+
+
+
+.notes-section {
+    background-color: var(--light-grey-bg);
+    border-radius: 5px;
+    padding: 15px;
+    border: 1px solid var(--border-color);
+}
+
+.notes-section h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    color: var(--dark-grey-text);
+}
+
+.notes-section p {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--medium-grey-text);
+    line-height: 1.4;
+}
+
+/* Responsive Design - Media Queries */
+@media (max-width: 992px) {
+    .student-main-content {
+        padding: 20px;
+    }
+    .clearance-section-card {
+        grid-template-columns: 1fr; /* Stack columns on smaller screens */
+    }
+    .section-header {
+        margin-bottom: 0; /* Adjust spacing */
+    }
+    .notes-section {
+        margin-top: 15px; /* Add space when stacked */
+    }
+}
+
+@media (max-width: 768px) {
+    .student-main-content {
+        padding: 15px;
+    }
+    .section-header {
+        font-size: 1.2em;
+    }
+    .requirement-item {
+        font-size: 0.95em;
+    }
+    .notes-section h4 {
+        font-size: 1em;
+    }
+    .notes-section p {
+        font-size: 0.85em;
+    }
+}

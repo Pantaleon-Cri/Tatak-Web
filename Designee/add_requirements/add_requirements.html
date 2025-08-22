@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Validate Requirements</title>
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="../designee.css" />
+  <link rel="stylesheet" href="add_requirements.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+
+  <!-- Firebase JS SDK -->
+  
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <img src="../../logo.png" alt="Logo" class="logo" />
+      <div class="title">
+        <span class="system-name">TATAK</span>
+        <span class="divider">|</span>
+        <span class="dashboard-title">Designee - Add Requirements</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="user-dropdown" id="userDropdownToggle">
+        <div class="user-info">
+          <div class="username" id="headerUsername">User</div>
+          <div class="email">Designee</div>
+        </div>
+        <i class="fas fa-angle-down dropdown-arrow"></i>
+      </div>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="../settings/settings.html">Settings</a>
+        <a href="#" id="logoutBtn">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <div class="content-wrapper">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header"></div>
+      <nav>
+        <ul>
+          <li><a href="../designee.html"><i class="fas fa-tachometer-alt"></i> Manage Staff</a></li>
+          <li><a href="../add_requirements/add_requirements.html" class="active"><i class="fas fa-table"></i> Add Requirements</a></li>
+          <li><a href="../validate_requirements/validate_requirements.html"><i class="fas fa-check-circle"></i> Validate Requirements</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <div class="container">
+      <main class="add-requirements-main">
+        <div class="requirements-grid">
+
+          <!-- Add Requirements Panel -->
+          <div class="add-requirements-panel">
+            <div class="panel-header">
+              <span>Add Requirements</span>
+            </div>
+
+            <!-- Dynamic Requirement List -->
+            <div class="current-items" id="requirementsList"></div>
+
+            <!-- Add New Requirement -->
+            <input type="text" id="newRequirementInput" class="add-item-input" placeholder="New Requirement Name">
+            <button class="add-button-bottom" id="addRequirementBtn">Add Requirement</button>
+          </div>
+
+         <!-- Add Notes Panel -->
+<div class="add-notes-panel">
+  <div class="panel-header">
+    <span>Add Notes (Optional)</span>
+    <div class="notes-actions">
+      <button id="editNotesBtn" title="Edit Notes"><i class="fas fa-edit"></i></button>
+      <button id="saveNotesBtn" title="Save Notes" style="display: none;"><i class="fas fa-save"></i></button>
+      <button id="cancelNotesBtn" title="Cancel Edit" style="display: none;"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+  <div id="notesContent" class="notes-content-editable" contenteditable="false" maxlength="150">
+
+  </div>
+  <div style="align-self: flex-end; width: 100%;">
+     <span id="noteCharCount">0 / 150</span>
+   
+  </div>
+</div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">Edit Requirement</div>
+    <div class="modal-content">
+      <label for="editRequirementInput">Requirement Name</label>
+      <input type="text" id="editRequirementInput">
+      <div class="modal-buttons">
+        <button class="cancel-btn" id="cancelEditBtn">Cancel</button>
+        <button class="save-btn" id="saveEditBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <div class="modal-header">Delete Requirement</div>
+    <div class="modal-content">
+      <p>Are you sure you want to delete this requirement?</p>
+      <div class="modal-buttons">
+        <button class="cancel-btn" id="cancelDeleteBtn">Cancel</button>
+        <button class="save-btn" id="confirmDeleteBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+  <!-- JS -->
+ <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+ <script src="requirements.js"></script>
+<script src="notes.js"></script>
+
+
+</body>
+</html>

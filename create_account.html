@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Options</title>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+   <link rel="stylesheet" href="register.css">
+    
+</head>
+<body>
+   <div class="logo-wrapper">
+        <img src="Tatak.png" alt="Logo" class="logo-img" />
+    </div>
+
+    
+    <div class="logout-container">
+        <h1 class="logout-title">Registration Option</h1>
+        <div class="options-grid">
+            <div class="option-box" onclick="location.href='designee_registration/designee_register.html'">
+                <i class="fas fa-user-tie option-icon"></i> <!-- Designee icon -->
+                <span class="option-text">Create Account as Designee</span>
+            </div>
+            <div class="option-box" onclick="location.href='student_registration/registration.html'">
+                <i class="fas fa-user-graduate option-icon"></i> <!-- Student icon -->
+                <span class="option-text">Create Account as Student</span>
+            </div>
+        </div>
+        <div class="create-account">
+    Already have an account? <a href="logout.html">Login</a>
+</div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Activity Log</title>
+
+  <!-- Font Awesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <!-- Custom Stylesheets -->
+  <link rel="stylesheet" href="admin.css" />
+  <link rel="stylesheet" href="activity_log.css" />
+  <style>
+    /* activity_log.css */
+
+/* -----------------------------------------
+  Main Log Page Container
+------------------------------------------ */
+.log-page {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  flex-grow: 1; /* Allows the main content to take available space */
+}
+
+/* -----------------------------------------
+  Page Title
+------------------------------------------ */
+.log-page h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  font-size: 1.5em;
+  color: #333;
+}
+
+/* -----------------------------------------
+  Log Table Styling
+------------------------------------------ */
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  border-radius: 8px; /* Apply rounded corners to the table */
+  overflow: hidden; /* Ensures rounded corners are visible */
+}
+
+.log-table th,
+.log-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.log-table th {
+  background-color: #f0f0f0; /* Light gray background for headers */
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  font-size: 0.9em;
+}
+
+.log-table tbody tr:nth-child(even) {
+  background-color: #f9f9f9; /* Subtle zebra striping for rows */
+}
+
+.log-table tbody tr:hover {
+  background-color: #f1f1f1; /* Highlight row on hover */
+}
+
+/* -----------------------------------------
+  Table Cell Specific Styles (Optional, for better alignment)
+------------------------------------------ */
+.log-table td {
+  color: #333;
+}
+
+/* Timestamp column can be styled slightly differently for readability */
+.log-table td:nth-child(5) {
+  font-size: 0.9em;
+  color: #666;
+}
+
+
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <img src="../logo.png" alt="Logo" class="logo" />
+      <div class="title">
+        <span class="system-name">TATAK</span>
+        <span class="divider">|</span>
+        <span class="dashboard-title">Administrator - Activity Log</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="user-dropdown" id="userDropdownToggle">
+        <div class="user-info">
+          <div class="username">Crizwa</div>
+          <div class="email">Administrator</div>
+        </div>
+        <i class="fas fa-angle-down dropdown-arrow"></i>
+      </div>
+
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="settings/settings.html">Settings</a>
+        <a href="#" id="logoutBtn">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT WRAPPER -->
+  <div class="content-wrapper">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header"></div>
+      <nav>
+        <ul>
+          <li>
+            <a href="admin.html">
+              <i class="fas fa-tachometer-alt"></i> Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="data_table/table.html">
+              <i class="fas fa-table"></i> Manage Data Table
+            </a>
+          </li>
+          <li class="has-submenu">
+            <a href="#" class="dropdown-toggle">
+              <i class="fas fa-users-cog"></i> Manage Accounts
+              <i class="fas fa-chevron-down arrow"></i>
+            </a>
+            <ul class="submenu">
+              <li>
+                <a href="student/student.html"><i class="fas fa-user-graduate"></i> Students</a>
+              </li>
+              <li class="has-submenu">
+                <a href="#" class="dropdown-toggle">
+                  <i class="fas fa-user-tie"></i> Designees
+                  <i class="fas fa-chevron-down arrow"></i>
+                </a>
+                <ul class="submenu">
+                  <li><a href="clubs/clubs.html"><i class="fas fa-users"></i> Clubs</a></li>
+                  <li><a href="offices/office.html"><i class="fas fa-building"></i> Offices</a></li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main">
+      <div class="log-page">
+        <h2>📜 Full Designee Staff Creation Activity Log</h2>
+
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Designee</th>
+              <th>Action</th>
+              <th>Staff Name</th>
+              <th>Assigned To</th>
+              <th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody id="fullActivityLog">
+            <!-- Logs will load here dynamically from activityLogs.js -->
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- Firebase v8 SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+  <!-- External Script for Logs -->
+   <script src="admin.js"></script>
+  <script src="activityLogs.js"></script>
+</body>
+</html>
