@@ -1,5 +1,3 @@
-
-
 // DOM Elements
 const openBtn = document.getElementById("openModalBtn");
 const modal = document.getElementById("modalOverlay");
@@ -23,9 +21,7 @@ cancelBtn.addEventListener("click", () => {
 
 // Close modal on outside click
 modal.addEventListener("click", (e) => {
-  if (e.target === modal) {
-    modal.style.display = "none";
-  }
+  if (e.target === modal) modal.style.display = "none";
 });
 
 // Save new semester (manual ID)
@@ -47,8 +43,8 @@ saveBtn.addEventListener("click", async () => {
       return;
     }
 
-    await docRef.set({ id, semester: semesterName, visibleToStudents: false });
-    addRowToTable(id, semesterName, false);
+    await docRef.set({ id, semester: semesterName, visibleToStudents: false, currentSemester: false });
+    addRowToTable(id, semesterName, false, false);
     modal.style.display = "none";
   } catch (error) {
     console.error("Error saving semester:", error);
@@ -61,35 +57,20 @@ window.addEventListener("DOMContentLoaded", async () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
+  usernameDisplay.textContent = storedAdminID || "Unknown";
+
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
-    logoutBtn.addEventListener("click", function (e) {
+    logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
-
-      const keysToRemove = [
-        "userData",
-        "studentName",
-        "schoolID",
-        "studentID",
-        "staffID",
-        "designeeID",
-        "category",
-        "office",
-        "department"
-      ];
-
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-
+      [
+        "userData","studentName","schoolID","studentID","staffID",
+        "designeeID","category","office","department"
+      ].forEach(key => localStorage.removeItem(key));
       window.location.href = "../../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
   }
+
   try {
     const snapshot = await db.collection("semesterTable").get();
     const docs = snapshot.docs
@@ -98,15 +79,16 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     docs.forEach(doc => {
       const data = doc.data();
-      addRowToTable(doc.id, data.semester, data.visibleToStudents || false);
+      addRowToTable(doc.id, data.semester, data.visibleToStudents || false, data.currentSemester || false);
     });
+
   } catch (error) {
     console.error("Error loading semesters:", error);
   }
 });
 
 // Add row to table
-function addRowToTable(id, name, visible) {
+function addRowToTable(id, name, visible, current) {
   const row = document.createElement("tr");
   row.innerHTML = `
     <td>${id}</td>
@@ -114,6 +96,12 @@ function addRowToTable(id, name, visible) {
     <td>
       <label class="switch">
         <input type="checkbox" ${visible ? "checked" : ""} data-id="${id}" class="visibility-toggle">
+        <span class="slider round"></span>
+      </label>
+    </td>
+    <td>
+      <label class="switch">
+        <input type="checkbox" ${current ? "checked" : ""} data-id="${id}" class="current-sem-toggle">
         <span class="slider round"></span>
       </label>
     </td>
@@ -128,6 +116,7 @@ function addRowToTable(id, name, visible) {
   row.querySelector(".edit").addEventListener("click", handleEdit);
   row.querySelector(".delete").addEventListener("click", handleDelete);
   row.querySelector(".visibility-toggle").addEventListener("change", handleToggleVisibility);
+  row.querySelector(".current-sem-toggle").addEventListener("change", handleCurrentSemester);
 }
 
 // Handle visibility toggle
@@ -135,13 +124,71 @@ async function handleToggleVisibility(e) {
   const id = e.target.dataset.id;
   const isVisible = e.target.checked;
   try {
-    await db.collection("semesterTable").doc(id).update({
-      visibleToStudents: isVisible
-    });
+    await db.collection("semesterTable").doc(id).update({ visibleToStudents: isVisible });
     console.log(`Semester ${id} visibility set to ${isVisible}`);
   } catch (error) {
     console.error("Error updating visibility:", error);
     alert("Failed to update visibility.");
+  }
+}
+
+// Handle current semester toggle
+async function handleCurrentSemester(e) {
+  const newCurrentId = e.target.dataset.id;
+  const isChecked = e.target.checked;
+  if (!isChecked) return; // only act when toggled ON
+
+  if (!confirm("Changing the current semester will delete all staff. Continue?")) {
+    e.target.checked = false;
+    return;
+  }
+
+  try {
+    // 1️⃣ Update all semesterTable rows so only one is current
+    const semestersSnap = await db.collection("semesterTable").get();
+    const batchSem = db.batch();
+    semestersSnap.forEach(doc => {
+      const docRef = db.collection("semesterTable").doc(doc.id);
+      batchSem.update(docRef, { currentSemester: doc.id === newCurrentId });
+    });
+    await batchSem.commit();
+
+    // 2️⃣ Delete all staff
+    await deleteAllStaff();
+
+    // 3️⃣ Update all students to this semester
+    const studentsSnap = await db.collection("Students").get();
+    const batchStudents = db.batch();
+    studentsSnap.forEach(studentDoc => {
+      const studentRef = db.collection("Students").doc(studentDoc.id);
+      batchStudents.update(studentRef, { semester: newCurrentId });
+    });
+    await batchStudents.commit();
+
+    // 4️⃣ Update UI: only one toggle can be checked
+    document.querySelectorAll(".current-sem-toggle").forEach(toggle => {
+      toggle.checked = toggle.dataset.id === newCurrentId;
+    });
+
+  } catch (error) {
+    console.error("Error updating current semester:", error);
+    alert("Failed to update current semester.");
+  }
+}
+
+// Helper: Delete all staff
+async function deleteAllStaff() {
+  try {
+    const staffSnap = await db.collection("staffTable").get();
+    if (staffSnap.empty) return;
+
+    const batch = db.batch();
+    staffSnap.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    console.log("All staff deleted due to semester change.");
+  } catch (error) {
+    console.error("Failed to delete staff:", error);
+    alert("Failed to reset staff for new semester.");
   }
 }
 
@@ -182,13 +229,9 @@ editSaveBtn.addEventListener("click", async () => {
   }
 
   try {
-    await db.collection("semesterTable").doc(currentEditId).update({
-      semester: newName,
-    });
-
+    await db.collection("semesterTable").doc(currentEditId).update({ semester: newName });
     const row = document.querySelector(`.edit[data-id="${currentEditId}"]`).closest("tr");
     row.querySelector("td:nth-child(2)").textContent = newName;
-
     editModal.style.display = "none";
     currentEditId = null;
   } catch (error) {
@@ -254,8 +297,8 @@ async function handleFileUpload(e) {
         const docSnap = await docRef.get();
         if (docSnap.exists) continue;
 
-        await docRef.set({ id, semester: name, visibleToStudents: false });
-        addRowToTable(id, name, false);
+        await docRef.set({ id, semester: name, visibleToStudents: false, currentSemester: false });
+        addRowToTable(id, name, false, false);
       } catch (error) {
         console.error(`Failed to upload ${name}:`, error);
       }

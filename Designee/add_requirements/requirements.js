@@ -1,11 +1,10 @@
-// requirements.js
 let currentEditingId = null;
 let currentEditingInput = null;
 
 function showModal(modal) { modal.style.display = "flex"; }
 function closeModal(modal) { modal.style.display = "none"; }
 
-function addRequirementToUI(requirementText, docId) {
+function addRequirementToUI(requirementText, docId, semester) {
   const list = document.getElementById("requirementsList");
   const row = document.createElement("div");
   row.classList.add("item-row");
@@ -13,6 +12,7 @@ function addRequirementToUI(requirementText, docId) {
 
   row.innerHTML = `
     <input type="text" value="${requirementText}" readonly>
+    
     <div class="item-actions">
       <button class="edit-item-btn"><i class="fas fa-edit"></i></button>
       <button class="delete-item-btn"><i class="fas fa-trash-alt"></i></button>
@@ -42,13 +42,18 @@ async function loadRequirements() {
     console.log("Loading requirements for user:", userData.id, "role:", userData.role);
     console.log("CreatedByDesigneeID:", userData.createdByDesigneeID);
 
+    // Fetch current semester
+    const semSnap = await db.collection("semesterTable").where("currentSemester", "==", true).get();
+    let currentSemester = "N/A";
+    if (!semSnap.empty) {
+      currentSemester = semSnap.docs[0].data().semester || "N/A";
+    }
+
     let query = db.collection("RequirementsTable");
 
     if (userData.role === "designee") {
-      // Designee sees all requirements added by themselves or staff they created
       query = query.where("addedByDesigneeId", "==", userData.id);
     } else if (userData.role === "staff") {
-      // Staff sees all requirements added by their connected designee
       query = query.where("addedByDesigneeId", "==", userData.createdByDesigneeID);
     } else {
       console.warn("Unknown role, loading no requirements.");
@@ -61,8 +66,12 @@ async function loadRequirements() {
       console.log("No requirements found for this user/group.");
     }
 
+    // Only add requirements matching the current semester
     snapshot.forEach(doc => {
-      addRequirementToUI(doc.data().requirement, doc.id);
+      const data = doc.data();
+      if (data.semester === currentSemester) {
+        addRequirementToUI(data.requirement, doc.id, data.semester);
+      }
     });
 
   } catch (err) {
@@ -71,10 +80,18 @@ async function loadRequirements() {
   }
 }
 
+
 async function addRequirement(requirementText) {
   try {
     const userData = JSON.parse(localStorage.getItem("userData"));
     if (!userData) throw new Error("User data not found.");
+
+    // Fetch current semester
+    const semSnap = await db.collection("semesterTable").where("currentSemester", "==", true).get();
+    let currentSemester = "N/A";
+    if (!semSnap.empty) {
+      currentSemester = semSnap.docs[0].data().semester || "N/A";
+    }
 
     const docRef = await db.collection("RequirementsTable").add({
       requirement: requirementText,
@@ -84,9 +101,11 @@ async function addRequirement(requirementText) {
       office: userData.office || "N/A",
       category: userData.category || "N/A",
       department: userData.department || "N/A",
+      semester: currentSemester,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    addRequirementToUI(requirementText, docRef.id);
+
+    addRequirementToUI(requirementText, docRef.id, currentSemester);
   } catch (err) {
     console.error("Failed to add requirement:", err);
     alert("Failed to add requirement.");

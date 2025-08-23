@@ -64,6 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // -------------------- Main Clearance Loader --------------------
+// -------------------- Main Clearance Loader --------------------
 window.openViewClearanceCard = async function(studentID, db) {
   const modal = document.getElementById("clearanceModal");
   modal.style.display = "block";
@@ -71,7 +72,7 @@ window.openViewClearanceCard = async function(studentID, db) {
   document.getElementById("studentId").textContent = studentID;
   document.getElementById("studentName").textContent = "Loading...";
   document.getElementById("status").textContent = "Loading...";
-  document.getElementById("semesterText").textContent = "1st Semester 2025-2026";
+  document.getElementById("semesterText").textContent = "";
   document.getElementById("officeSectionsGrid").innerHTML = "<p>Loading offices...</p>";
   document.getElementById("nonAcademicSectionsGrid").innerHTML = "";
 
@@ -83,7 +84,7 @@ window.openViewClearanceCard = async function(studentID, db) {
       return;
     }
     const studentData = studentDoc.data();
-    document.getElementById("studentName").textContent = 
+    document.getElementById("studentName").textContent =
       [studentData.firstName, studentData.middleName, studentData.lastName].filter(Boolean).join(" ");
 
     const studentClubs = Array.isArray(studentData.clubs)
@@ -92,6 +93,13 @@ window.openViewClearanceCard = async function(studentID, db) {
         ? studentData.clubs.split(",").map(c => c.trim())
         : [];
     const studentDept = String(studentData.department || "").trim();
+    const studentSemesterId = String(studentData.semester || "").trim(); // e.g., "1"
+
+    // 🔹 Convert student semester ID to readable name
+    let studentSemesterName = "";
+    const semesterSnap = await db.collection("semesterTable").doc(studentSemesterId).get();
+    if (semesterSnap.exists) studentSemesterName = String(semesterSnap.data().semester || "").trim();
+    document.getElementById("semesterText").textContent = studentSemesterName || "Unknown Semester";
 
     // Allowed collections
     const allowedSnap = await db.collection("allowedCollections").get();
@@ -116,6 +124,10 @@ window.openViewClearanceCard = async function(studentID, db) {
 
     for (const reqDoc of reqSnap.docs) {
       const req = reqDoc.data();
+
+      // 🔹 Filter by student semester name
+      if (String(req.semester || "").trim() !== studentSemesterName) continue;
+
       const reqDept = String(req.department || "").trim();
       const reqCategory = String(req.category || "").trim();
       const reqOffice = String(req.office || "").trim();
@@ -172,32 +184,24 @@ window.openViewClearanceCard = async function(studentID, db) {
       const isDeptGlobal = normalizeString(group.department) === "n/a" || group.department === "";
       const isCategoryGlobal = normalizeString(group.category) === "n/a" || group.category === "";
 
-     let headerTitle = "";
+      let headerTitle = "";
 
-// Labs (office 314) → use labTable for category/lab name
-if (group.office === "314" && !isCategoryGlobal) {
-  headerTitle = (await getLabName(db, group.category)) || group.category;
-}
-// Clubs and orgs → use acadClubTable or groupTable
-else if (!isCategoryGlobal) {
-  headerTitle = (await getCategoryName(db, group.category)) || group.category;
-}
-// Default office or dept names
-else if (isCategoryGlobal && isDeptGlobal) {
-  headerTitle = (await getOfficeName(db, group.office)) || group.office;
-} 
-else if (isCategoryGlobal && !isDeptGlobal) {
-  const officeName = (await getOfficeName(db, group.office)) || group.office;
-  const deptName = (await getDepartmentName(db, group.department)) || group.department;
-  headerTitle = `${officeName} - ${deptName}`;
-}
+      if (group.office === "314" && !isCategoryGlobal) {
+        headerTitle = (await getLabName(db, group.category)) || group.category;
+      } else if (!isCategoryGlobal) {
+        headerTitle = (await getCategoryName(db, group.category)) || group.category;
+      } else if (isCategoryGlobal && isDeptGlobal) {
+        headerTitle = (await getOfficeName(db, group.office)) || group.office;
+      } else if (isCategoryGlobal && !isDeptGlobal) {
+        const officeName = (await getOfficeName(db, group.office)) || group.office;
+        const deptName = (await getDepartmentName(db, group.department)) || group.department;
+        headerTitle = `${officeName} - ${deptName}`;
+      }
 
-// If requirement has a `lab` field, append lab name
-if (group.lab) {
-  const labName = await getLabName(db, group.lab);
-  if (labName) headerTitle += ` - ${labName}`;
-}
-
+      if (group.lab) {
+        const labName = await getLabName(db, group.lab);
+        if (labName) headerTitle += ` - ${labName}`;
+      }
 
       const sectionGroupDiv = document.createElement("div");
       sectionGroupDiv.classList.add("section-group");
@@ -215,8 +219,8 @@ if (group.lab) {
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");
       approvalDiv.innerHTML = allChecked
-       ? `<img src="../../Tatak.png" alt="Approved Icon" style="width:50px; height:50px;" /><br />
-     <label style="font-size:14px; color:#333;"><i>approved by ${lastCheckedBy || "Unknown"}</i><hr /></label>`
+        ? `<img src="../../Tatak.png" alt="Approved Icon" style="width:50px; height:50px;" /><br />
+           <label style="font-size:14px; color:#333;"><i>approved by ${lastCheckedBy || "Unknown"}</i><hr /></label>`
         : `<label><i>Not Cleared</i><hr /></label>`;
 
       sectionGroupDiv.appendChild(approvalDiv);
@@ -238,3 +242,4 @@ if (group.lab) {
     document.getElementById("status").innerHTML = `<span style="color:red">Pending</span>`;
   }
 };
+

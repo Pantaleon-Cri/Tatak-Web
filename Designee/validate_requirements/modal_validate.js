@@ -34,6 +34,17 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+// Helper: fetch current semester from semesterTable
+async function getCurrentSemester() {
+  if (!dbInstance) return null;
+  const snapshot = await dbInstance.collection("semesterTable").where("currentSemester", "==", true).get();
+  if (!snapshot.empty) {
+    const semDoc = snapshot.docs[0].data();
+    return semDoc.semester || null;
+  }
+  return null;
+}
+
 // Open modal and load requirements for a given student and designee
 window.openRequirementsModal = async function(studentID, designeeUserID, db) {
   currentStudentID = studentID;
@@ -54,7 +65,6 @@ window.openRequirementsModal = async function(studentID, designeeUserID, db) {
     let linkedDesigneeId = null;
 
     if (currentUser.role === "staff") {
-      // Staff should always use createdByDesigneeID from localStorage
       linkedDesigneeId = currentUser.createdByDesigneeID || null;
       if (!linkedDesigneeId) {
         modalBody.innerHTML = "<p>No requirements assigned to you.</p>";
@@ -62,10 +72,11 @@ window.openRequirementsModal = async function(studentID, designeeUserID, db) {
       }
     }
 
-    // Set currentDesigneeUserID based on role
     currentDesigneeUserID = (currentUser.role === "staff") ? linkedDesigneeId : designeeUserID;
 
-    // Fetch requirements only from the correct designee
+    const currentSemester = await getCurrentSemester();
+
+    // Fetch master requirements
     const snapshot = await dbInstance.collection("RequirementsTable")
       .where("addedByDesigneeId", "==", currentDesigneeUserID)
       .orderBy("createdAt", "desc")
@@ -76,21 +87,24 @@ window.openRequirementsModal = async function(studentID, designeeUserID, db) {
       return;
     }
 
-    // Prepare master requirement list
-    const masterRequirements = snapshot.docs.map(doc => ({
-      requirement: doc.data().requirement,
-      status: false,
-      checkedBy: null,
-      checkedAt: null
-    }));
+    // Only include requirements aligned with the current semester
+    const masterRequirements = snapshot.docs
+      .map(doc => doc.data())
+      .filter(d => !d.semester || d.semester === currentSemester) // filter by semester if stored
+      .map(d => ({
+        requirement: d.requirement,
+        status: false,
+        checkedBy: null,
+        checkedAt: null,
+        semester: currentSemester // label requirement with current semester
+      }));
 
     // Load saved validation for this student
     const valDocRef = dbInstance.collection("ValidateRequirementsTable").doc(studentID);
     const valDoc = await valDocRef.get();
     let requirementsByOffice = {};
     if (valDoc.exists) {
-      const savedData = valDoc.data();
-      requirementsByOffice = savedData.offices || {};
+      requirementsByOffice = valDoc.data().offices || {};
     }
 
     const savedRequirementsForOffice = Array.isArray(requirementsByOffice[currentDesigneeUserID])
@@ -100,7 +114,7 @@ window.openRequirementsModal = async function(studentID, designeeUserID, db) {
     const mergedRequirements = masterRequirements.map(masterReq => {
       const savedReq = savedRequirementsForOffice.find(r => r.requirement === masterReq.requirement);
       return savedReq
-        ? { ...masterReq, status: savedReq.status, checkedBy: savedReq.checkedBy || null, checkedAt: savedReq.checkedAt || null }
+        ? { ...masterReq, status: savedReq.status, checkedBy: savedReq.checkedBy || null, checkedAt: savedReq.checkedAt || null, semester: savedReq.semester || masterReq.semester }
         : masterReq;
     });
 
@@ -158,9 +172,10 @@ async function saveRequirements() {
   const updatedRequirements = [];
 
   const currentUser = JSON.parse(localStorage.getItem("userData"));
-  const currentUserId = currentUser?.id || null;
   const currentUserFullName = getCurrentUserFullName();
   const currentTimestamp = new Date().toISOString();
+
+  const currentSemester = await getCurrentSemester();
 
   try {
     const valDocRef = dbInstance.collection("ValidateRequirementsTable").doc(currentStudentID);
@@ -204,7 +219,8 @@ async function saveRequirements() {
         requirement: requirementText,
         status: isChecked,
         checkedBy: newCheckedBy,
-        checkedAt: newCheckedAt
+        checkedAt: newCheckedAt,
+        semester: existingReq?.semester || currentSemester
       };
     }
 

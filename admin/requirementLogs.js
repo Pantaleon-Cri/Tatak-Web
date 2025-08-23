@@ -7,28 +7,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     usernameDisplay.textContent = "Unknown"; // fallback
   }
+
   await loadRequirementApprovalLogs();
+  setupExportButton();
 });
 
 async function loadRequirementApprovalLogs() {
   const db = firebase.firestore();
 
-  // Detect if we’re on dashboard or full-page log
-  const logsList = document.getElementById("requirementLogsList");
   const fullLogTable = document.getElementById("fullCheckedByLog");
-
-  if (logsList) {
-    logsList.innerHTML = "<li>Loading requirement logs...</li>";
-  }
   if (fullLogTable) {
     fullLogTable.innerHTML = `<tr><td colspan="6">Loading requirement logs...</td></tr>`;
   }
 
   try {
     const snapshot = await db.collection("ValidateRequirementsTable").get();
-
     if (snapshot.empty) {
-      if (logsList) logsList.innerHTML = "<li>No requirement approvals found.</li>";
       if (fullLogTable) fullLogTable.innerHTML = `<tr><td colspan="6">No requirement approvals found.</td></tr>`;
       return;
     }
@@ -38,21 +32,18 @@ async function loadRequirementApprovalLogs() {
     for (const doc of snapshot.docs) {
       const data = doc.data();
       if (!data.offices) continue;
-      const offices = data.offices;
 
-      for (const [userID, requirementsArr] of Object.entries(offices)) {
+      for (const [userID, requirementsArr] of Object.entries(data.offices)) {
         if (!Array.isArray(requirementsArr)) continue;
 
-        // 🔍 Resolve readable office name based on Designee rules
         const officeName = await resolveOfficeName(db, userID);
 
         for (const req of requirementsArr) {
-          if (!req.status || !req.checkedBy) continue; // only approved ones
+          if (!req.status || !req.checkedBy) continue; // only approved
 
           const studentID = data.studentID || req.studentID;
           let studentName = studentID || "Unknown Student";
 
-          // fetch student info
           if (studentID) {
             try {
               const studentDoc = await db.collection("Students").doc(studentID).get();
@@ -65,44 +56,24 @@ async function loadRequirementApprovalLogs() {
             }
           }
 
-          // push log entry
           allLogs.push({
             office: officeName,
             personnel: req.checkedBy,
             action: "Approved",
             student: studentName,
             requirement: req.requirement || "—",
-            timestamp: req.checkedAt ? new Date(req.checkedAt) : null,
+            timestamp: req.checkedAt ? new Date(req.checkedAt) : null
           });
         }
       }
     }
 
-    // Sort logs newest first if timestamp exists
-    allLogs.sort((a, b) => {
-      if (!a.timestamp || !b.timestamp) return 0;
-      return b.timestamp - a.timestamp;
-    });
+    // Sort newest first
+    allLogs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-    // --------------------------
-    // Dashboard Preview (last 5)
-    // --------------------------
-    if (logsList) {
-      logsList.innerHTML = "";
-      allLogs.slice(0, 10).forEach((log) => {
-        const li = document.createElement("li");
-        li.innerHTML = `<strong>${log.personnel}</strong> approved <em>${log.requirement}</em> for ${log.student} 
-          <span style="color:#777; font-size:0.85em;">(${log.timestamp ? log.timestamp.toLocaleString() : "No time"})</span>`;
-        logsList.appendChild(li);
-      });
-    }
-
-    // --------------------------
-    // Full Page Table (all logs)
-    // --------------------------
     if (fullLogTable) {
       fullLogTable.innerHTML = "";
-      allLogs.forEach((log) => {
+      allLogs.forEach(log => {
         const row = document.createElement("tr");
         row.innerHTML = `
           <td>${log.office}</td>
@@ -116,71 +87,84 @@ async function loadRequirementApprovalLogs() {
       });
     }
 
-  } catch (error) {
-    console.error("Error loading requirement logs:", error);
-    if (logsList) logsList.innerHTML = "<li>Error loading requirement logs.</li>";
+  } catch (err) {
+    console.error("Error loading requirement logs:", err);
     if (fullLogTable) fullLogTable.innerHTML = `<tr><td colspan="6">Error loading requirement logs.</td></tr>`;
   }
 }
 
-/**
- * Resolve human-readable office name using Designees + related tables.
- * @param {object} db Firestore instance
- * @param {string} userID The userID from ValidateRequirementsTable (points to Designees.doc)
- */
 async function resolveOfficeName(db, userID) {
   try {
     const designeeDoc = await db.collection("Designees").doc(userID).get();
-    if (!designeeDoc.exists) {
-      return userID; // fallback: show raw userID
-    }
+    if (!designeeDoc.exists) return userID;
 
-    const designee = designeeDoc.data();
-    const { office, department, category } = designee;
+    const { office, department, category } = designeeDoc.data();
 
-    // Case 1: No category & no department → use office
     if (!category && !department) {
       const officeDoc = await db.collection("officeTable").doc(office).get();
       return officeDoc.exists ? officeDoc.data().office : office;
     }
 
-    // Case 2: Department only → office + department
     if (!category && department) {
       const officeDoc = await db.collection("officeTable").doc(office).get();
       const deptDoc = await db.collection("departmentTable").doc(department).get();
-
       const officeName = officeDoc.exists ? officeDoc.data().office : office;
       const deptName = deptDoc.exists ? deptDoc.data().department : department;
-
       return `${officeName} - ${deptName}`;
     }
 
-    // Case 3: Category exists → check labTable first, then acadClubTable, then groupTable
     if (category) {
-      // Check labTable
       const labDoc = await db.collection("labTable").doc(category).get();
-      if (labDoc.exists) {
-        return labDoc.data().lab;
-      }
+      if (labDoc.exists) return labDoc.data().lab;
 
-      // Check acadClubTable
-      const acadClubDoc = await db.collection("acadClubTable").doc(category).get();
-      if (acadClubDoc.exists) {
-        return acadClubDoc.data().codeName;
-      }
+      const acadDoc = await db.collection("acadClubTable").doc(category).get();
+      if (acadDoc.exists) return acadDoc.data().codeName;
 
-      // Check groupTable
       const groupDoc = await db.collection("groupTable").doc(category).get();
-      if (groupDoc.exists) {
-        return groupDoc.data().club;
-      }
+      if (groupDoc.exists) return groupDoc.data().club;
 
-      return category; // fallback
+      return category;
     }
 
-    return userID; // ultimate fallback
+    return userID;
   } catch (err) {
     console.error("Error resolving office name:", err);
     return userID;
   }
+}
+
+// --------------------------
+// XLSX Export
+// --------------------------
+async function setupExportButton() {
+  const exportBtn = document.getElementById("exportSheetBtn");
+  if (!exportBtn) return;
+
+  exportBtn.addEventListener("click", async () => {
+    try {
+      const db = firebase.firestore();
+      const tableRows = document.querySelectorAll("#fullCheckedByLog tr");
+      const data = [["Office","Personnel","Action","Student Name","Requirement","Timestamp"]];
+
+      tableRows.forEach(tr => {
+        const row = Array.from(tr.children).map(td => td.textContent);
+        if (row.length === 6) data.push(row);
+      });
+
+      // Get current semester
+      const semesterSnap = await db.collection("semesterTable").where("currentSemester", "==", true).limit(1).get();
+      let semesterName = "UnknownSemester";
+      if (!semesterSnap.empty) {
+        semesterName = semesterSnap.docs[0].data().semester.replace(/\s+/g, "_");
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Requirement Logs");
+      XLSX.writeFile(wb, `Requirement_Approval_Logs_${semesterName}.xlsx`);
+    } catch (err) {
+      console.error("Error exporting XLSX:", err);
+      alert("Failed to export logs.");
+    }
+  });
 }

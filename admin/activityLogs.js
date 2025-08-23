@@ -5,8 +5,8 @@
 // ----------------------
 
 
-// ----------------------sssss
-// Cache for lookupss
+// ----------------------
+// Cache for lookups
 // ----------------------
 const nameCache = {
   office: {},
@@ -129,6 +129,21 @@ async function loadFullActivityLogs() {
 
   try {
     await preloadNames();
+
+    // Get current semester
+    const semSnap = await db.collection("semesterTable").where("currentSemester", "==", true).limit(1).get();
+    const currentSemester = semSnap.empty ? "UnknownSemester" : semSnap.docs[0].data().semester;
+
+    // Assign export button
+    const exportBtn = document.getElementById("exportSheetBtn");
+    if (exportBtn) {
+      exportBtn.addEventListener("click", () => {
+        const table = document.querySelector(".log-table");
+        if (!table) return;
+        const wb = XLSX.utils.table_to_book(table, { sheet: "Activity Log" });
+        XLSX.writeFile(wb, `ActivityLog_${currentSemester}.xlsx`);
+      });
+    }
 
     const staffSnapshot = await db.collection("staffTable")
       .orderBy("createdAt", "desc")
