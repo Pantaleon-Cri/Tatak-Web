@@ -1,3 +1,4 @@
+<!-- validate_requirements.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,25 +10,11 @@
   <link rel="stylesheet" href="../designee.css" />
   <link rel="stylesheet" href="validate_requirements.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-<style>
-  .add-all-btn {
-  padding: 6px 12px;
-  font-size: 13px;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 9999px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.add-all-btn:hover {
-  background-color: #218838;
-}
-
-</style>
+  <style>
+    
+  </style>
 </head>
 <body>
   <!-- HEADER -->
@@ -77,9 +64,8 @@
           <input type="text" placeholder="Search by ID or Name" class="search-input" id="searchInput" />
           <button class="search-button"><i class="fas fa-search"></i></button>
         </div>
-     <input type="file" id="uploadInput" accept=".xlsx, .csv" style="display:none;" />
-<button class="add-all-btn" id="uploadBtn"><i class="fas fa-upload"></i> Upload Sheet</button>
-
+        <input type="file" id="uploadInput" accept=".xlsx, .csv" style="display:none;" />
+        <button class="add-all-btn" id="uploadBtn"><i class="fas fa-upload"></i> Upload Sheet</button>
       </section>
 
       <main class="table-container">
@@ -102,39 +88,75 @@
     </div>
   </div>
 
-  <!-- Modal Overlay -->
+  <!-- Checklist Modal -->
   <div id="checklistModal" class="modal-overlay">
-    <!-- Modal Content -->
     <div class="modal-content">
-      <!-- Modal Header -->
+      <span class="close" id="closeChecklist"></span>
       <div class="modal-header">
         <h2>Requirements Checklist</h2>
       </div>
-
-      <!-- Modal Body -->
       <div class="modal-body">
         <!-- Dynamic requirements checkboxes will be inserted here -->
       </div>
-
-      <!-- Modal Footer -->
       <div class="modal-footer">
-        <button id="cancelBtn" class="btn-cancel">
-          Cancel
-        </button>
-        <button id="saveBtn" class="btn-save">
-          Save
-        </button>
-        
+        <button id="cancelBtn" class="btn-cancel">Cancel</button>
+        <button id="saveBtn" class="btn-save">Save</button>
       </div>
     </div>
   </div>
-  <!-- Firebase SDK (Make sure you add your config & initialize below) -->
+
+  <!-- Clearance Modal -->
+<div id="clearanceModal" class="clearance-modal-overlay">
+  <div class="clearance-modal-wrapper">
+    <div class="clearance-container">
+      <span class="close" id="closeClearanceBtn"></span>
+      <div class="head">
+        <div class="head-left">
+          <img src="../../ndmu_logo.png" alt="University Logo" />
+        </div>
+        <div class="head-center">
+          <h3>JMJ Marist Brothers</h3>
+          <h1>Notre Dame of Marbel University</h1>
+          <p>City of Koronadal South Cotabato</p>
+          <h4>CLEARANCE</h4>
+          <p id="semesterText">Loading semester...</p>
+        </div>
+        <div class="head-right">
+          <img src="../../green_univ.png" alt="Learning Icon" />
+        </div>
+      </div>
+
+     
+
+      <div class="info-section">
+        <div>I.D No.: <span id="studentId">Loading...</span></div>
+        <div>Name: <span id="studentName">Loading...</span></div>
+        <div>Status: <span id="status">Loading...</span></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="sections-grid" id="officeSectionsGrid"></div>
+      <div class="non-academic-section" id="nonAcademicSectionsGrid"></div>
+
+      <div class="note">
+        NOTE: The <strong>RECORDS SECTION</strong> will release your 
+        <strong>EXAM PERMIT</strong> for the <strong>FINALS</strong> if you 
+        can present this clearance fully accomplished.
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
   <script src="validate_requirements.js"></script>
   <script src="modal_validate.js"></script>
   <script src="upload.js"></script>
-  
+  <script src="modal_view.js"></script>
 </body>
-
 </html>

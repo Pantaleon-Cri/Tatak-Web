@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
 
- 
   const firebaseConfig = {
     apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
     authDomain: "tatak-mobile-web.firebaseapp.com",
@@ -20,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modalBody: document.getElementById("checklistModal").querySelector(".modal-body"),
     cancelBtn: document.getElementById("cancelBtn"),
     saveBtn: document.getElementById("saveBtn"),
-    approveBtn: document.getElementById("approveBtn"),
+    approveBtn: document.getElementById("approveBtn") // may be null if not in HTML
   };
 
   const logoutBtn = document.getElementById("logoutBtn");
@@ -30,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggle = document.getElementById('userDropdownToggle');
   const menu = document.getElementById('dropdownMenu');
 
+  // Dropdown toggle
   if (toggle && menu) {
     toggle.addEventListener('click', () => {
       toggle.classList.toggle('active');
@@ -52,8 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Get designee info
-  let designeeName = "Designee", designeeCategory = "", designeeDepartment = "", designeeOffice = "", designeeUserID = null;
+  // Designee info
+  let designeeName = "Designee";
+  let designeeFirstName = "";
+  let designeeCategory = "";
+  let designeeDepartment = "";
+  let designeeOffice = "";
+  let designeeUserID = null;
+
   const userDataString = localStorage.getItem("userData");
   if (userDataString) {
     try {
@@ -72,66 +78,57 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   usernameDisplay.textContent = designeeFirstName;
+
+  // Load user role display
   async function loadUserRoleDisplay() {
-  const userData = JSON.parse(localStorage.getItem("userData"));
-  if (!userData) return;
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    if (!userData) return;
 
-  const userId = userData.id;
-  const emailDiv = document.getElementById("userRoleDisplay");
+    const userId = userData.id;
+    const emailDiv = document.getElementById("userRoleDisplay");
 
-  try {
-    const userDoc = await db.collection("Designees").doc(userId).get();
-    if (!userDoc.exists) return;
+    try {
+      const userDoc = await db.collection("Designees").doc(userId).get();
+      if (!userDoc.exists) return;
 
-    const data = userDoc.data();
-    let category = data.category || null;
-    let department = data.department || null;
-    let office = data.office || null;
+      const data = userDoc.data();
+      let category = data.category || null;
+      let department = data.department || null;
+      let office = data.office || null;
 
-    // Convert category to readable name
-    if (category) {
-      let catDoc = await db.collection("acadClubTable").doc(category).get();
-      if (!catDoc.exists) catDoc = await db.collection("groupTable").doc(category).get();
-      if (!catDoc.exists) catDoc = await db.collection("labTable").doc(category).get();
-      category = catDoc.exists ? (catDoc.data().club || catDoc.data().group || catDoc.data().lab) : category;
+      if (category) {
+        let catDoc = await db.collection("acadClubTable").doc(category).get();
+        if (!catDoc.exists) catDoc = await db.collection("groupTable").doc(category).get();
+        if (!catDoc.exists) catDoc = await db.collection("labTable").doc(category).get();
+        category = catDoc.exists ? (catDoc.data().club || catDoc.data().group || catDoc.data().lab) : category;
+      }
+
+      if (department) {
+        const deptDoc = await db.collection("departmentTable").doc(department).get();
+        department = deptDoc.exists ? deptDoc.data().department : department;
+      }
+
+      if (office) {
+        const officeDoc = await db.collection("officeTable").doc(office).get();
+        office = officeDoc.exists ? officeDoc.data().office : office;
+      }
+
+      let displayText = "";
+      if (category) displayText = category;
+      else if (department) displayText = `${department} - ${office || ""}`;
+      else displayText = office || "";
+
+      emailDiv.textContent = displayText;
+
+    } catch (err) {
+      console.error("Error loading user role:", err);
+      emailDiv.textContent = "Designee";
     }
-
-    // Convert department to readable
-    if (department) {
-      const deptDoc = await db.collection("departmentTable").doc(department).get();
-      department = deptDoc.exists ? deptDoc.data().department : department;
-    }
-
-    // Convert office to readable
-    if (office) {
-      const officeDoc = await db.collection("officeTable").doc(office).get();
-      office = officeDoc.exists ? officeDoc.data().office : office;
-    }
-
-    // Build display string
-    let displayText = "";
-    if (category) {
-      displayText = category;
-    } else if (department) {
-      displayText = `${department} - ${office || ""}`;
-    } else {
-      displayText = office || "";
-    }
-
-    emailDiv.textContent = displayText;
-
-  } catch (err) {
-    console.error("Error loading user role:", err);
-    emailDiv.textContent = "Designee";
   }
-}
-
 
   loadUserRoleDisplay();
 
-
-
-  // Row HTML
+  // Create table row HTML
   function createStudentRow(student) {
     return `
       <tr>
@@ -140,116 +137,21 @@ document.addEventListener('DOMContentLoaded', () => {
         <td>${student.departmentDisplay || ""}</td>
         <td>${student.yearLevel || ""}</td>
         <td><button class="status-button validate-button" data-studentid="${student.schoolID}">VALIDATE</button></td>
-        <td><button class="action-button view-button">VIEW</button></td>
+        <td><button class="action-button view-button" data-studentid="${student.schoolID}">VIEW</button></td>
       </tr>
     `;
   }
 
-  // Load students
-  async function loadStudents() {
-  studentsTableBody.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
-
-  try {
-    // 1️⃣ Departments map
-    const deptSnapshot = await db.collection("departmentTable").get();
-    const departmentMap = {};
-    deptSnapshot.forEach(doc => {
-      const data = doc.data();
-      departmentMap[doc.id] = data.code || doc.id;
-    });
-
-    // 2️⃣ Build collection name mapping for groupTable and labTable
-    const groupSnapshot = await db.collection("groupTable").get();
-    const labSnapshot = await db.collection("labTable").get();
-    const collectionMap = {};
-
-    groupSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.id && data.club) collectionMap[String(data.id)] = data.club;
-    });
-    labSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
-    });
-
-    // 3️⃣ Determine which collection to fetch
-    let querySnapshot;
-    const personalOffices = ["301","310","311","312","313","314"];
-    const excludeCategories = ["401","403"];
-    
-    if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
-      const collectionName = collectionMap[designeeCategory];
-      if (!collectionName) {
-        studentsTableBody.innerHTML = "<tr><td colspan='8'>No matching collection found for this category.</td></tr>";
-        return;
-      }
-      querySnapshot = await db.collection(collectionName).get();
-    } else {
-      querySnapshot = await db.collection("Students").get();
-    }
-
-    if (querySnapshot.empty) {
-      studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
-      return;
-    }
-
-    const allStudents = [];
-    querySnapshot.forEach(doc => {
-      const data = doc.data();
-      const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
-      let deptDisplay = data.department || "";
-      if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
-
-      allStudents.push({
-        schoolID: doc.id,
-        fullName,
-        course: data.course || "",
-        department: data.department || "",
-        departmentDisplay: deptDisplay,
-        yearLevel: data.yearLevel || "",
-        email: data.institutionalEmail || data.gmail || "",
-        clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : []
-      });
-    });
-
-    // 🔹 Apply filtering rules
-    let filteredStudents = [];
-    const showAllCategories = ["401","403"];
-    const showAllOffices = ["302","303","304","305","306"];
-
-    if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
-      filteredStudents = allStudents;
-    } else if (designeeOffice === "307" || designeeOffice === "308") {
-      filteredStudents = allStudents.filter(student => student.department === designeeDepartment);
-    } else if (designeeOffice === "309") {
-      const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
-      filteredStudents = allStudents.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
-    } else if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
-      filteredStudents = allStudents;
-    } else {
-      filteredStudents = allStudents;
-    }
-
-    renderStudents(filteredStudents);
-    attachSearchHandler(filteredStudents);
-   
-    attachValidateButtonHandler();
-
-  } catch (err) {
-    console.error(err);
-    studentsTableBody.innerHTML = "<tr><td colspan='8'>Failed to load students.</td></tr>";
-  }
-}
-
-
+  // Render students
   function renderStudents(students) {
-    if (students.length === 0) {
+    if (!students || students.length === 0) {
       studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
       return;
     }
     studentsTableBody.innerHTML = students.map(createStudentRow).join("");
   }
 
+  // Search handler
   function attachSearchHandler(students) {
     searchInput.addEventListener("input", () => {
       const searchTerm = searchInput.value.toLowerCase();
@@ -257,26 +159,124 @@ document.addEventListener('DOMContentLoaded', () => {
         s.schoolID.toLowerCase().includes(searchTerm) || s.fullName.toLowerCase().includes(searchTerm)
       );
       renderStudents(filtered);
-      attachValidateButtonHandler();
     });
   }
 
-  function attachValidateButtonHandler() {
-    const validateButtons = document.querySelectorAll(".validate-button");
-    validateButtons.forEach(btn => {
-      btn.addEventListener("click", () => {
-        const studentID = btn.getAttribute("data-studentid");
-        const currentUser = JSON.parse(localStorage.getItem("userData")) || {};
-        const currentUserID = currentUser?.id || currentUser?.userID || designeeUserID;
-        if (typeof openRequirementsModal === "function") {
-          openRequirementsModal(studentID, currentUserID, db);
-        } else {
-          console.error("openRequirementsModal not found");
-        }
+  // Load students from Firestore
+  async function loadStudents() {
+    studentsTableBody.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
+
+    try {
+      const deptSnapshot = await db.collection("departmentTable").get();
+      const departmentMap = {};
+      deptSnapshot.forEach(doc => {
+        const data = doc.data();
+        departmentMap[doc.id] = data.code || doc.id;
       });
-    });
+
+      const groupSnapshot = await db.collection("groupTable").get();
+      const labSnapshot = await db.collection("labTable").get();
+      const collectionMap = {};
+
+      groupSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.id && data.club) collectionMap[String(data.id)] = data.club;
+      });
+      labSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
+      });
+
+      let querySnapshot;
+      const personalOffices = ["301","310","311","312","313","314"];
+      const excludeCategories = ["401","403"];
+
+      if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
+        const collectionName = collectionMap[designeeCategory];
+        if (!collectionName) {
+          studentsTableBody.innerHTML = "<tr><td colspan='8'>No matching collection found for this category.</td></tr>";
+          return;
+        }
+        querySnapshot = await db.collection(collectionName).get();
+      } else {
+        querySnapshot = await db.collection("Students").get();
+      }
+
+      if (querySnapshot.empty) {
+        studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
+        return;
+      }
+
+      const allStudents = [];
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
+        let deptDisplay = data.department || "";
+        if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
+
+        allStudents.push({
+          schoolID: doc.id,
+          fullName,
+          course: data.course || "",
+          department: data.department || "",
+          departmentDisplay: deptDisplay,
+          yearLevel: data.yearLevel || "",
+          email: data.institutionalEmail || data.gmail || "",
+          clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : []
+        });
+      });
+
+      // Filtering
+      let filteredStudents = [];
+      const showAllCategories = ["401","403"];
+      const showAllOffices = ["302","303","304","305","306"];
+
+      if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
+        filteredStudents = allStudents;
+      } else if (designeeOffice === "307" || designeeOffice === "308") {
+        filteredStudents = allStudents.filter(student => student.department === designeeDepartment);
+      } else if (designeeOffice === "309") {
+        const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
+        filteredStudents = allStudents.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
+      } else if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
+        filteredStudents = allStudents;
+      } else {
+        filteredStudents = allStudents;
+      }
+
+      renderStudents(filteredStudents);
+      attachSearchHandler(filteredStudents);
+
+    } catch (err) {
+      console.error(err);
+      studentsTableBody.innerHTML = "<tr><td colspan='8'>Failed to load students.</td></tr>";
+    }
   }
 
+  // Event delegation for validate and view buttons
+  studentsTableBody.addEventListener("click", (e) => {
+    const validateBtn = e.target.closest(".validate-button");
+    if (validateBtn) {
+      const studentID = validateBtn.getAttribute("data-studentid");
+      const currentUser = JSON.parse(localStorage.getItem("userData")) || {};
+      const currentUserID = currentUser?.id || currentUser?.userID || designeeUserID;
+      if (typeof openRequirementsModal === "function") {
+        openRequirementsModal(studentID, currentUserID, db);
+      } else console.error("openRequirementsModal not found");
+      return;
+    }
+
+    const viewBtn = e.target.closest(".view-button");
+    if (viewBtn) {
+      const studentID = viewBtn.getAttribute("data-studentid");
+      if (typeof openViewClearanceCard === "function") {
+        openViewClearanceCard(studentID, db);
+      } else console.error("openViewClearanceCard not found");
+      return;
+    }
+  });
+
+  // Initial load
   loadStudents();
-  
+
 });
