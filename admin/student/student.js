@@ -14,12 +14,46 @@ const db = firebase.firestore();
 
 // Wait for DOM to load
 document.addEventListener("DOMContentLoaded", async () => {
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+
+      const keysToRemove = [
+        "userData",
+        "studentName",
+        "schoolID",
+        "studentID",
+        "staffID",
+        "designeeID",
+        "category",
+        "office",
+        "department",
+        "adminID"
+      ];
+
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      window.location.href = "../../../logout.html";
+    });
+  } else {
+    console.warn("logoutBtn not found");
+  }
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  const storedAdminID = localStorage.getItem("adminID");
+
+  if (storedAdminID) {
+    usernameDisplay.textContent = storedAdminID;  // show saved ID
+  } else {
+    usernameDisplay.textContent = "Unknown"; // fallback
+  }
+
   const dropdownToggle = document.getElementById("userDropdownToggle");
   const dropdownMenu = document.getElementById("dropdownMenu");
 
   // Toggle dropdown on click
   dropdownToggle.addEventListener("click", () => {
-    dropdownMenu.style.display = 
+    dropdownMenu.style.display =
       dropdownMenu.style.display === "block" ? "none" : "block";
   });
 
@@ -29,6 +63,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       dropdownMenu.style.display = "none";
     }
   });
+
   const tbody = document.querySelector(".log-table tbody");
   if (!tbody) return console.error("Table body not found");
 
@@ -92,29 +127,101 @@ document.addEventListener("DOMContentLoaded", async () => {
         <td>${student.institutionalEmail || ""}</td>
         <td>
           <button class="action-btn edit" data-id="${student.id}"><i class="fas fa-edit"></i></button>
-      <button class="action-btn delete" data-id="${student.id}"><i class="fas fa-trash-alt"></i></button>
+          <button class="action-btn delete" data-id="${student.id}"><i class="fas fa-trash-alt"></i></button>
         </td>
       `;
       tbody.appendChild(tr);
     });
+
+    // --- Modal Elements ---
+    const editModal = document.getElementById("editModalOverlay");
+    const deleteModal = document.getElementById("deleteModalOverlay");
+
+    const editStudentId = document.getElementById("editStudentId");
+    const editStudentName = document.getElementById("editStudentName");
+    const editCancelBtn = document.getElementById("editCancelBtn");
+    const editSaveBtn = document.getElementById("editSaveBtn");
+
+    const deleteCancelBtn = document.getElementById("deleteCancelBtn");
+    const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
+
+    let currentEditId = null;
+    let currentDeleteId = null;
+
+    // --- Edit Handlers ---
+    tbody.addEventListener("click", (e) => {
+      if (e.target.closest(".edit")) {
+        const id = e.target.closest(".edit").dataset.id;
+        const student = students.find(s => s.id === id);
+        if (!student) return;
+
+        currentEditId = id;
+        editStudentId.value = student.schoolId || "";
+        editStudentName.value = student.firstName + " " + student.lastName;
+
+        editModal.style.display = "flex";
+      }
+    });
+
+    editCancelBtn.addEventListener("click", () => {
+      editModal.style.display = "none";
+    });
+
+    editSaveBtn.addEventListener("click", async () => {
+      if (!currentEditId) return;
+      const [firstName, ...rest] = editStudentName.value.trim().split(" ");
+      const lastName = rest.join(" ");
+      try {
+        await db.collection("Students").doc(currentEditId).update({
+          firstName: firstName || "",
+          lastName: lastName || ""
+        });
+        alert("Student updated successfully!");
+        window.location.reload(); // refresh list
+      } catch (err) {
+        console.error("Error updating student:", err);
+        alert("Failed to update student");
+      }
+    });
+
+    // --- Delete Handlers ---
+    tbody.addEventListener("click", (e) => {
+      if (e.target.closest(".delete")) {
+        const id = e.target.closest(".delete").dataset.id;
+        currentDeleteId = id;
+        deleteModal.style.display = "flex";
+      }
+    });
+
+    deleteCancelBtn.addEventListener("click", () => {
+      deleteModal.style.display = "none";
+    });
+
+    deleteConfirmBtn.addEventListener("click", async () => {
+      if (!currentDeleteId) return;
+      try {
+        await db.collection("Students").doc(currentDeleteId).delete();
+        alert("Student deleted successfully!");
+        window.location.reload();
+      } catch (err) {
+        console.error("Error deleting student:", err);
+        alert("Failed to delete student");
+      }
+    });
+
   } catch (error) {
     console.error("Error loading students:", error);
   }
-
-  // Optional: handle modal and logout logic if needed
 });
-function initSidebarDropdowns() {
-  // Get all dropdown toggles
-  const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
 
+// Sidebar dropdowns
+function initSidebarDropdowns() {
+  const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
   dropdownToggles.forEach(toggle => {
     toggle.addEventListener('click', function (e) {
       e.preventDefault();
-
-      const parentLi = this.parentElement; // <li class="has-submenu">
+      const parentLi = this.parentElement;
       const submenu = parentLi.querySelector('.submenu');
-
-      // Toggle visibility of the submenu
       if (submenu.style.display === 'block') {
         submenu.style.display = 'none';
         this.querySelector('.arrow')?.classList.remove('rotated');
@@ -125,6 +232,4 @@ function initSidebarDropdowns() {
     });
   });
 }
-
-// 🔥 Run function after DOM loads
 document.addEventListener('DOMContentLoaded', initSidebarDropdowns);

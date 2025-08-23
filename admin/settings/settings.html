@@ -11,97 +11,100 @@
 </head>
 <body>
   <!-- HEADER -->
-    <header class="header">
-        <div class="header-left">
-            <img src="../../logo.png" alt="Logo" class="logo" />
-            <div class="title">
-                <span class="system-name">TATAK</span>
-                <span class="divider">|</span>
-                <span class="dashboard-title">Administrator - Settings</span>
-            </div>
-        </div>
-
-        <div class="header-right">
-            <div class="user-dropdown" id="userDropdownToggle">
-                <div class="user-info">
-                    <div class="username">Crizwa</div>
-                    <div class="email">Administrator</div>
-                </div>
-                <i class="fas fa-angle-down dropdown-arrow"></i>
-            </div>
-
-            <div class="dropdown-menu" id="dropdownMenu">
-           <a href="../settings/settings.html">Settings</a>
-      <a href="#">Logout</a>
-            </div>
-        </div>
-    </header>
-
-    <!-- Wrapper for the existing settings UI content -->
-    <div class="main-content-wrapper">
-        <div class="container">
-            <!-- Back Button -->
-            <div class="back-button-wrapper">
-               <a href="../admin.html" class="back-button">
-                   <!-- Back icon (SVG) -->
-                   <svg xmlns="http://www.w3.org/2000/svg" class="back-button-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                       <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                   </svg>
-               </a>
-                    <span class="back-button-text">Back to Dashboard</span>
-                </button>
-            </div>
-
-            <!-- Administrator Settings Title -->
-            <h1 class="main-title">Administrator Settings</h1>
-
-            <!-- Account Settings Section -->
-            <div class="account-settings-section">
-                <h2 class="account-settings-title">
-                    <i class="fas fa-user-cog"></i>
-                    Account Settings
-                </h2>
-
-                <!-- Change Password Subsection -->
-                <div class="change-password-subsection">
-                    <h3 class="subsection-title">
-                        <i class="fas fa-key"></i>
-                        Change Password
-                    </h3>
-                    <div class="grid-layout">
-                        <input type="password" placeholder="Current Password">
-                        <input type="password" placeholder="New Password (min 6 characters)">
-                        <input type="password" placeholder="Confirm New Password">
-                        <button class="action-button">
-                            Change Password
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Change Admin ID Subsection -->
-                <div>
-                    <h3 class="subsection-title">
-                        <i class="fas fa-id-badge"></i>
-                        Change Admin ID
-                    </h3>
-                    <div class="grid-layout">
-                        <div class="current-admin-id">
-                            Current Admin ID: <span class="admin-id-value">admin123</span>
-                        </div>
-                        <input type="text" placeholder="New Admin ID">
-                        <div class="empty-grid-cell"></div> <!-- Empty div for grid alignment -->
-                        <button class="action-button">
-                            Change Admin ID
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+  <header class="header">
+    <div class="header-left">
+      <img src="../../logo.png" alt="Logo" class="logo" />
+      <div class="title">
+        <span class="system-name">TATAK</span>
+        <span class="divider">|</span>
+        <span class="dashboard-title">Administrator - Settings</span>
+      </div>
     </div>
+
+    <div class="header-right">
+      <div class="user-dropdown" id="userDropdownToggle">
+        <div class="user-info">
+          <div class="username" id="usernameDisplay"></div>
+          <div class="email">Administrator</div>
+        </div>
+        <i class="fas fa-angle-down dropdown-arrow"></i>
+      </div>
+
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="../settings/settings.html">Settings</a>
+        <a href="#" id="logoutBtn">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Wrapper for the existing settings UI content -->
+  <div class="main-content-wrapper">
+    <div class="container">
+      <!-- Back Button -->
+      <div class="back-button-wrapper">
+        <a href="../admin.html" class="back-button">
+          <svg xmlns="http://www.w3.org/2000/svg" class="back-button-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+        </a>
+        <span class="back-button-text">Back to Dashboard</span>
+      </div>
+
+      <!-- Administrator Settings Title -->
+      <h1 class="main-title">Administrator Settings</h1>
+
+      <!-- Account Settings Section -->
+      <div class="account-settings-section">
+        <h2 class="account-settings-title">
+          <i class="fas fa-user-cog"></i>
+          Account Settings
+        </h2>
+
+        <!-- Change Password Subsection -->
+        <div class="change-password-subsection">
+          <h3 class="subsection-title">
+            <i class="fas fa-key"></i>
+            Change Password
+          </h3>
+          <!-- ✅ Wrap in a form to avoid Chrome warnings -->
+          <form id="passwordForm" onsubmit="return false;" class="grid-layout">
+            <input type="password" id="currentPassword" placeholder="Current Password" required>
+            <input type="password" id="newPassword" placeholder="New Password (min 6 characters)" required>
+            <input type="password" id="confirmPassword" placeholder="Confirm New Password" required>
+            <button type="button" class="action-button" id="changePasswordBtn">
+              Change Password
+            </button>
+          </form>
+        </div>
+
+        <!-- Change Admin ID Subsection -->
+        <div>
+          <h3 class="subsection-title">
+            <i class="fas fa-id-badge"></i>
+            Change Admin ID
+          </h3>
+          <!-- ✅ Wrap in a form too -->
+          <form id="adminIdForm" onsubmit="return false;" class="grid-layout">
+            <div class="current-admin-id">
+              Current Admin ID: <span class="admin-id-value" id="currentAdminID"></span>
+            </div>
+            <input type="text" id="newAdminID" placeholder="New Admin ID" required>
+            <div class="empty-grid-cell"></div>
+            <button type="button" class="action-button" id="changeAdminIDBtn">
+              Change Admin ID
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase v8 SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <!-- Firebase SDK (assume already initialized in admin.js) -->
   
-
-  <script src="../admin.js"></script>
-  <script src = "office.js"></script>
-
+  <script src="settings.js"></script>
 </body>
 </html>

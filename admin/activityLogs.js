@@ -170,6 +170,14 @@ async function loadFullActivityLogs() {
 // DOMContentLoaded → Run on both pages
 // ----------------------
 document.addEventListener("DOMContentLoaded", () => {
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  const storedAdminID = localStorage.getItem("adminID");
+
+  if (storedAdminID) {
+    usernameDisplay.textContent = storedAdminID;  // show saved ID
+  } else {
+    usernameDisplay.textContent = "Unknown"; // fallback
+  }
   loadStaffCreationLogs(); // dashboard preview
   loadFullActivityLogs();  // full activity log page
 });

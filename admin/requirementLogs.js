@@ -1,4 +1,12 @@
 document.addEventListener("DOMContentLoaded", async () => {
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  const storedAdminID = localStorage.getItem("adminID");
+
+  if (storedAdminID) {
+    usernameDisplay.textContent = storedAdminID;  // show saved ID
+  } else {
+    usernameDisplay.textContent = "Unknown"; // fallback
+  }
   await loadRequirementApprovalLogs();
 });
 

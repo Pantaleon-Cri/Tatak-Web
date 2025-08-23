@@ -12,7 +12,7 @@ document.getElementById("registrationForm").addEventListener("submit", async fun
   console.log("Input Password:", password);
 
   try {
-    const docRef = db.collection("adminAccount").doc(adminID);  // ✅ Corrected this line
+    const docRef = db.collection("adminAccount").doc(adminID);
     const docSnap = await docRef.get();
 
     if (docSnap.exists) {
@@ -20,11 +20,15 @@ document.getElementById("registrationForm").addEventListener("submit", async fun
       console.log("Firestore Data:", data);
 
       if (data.password === password) {
+        // ✅ Store user ID in localStorage
+        localStorage.setItem("adminID", adminID);
+
         messageBox.style.display = "block";
         messageBox.style.color = "green";
         messageBox.textContent = "Login successful!";
+
         setTimeout(() => {
-          window.location.href = "../admin/admin.html"; // ✅ Change path if needed
+          window.location.href = "../admin/admin.html"; // redirect after login
         }, 1000);
       } else {
         messageBox.style.display = "block";

@@ -23,8 +23,8 @@
     <div class="header-right">
       <div class="user-dropdown" id="userDropdownToggle">
         <div class="user-info">
-          <div class="username" id="username"></div>
-          <div class="email">Designee</div>
+          <div class="username" id="usernameDisplay"></div>
+          <div class="email" id="userRoleDisplay"></div>
         </div>
         <i class="fas fa-angle-down dropdown-arrow"></i>
       </div>
@@ -123,8 +123,9 @@
     </div>
   </div>
 </div>
+
 <!-- EDIT MODAL -->
-<div class="modal-overlay" id="editStaffModal">
+<div class="modal-overlay" id="editModalOverlay" style="display: none;">
   <div class="modal">
     <div class="modal-header">
       <h2>Edit Staff</h2>
@@ -134,29 +135,27 @@
       <input type="text" id="editStaffId" disabled />
 
       <label for="editFirstName">First Name:</label>
-      <input type="text" id="editFirstName" placeholder="Enter first name" />
+      <input type="text" id="editFirstName" placeholder="e.g., John" />
 
       <label for="editLastName">Last Name:</label>
-      <input type="text" id="editLastName" placeholder="Enter last name" />
+      <input type="text" id="editLastName" placeholder="e.g., Doe" />
 
       <label for="editEmail">Institutional Email:</label>
-      <input type="email" id="editEmail" placeholder="Enter email" />
+      <input type="email" id="editEmail" placeholder="e.g., john.doe@tatak.edu.ph" />
 
       <label for="editPassword">Password:</label>
       <input type="text" id="editPassword" placeholder="Enter password" />
 
       <div class="modal-buttons">
-        <button class="cancel-btn" onclick="closeEditModal()">Cancel</button>
-        <button class="save-btn" onclick="saveEdit()">Update</button>
+        <button class="cancel-btn" id="editCancelBtn">Cancel</button>
+        <button class="save-btn" id="editSaveBtn">Update</button>
       </div>
     </div>
   </div>
 </div>
 
-
-
 <!-- DELETE MODAL -->
-<div class="modal-overlay" id="deleteModalOverlay">
+<div class="modal-overlay" id="deleteModalOverlay" style="display: none;">
   <div class="modal">
     <div class="modal-header">
       <h2>Confirm Delete</h2>
@@ -179,6 +178,7 @@
 <script src="auth.js"></script>
 <script src="staff.js"></script>
 <script src="main.js"></script>
+
 
   
 

@@ -26,7 +26,7 @@
     <div class="header-right">
       <div class="user-dropdown" id="userDropdownToggle">
         <div class="user-info">
-          <div class="username">Crizwa</div>
+          <div class="username" id="usernameDisplay"></div>
           <div class="email">Administrator</div>
         </div>
         <i class="fas fa-angle-down dropdown-arrow"></i>
@@ -108,22 +108,44 @@
     </main>
   </div>
 
-  <!-- MODAL -->
-  <div class="modal-overlay" id="modalOverlay">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>Add Year Level</h2>
-      </div>
-      <div class="modal-content">
-        <label for="yearLevelName">Year Level Name:</label>
-        <input type="text" id="yearLevelName" placeholder="e.g., 1st Year" />
-        <div class="modal-buttons">
-          <button class="cancel-btn" id="cancelBtn">Cancel</button>
-          <button class="save-btn">Save</button>
-        </div>
+
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Edit Students</h2>
+    </div>
+    <div class="modal-content">
+      <label for="editStudentId">ID No.:</label>
+      <input type="text" id="editStudentId" disabled />
+
+      <label for="editStudentName">Student Name:</label>
+      <input type="text" id="editStudentName" placeholder="Enter student name" />
+
+      <div class="modal-buttons">
+        <button class="cancel-btn" id="editCancelBtn">Cancel</button>
+        <button class="save-btn" id="editSaveBtn">Update</button>
       </div>
     </div>
   </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal-overlay" id="deleteModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Confirm Delete</h2>
+    </div>
+    <div class="modal-content">
+      <p>Are you sure you want to delete this student?</p>
+      <div class="modal-buttons">
+        <button class="cancel-btn" id="deleteCancelBtn">Cancel</button>
+        <button class="save-btn" id="deleteConfirmBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
 
   <script src="student.js"></script>
 

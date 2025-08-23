@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       showMessage("Registration successful! Redirecting...");
 
       setTimeout(() => {
-        window.location.href = "../students/student.html";
+        window.location.href = "../login/student_login.html";
       }, 1500);
 
     } catch (error) {

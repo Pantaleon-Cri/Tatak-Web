@@ -1,15 +1,3 @@
-// Firebase Configuration (v8)
-var firebaseConfig = {
-  apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
-  authDomain: "tatak-mobile-web.firebaseapp.com",
-  projectId: "tatak-mobile-web",
-  storageBucket: "tatak-mobile-web.firebasestorage.app",
-  messagingSenderId: "771908675869",
-  appId: "1:771908675869:web:88e68ca51ed7ed4da019f4",
-  measurementId: "G-CENPP29LKQ"
-};
-firebase.initializeApp(firebaseConfig);
-var db = firebase.firestore();
 
 // DOM Elements
 const openBtn = document.getElementById("openModalBtn");
@@ -73,6 +61,14 @@ saveBtn.addEventListener("click", async () => {
 
 // Load departments on page load
 window.addEventListener("DOMContentLoaded", async () => {
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  const storedAdminID = localStorage.getItem("adminID");
+
+  if (storedAdminID) {
+    usernameDisplay.textContent = storedAdminID;  // show saved ID
+  } else {
+    usernameDisplay.textContent = "Unknown"; // fallback
+  }
   const logoutBtn = document.getElementById("logoutBtn");
 
   if (logoutBtn) {

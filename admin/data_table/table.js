@@ -25,6 +25,14 @@ const group = document.querySelector("#groupTable tbody");
 
 // Load first 3 semester entries
 window.addEventListener("DOMContentLoaded", async () => {
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  const storedAdminID = localStorage.getItem("adminID");
+
+  if (storedAdminID) {
+    usernameDisplay.textContent = storedAdminID;  // show saved ID
+  } else {
+    usernameDisplay.textContent = "Unknown"; // fallback
+  }
    const dropdownToggle = document.getElementById("userDropdownToggle");
   const dropdownMenu = document.getElementById("dropdownMenu");
 

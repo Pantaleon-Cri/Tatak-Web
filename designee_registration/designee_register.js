@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       departmentGroup.style.display = 'none';
 
       setTimeout(() => {
-        window.location.href = "../Designee/designee.html";
+        window.location.href = "../login/designee_login.html";
       }, 1500);
 
     } catch (err) {

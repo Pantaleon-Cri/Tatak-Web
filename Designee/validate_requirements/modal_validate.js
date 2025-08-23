@@ -19,6 +19,7 @@ function getCurrentUserFullName() {
 
 // Wait for DOMContentLoaded and presence of window.validateRequirementsData
 document.addEventListener("DOMContentLoaded", () => {
+  
   if (!window.validateRequirementsData) {
     console.error("window.validateRequirementsData is undefined!");
     return;
@@ -282,3 +283,4 @@ async function saveRequirements() {
     alert("Failed to save. Please try again.");
   }
 }
+

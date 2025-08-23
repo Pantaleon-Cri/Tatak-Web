@@ -14,6 +14,14 @@ const db = firebase.firestore();
 
 
 document.addEventListener('DOMContentLoaded', () => {
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  const storedAdminID = localStorage.getItem("adminID");
+
+  if (storedAdminID) {
+    usernameDisplay.textContent = storedAdminID;  // show saved ID
+  } else {
+    usernameDisplay.textContent = "Unknown"; // fallback
+  }
   // ✅ Logout button
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
@@ -29,7 +37,8 @@ document.addEventListener('DOMContentLoaded', () => {
         "designeeID",
         "category",
         "office",
-        "department"
+        "department",
+        "adminID"
       ];
 
       keysToRemove.forEach(key => localStorage.removeItem(key));

@@ -131,3 +131,16 @@ if (profileData.category) {
     document.getElementById('profileCategory').textContent = 'Error loading category';
   }
 });
+
+const usernameDisplay = document.getElementById("usernameDisplay");
+
+const userDataString = localStorage.getItem("userData");
+  if (userDataString) {
+    try {
+      const userDataObj = JSON.parse(userDataString);
+            designeeFirstName = userDataObj.firstName || "";
+          } catch (err) { console.error(err); }
+  } 
+  
+
+  usernameDisplay.textContent = designeeFirstName;

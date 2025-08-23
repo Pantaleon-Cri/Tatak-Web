@@ -20,6 +20,60 @@ let createdByDesigneeID = null; // ✅ Store globally for staff case
 let currentEditingId = null;
 let currentEditingInput = null;
 
+async function loadUserRoleDisplay() {
+  const userData = JSON.parse(localStorage.getItem("userData"));
+  if (!userData) return;
+
+  const userId = userData.id;
+  const emailDiv = document.getElementById("userRoleDisplay");
+
+  try {
+    const userDoc = await db.collection("Designees").doc(userId).get();
+    if (!userDoc.exists) return;
+
+    const data = userDoc.data();
+    let category = data.category || null;
+    let department = data.department || null;
+    let office = data.office || null;
+
+    // Convert category to readable name
+    if (category) {
+      let catDoc = await db.collection("acadClubTable").doc(category).get();
+      if (!catDoc.exists) catDoc = await db.collection("groupTable").doc(category).get();
+      if (!catDoc.exists) catDoc = await db.collection("labTable").doc(category).get();
+      category = catDoc.exists ? (catDoc.data().club || catDoc.data().group || catDoc.data().lab) : category;
+    }
+
+    // Convert department to readable
+    if (department) {
+      const deptDoc = await db.collection("departmentTable").doc(department).get();
+      department = deptDoc.exists ? deptDoc.data().department : department;
+    }
+
+    // Convert office to readable
+    if (office) {
+      const officeDoc = await db.collection("officeTable").doc(office).get();
+      office = officeDoc.exists ? officeDoc.data().office : office;
+    }
+
+    // Build display string
+    let displayText = "";
+    if (category) {
+      displayText = category;
+    } else if (department) {
+      displayText = `${department} - ${office || ""}`;
+    } else {
+      displayText = office || "";
+    }
+
+    emailDiv.textContent = displayText;
+
+  } catch (err) {
+    console.error("Error loading user role:", err);
+    emailDiv.textContent = "Designee";
+  }
+}
+
 // Reusable function to load current user info (Designee or Staff)
 async function getCurrentUserData() {
   currentUser = JSON.parse(localStorage.getItem('userData'));
@@ -67,13 +121,23 @@ async function getCurrentUserData() {
 const editModal = document.getElementById("editModal");
 const deleteModal = document.getElementById("deleteModal");
 const editInput = document.getElementById("editRequirementInput");
-
+const usernameDisplay = document.getElementById("usernameDisplay");
 // Modal Buttons
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const saveEditBtn = document.getElementById("saveEditBtn");
 const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
 const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 
+const userDataString = localStorage.getItem("userData");
+  if (userDataString) {
+    try {
+      const userDataObj = JSON.parse(userDataString);
+            designeeFirstName = userDataObj.firstName || "";
+          } catch (err) { console.error(err); }
+  } 
+  
+
+  usernameDisplay.textContent = designeeFirstName;
 function showModal(modal) {
   modal.style.display = "flex";
 }
@@ -83,6 +147,7 @@ function closeModal(modal) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  loadUserRoleDisplay();
   // Setup logout button
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {

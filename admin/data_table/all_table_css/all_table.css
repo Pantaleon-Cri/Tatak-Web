@@ -108,7 +108,9 @@
   Modal Content
 ------------------------------------------ */
 .modal-content {
-  padding: 20px;
+  padding: 40px;
+  margin-right: 10px;
+ 
 }
 
 .modal-content label {

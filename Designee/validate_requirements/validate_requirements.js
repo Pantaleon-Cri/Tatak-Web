@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+
+ 
   const firebaseConfig = {
     apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
     authDomain: "tatak-mobile-web.firebaseapp.com",
@@ -57,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const userDataObj = JSON.parse(userDataString);
       designeeName = userDataObj.userID || userDataObj.id || designeeName;
+      designeeFirstName = userDataObj.firstName || "";
       designeeCategory = (userDataObj.category || "").trim();
       designeeDepartment = (userDataObj.department || "").trim();
       designeeOffice = (userDataObj.office || "").trim();
@@ -68,7 +71,65 @@ document.addEventListener('DOMContentLoaded', () => {
     designeeOffice = (localStorage.getItem("office") || "").trim();
   }
 
-  usernameDisplay.textContent = designeeName;
+  usernameDisplay.textContent = designeeFirstName;
+  async function loadUserRoleDisplay() {
+  const userData = JSON.parse(localStorage.getItem("userData"));
+  if (!userData) return;
+
+  const userId = userData.id;
+  const emailDiv = document.getElementById("userRoleDisplay");
+
+  try {
+    const userDoc = await db.collection("Designees").doc(userId).get();
+    if (!userDoc.exists) return;
+
+    const data = userDoc.data();
+    let category = data.category || null;
+    let department = data.department || null;
+    let office = data.office || null;
+
+    // Convert category to readable name
+    if (category) {
+      let catDoc = await db.collection("acadClubTable").doc(category).get();
+      if (!catDoc.exists) catDoc = await db.collection("groupTable").doc(category).get();
+      if (!catDoc.exists) catDoc = await db.collection("labTable").doc(category).get();
+      category = catDoc.exists ? (catDoc.data().club || catDoc.data().group || catDoc.data().lab) : category;
+    }
+
+    // Convert department to readable
+    if (department) {
+      const deptDoc = await db.collection("departmentTable").doc(department).get();
+      department = deptDoc.exists ? deptDoc.data().department : department;
+    }
+
+    // Convert office to readable
+    if (office) {
+      const officeDoc = await db.collection("officeTable").doc(office).get();
+      office = officeDoc.exists ? officeDoc.data().office : office;
+    }
+
+    // Build display string
+    let displayText = "";
+    if (category) {
+      displayText = category;
+    } else if (department) {
+      displayText = `${department} - ${office || ""}`;
+    } else {
+      displayText = office || "";
+    }
+
+    emailDiv.textContent = displayText;
+
+  } catch (err) {
+    console.error("Error loading user role:", err);
+    emailDiv.textContent = "Designee";
+  }
+}
+
+
+  loadUserRoleDisplay();
+
+
 
   // Row HTML
   function createStudentRow(student) {
@@ -97,13 +158,32 @@ document.addEventListener('DOMContentLoaded', () => {
       departmentMap[doc.id] = data.code || doc.id;
     });
 
-    // 2️⃣ Students
-    let querySnapshot;
-    const personalCollectionOffices = ["301","311","312","313","314"];
-    const usePersonalCollection = personalCollectionOffices.includes(designeeOffice) && designeeCategory !== "401";
+    // 2️⃣ Build collection name mapping for groupTable and labTable
+    const groupSnapshot = await db.collection("groupTable").get();
+    const labSnapshot = await db.collection("labTable").get();
+    const collectionMap = {};
 
-    if (usePersonalCollection && designeeCategory) {
-      querySnapshot = await db.collection(designeeCategory).get(); // personal collection
+    groupSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.id && data.club) collectionMap[String(data.id)] = data.club;
+    });
+    labSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
+    });
+
+    // 3️⃣ Determine which collection to fetch
+    let querySnapshot;
+    const personalOffices = ["301","310","311","312","313","314"];
+    const excludeCategories = ["401","403"];
+    
+    if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
+      const collectionName = collectionMap[designeeCategory];
+      if (!collectionName) {
+        studentsTableBody.innerHTML = "<tr><td colspan='8'>No matching collection found for this category.</td></tr>";
+        return;
+      }
+      querySnapshot = await db.collection(collectionName).get();
     } else {
       querySnapshot = await db.collection("Students").get();
     }
@@ -124,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         schoolID: doc.id,
         fullName,
         course: data.course || "",
-        department: data.department || "", // ✅ keep raw department (e.g. "05")
+        department: data.department || "",
         departmentDisplay: deptDisplay,
         yearLevel: data.yearLevel || "",
         email: data.institutionalEmail || data.gmail || "",
@@ -132,24 +212,19 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // 🔹 Filter students
+    // 🔹 Apply filtering rules
     let filteredStudents = [];
-    const normalizedDesigneeDepartment = designeeDepartment || "";
-    const isCategoryEmpty = !designeeCategory || designeeCategory.toLowerCase() === "n/a";
-    const isDepartmentEmpty = !designeeDepartment || designeeDepartment.toLowerCase() === "n/a";
+    const showAllCategories = ["401","403"];
+    const showAllOffices = ["302","303","304","305","306"];
 
-    if (designeeOffice === "309") {
-      // Clubs office: filter by clubs matching category
-      const designeeCategories = designeeCategory.split(",").map(c => c.trim().toLowerCase()).filter(Boolean);
-      filteredStudents = allStudents.filter(student => student.clubs.some(club => designeeCategories.includes(club)));
+    if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
+      filteredStudents = allStudents;
     } else if (designeeOffice === "307" || designeeOffice === "308") {
-      // ✅ Office 307 & 308: filter students with the same department
-      filteredStudents = allStudents.filter(student => student.department === normalizedDesigneeDepartment);
-    } else if (usePersonalCollection) {
-      filteredStudents = allStudents; // Only show their personal collection
-    } else if (!isDepartmentEmpty) {
-      filteredStudents = allStudents.filter(student => student.department.toLowerCase() === normalizedDesigneeDepartment.toLowerCase());
-    } else if (isCategoryEmpty && isDepartmentEmpty) {
+      filteredStudents = allStudents.filter(student => student.department === designeeDepartment);
+    } else if (designeeOffice === "309") {
+      const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
+      filteredStudents = allStudents.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
+    } else if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
       filteredStudents = allStudents;
     } else {
       filteredStudents = allStudents;
@@ -157,6 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     renderStudents(filteredStudents);
     attachSearchHandler(filteredStudents);
+   
     attachValidateButtonHandler();
 
   } catch (err) {
@@ -202,4 +278,5 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   loadStudents();
+  
 });

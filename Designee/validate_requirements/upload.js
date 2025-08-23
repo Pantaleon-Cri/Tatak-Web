@@ -1,10 +1,12 @@
 // upload.js
 document.addEventListener("DOMContentLoaded", () => {
+    
     console.log("upload.js loaded");
 
     const uploadBtn = document.getElementById("uploadBtn");
     const uploadInput = document.getElementById("uploadInput");
     const studentsTableBody = document.getElementById("studentsTableBody");
+     const usernameDisplay = document.getElementById("usernameDisplay");
 
     if (!uploadBtn || !uploadInput || !studentsTableBody) {
         console.error("Upload button, input, or table body not found in DOM");
@@ -21,140 +23,134 @@ document.addEventListener("DOMContentLoaded", () => {
         appId: "1:771908675869:web:88e68ca51ed7ed4da019f4",
         measurementId: "G-CENPP29LKQ"
     };
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Get office and category from localStorage
-    const userDataString = localStorage.getItem("userData");
-    let office = null;
-    let category = null;
-    let userData = null;
-
-    if (userDataString) {
-        try {
-            userData = JSON.parse(userDataString);
-            office = userData.office || null;
-            category = userData.category || null;
-        } catch (err) {
-            console.error("Failed to parse userData:", err);
-        }
+    // Get userData
+    let userData = {};
+    try {
+        const userDataString = localStorage.getItem("userData");
+        if (userDataString) userData = JSON.parse(userDataString);
+    } catch (err) {
+        console.error("Failed to parse userData:", err);
     }
 
-    // Offices allowed to use personal collection
-    const personalCollectionOffices = ["301","310","311","312","313"];
-    const usePersonalCollection = personalCollectionOffices.includes(office) && category !== "401";
+    const office = userData.office || null;
+    const category = userData.category || null;
+    const department = userData.department || null;
 
-    // Show/hide upload button
-    uploadBtn.style.display = usePersonalCollection ? "inline-block" : "none";
+    // Hide upload button for restricted offices
+    const restrictedOffices = ["302","303","304","305","306","307","308","309"];
+    const officeFromStorage = (office || "").toString().trim();
+    const categoryFromStorage = (category || "").toString().trim();
+
+    if (restrictedOffices.includes(officeFromStorage) || categoryFromStorage === "401") {
+        uploadBtn.style.display = "none";
+        uploadInput.style.display = "none";
+        console.log(`Upload button hidden for office ${officeFromStorage} or category ${categoryFromStorage}`);
+    } else {
+        console.log(`Upload button visible for office ${officeFromStorage} and category ${categoryFromStorage}`);
+    }
+
+    // Resolve collection name (office-specific collection)
+    async function resolveCollectionName() {
+        try {
+            if (category) {
+                const acadSnap = await db.collection("acadClubTable").doc(category).get();
+                if (acadSnap.exists) return acadSnap.data().codeName || category;
+
+                const groupSnap = await db.collection("groupTable").doc(category).get();
+                if (groupSnap.exists) return groupSnap.data().club || category;
+
+                const labSnap = await db.collection("labTable").doc(category).get();
+                if (labSnap.exists) return labSnap.data().lab || category;
+
+                return category;
+            } else if (department) {
+                const deptSnap = await db.collection("departmentTable").doc(department).get();
+                if (deptSnap.exists) return deptSnap.data().department || department;
+                return department;
+            } else if (office) {
+                const officeSnap = await db.collection("officeTable").doc(office).get();
+                if (officeSnap.exists) return officeSnap.data().office || office;
+                return office;
+            } else {
+                return "Students"; // fallback
+            }
+        } catch (err) {
+            console.error("Error resolving collection:", err);
+            return "Students";
+        }
+    }
 
     // Open file dialog
     uploadBtn.addEventListener("click", () => uploadInput.click());
 
     // Handle file upload
-    uploadInput.addEventListener("change", (event) => {
-        if (!usePersonalCollection) return;
-
+    uploadInput.addEventListener("change", async (event) => {
         const file = event.target.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: "array" });
-            const sheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[sheetName];
-            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        try {
+            const collectionName = await resolveCollectionName();
+            console.log("📂 Using collection:", collectionName);
 
-            // Standardized format: ID No., First Name, Last Name, Department, Year Level
-            const studentData = rows.slice(1).map(row => {
-                const idNo = row[0] || "";
-                const firstName = row[1] || "";
-                const lastName = row[2] || "";
-                const department = row[3] || "";
-                const yearLevel = row[4] || "";
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: "array" });
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-                return {
-                    idNo,
-                    firstName,
-                    lastName,
-                    fullName: `${firstName} ${lastName}`.trim(),
-                    department,
-                    yearLevel
-                };
-            });
+                if (!rows || rows.length < 2) return;
 
-            if (!category) {
-                console.error("Category not set for this user.");
-                return;
-            }
+                const studentData = rows.slice(1).map(row => ({
+                    idNo: row[0] || "",
+                    firstName: row[1] || "",
+                    lastName: row[2] || "",
+                    fullName: `${row[1] || ""} ${row[2] || ""}`.trim(),
+                    department: row[3] || "",
+                    yearLevel: row[4] || "",
+                    sourceDepartment: row[3] || department || null,
+                    sourceCategory: category || null,
+                    sourceOffice: office || null
+                })).filter(s => s.idNo);
 
-            const collectionRef = db.collection(category);
+                const collectionRef = db.collection(collectionName);
 
-            studentData.forEach(student => {
-                if (student.idNo) {
-                    collectionRef.doc(student.idNo.toString())
-                        .set(student, { merge: true }) // merge to avoid overwriting
-                        .catch(err => console.error("Failed to upload student:", student, err));
+                // Register collection if not exists
+                const allowedRef = db.collection("allowedCollections").doc(collectionName);
+                const allowedDoc = await allowedRef.get();
+                if (!allowedDoc.exists) {
+                    await allowedRef.set({
+                        name: collectionName,
+                        createdBy: userData.id || "unknown",
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    console.log(`✅ Registered collection "${collectionName}"`);
                 }
-            });
 
-            console.log(`Uploaded ${studentData.length} records to collection "${category}"`);
-        };
-        reader.readAsArrayBuffer(file);
+                // Upload students
+                for (const student of studentData) {
+                    await collectionRef.doc(student.idNo.toString()).set(student, { merge: true });
+                }
+
+                console.log(`✅ Uploaded ${studentData.length} records to "${collectionName}"`);
+                alert(`Uploaded ${studentData.length} students successfully!`);
+                uploadInput.value = ""; // reset
+                loadStudents(); // refresh table
+            };
+            reader.readAsArrayBuffer(file);
+        } catch (err) {
+            console.error("❌ Upload failed:", err);
+            alert("Upload failed. Check console.");
+        }
     });
 
-    // Real-time fetch from personal collection
-    async function loadStudents() {
-        if (!category) {
-            studentsTableBody.innerHTML = "<tr><td colspan='6'>No category selected.</td></tr>";
-            return;
-        }
+    // Load only students uploaded in that office’s collection
+    
 
-        const collectionRef = db.collection(category);
-
-        collectionRef.onSnapshot(async snapshot => {
-            studentsTableBody.innerHTML = "";
-
-            snapshot.forEach(doc => {
-                const student = doc.data();
-
-                const row = `
-                    <tr>
-                        <td>${student.idNo || doc.id}</td>
-                        <td>${student.fullName || `${student.firstName || ""} ${student.lastName || ""}`.trim()}</td>
-                        <td>${student.department || ""}</td>
-                        <td>${student.yearLevel || ""}</td>
-                        <td>
-                            <button class="status-button validate-button" data-studentid="${doc.id}">
-                                VALIDATE
-                            </button>
-                        </td>
-                        <td>
-                            <button class="action-button view-button">VIEW</button>
-                        </td>
-                    </tr>
-                `;
-                studentsTableBody.innerHTML += row;
-            });
-
-            // Attach validate button handlers
-            document.querySelectorAll(".validate-button").forEach(btn => {
-                btn.addEventListener("click", (e) => {
-                    const studentID = e.target.getAttribute("data-studentid");
-                    let designeeUserID = userData?.id || null;
-
-                    if (typeof window.openRequirementsModal === "function") {
-                        window.openRequirementsModal(studentID, designeeUserID, db);
-                    } else {
-                        console.error("openRequirementsModal function not found");
-                    }
-                });
-            });
-        });
-    }
-
-    // ✅ Load students immediately on page load
-    loadStudents();
+    // Load immediately
+   
 });
