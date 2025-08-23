@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   statusElement.textContent = "Loading...";
 
   try {
-    // Fetch student
+    // ================= Fetch student =================
     const studentDoc = await db.collection("Students").doc(studentId).get();
     if (!studentDoc.exists) throw new Error("Student not found");
     const student = studentDoc.data();
@@ -29,7 +29,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         : [];
     const studentDept = String(student.department || "").trim();
 
-    // Fetch allowed collections
+    // ✅ Fetch readable semester name
+    let readableSemester = "Unknown Semester";
+    let semesterId = String(student.semester || "");
+    if (semesterId) {
+      try {
+        const semesterDoc = await db.collection("semesterTable").doc(semesterId).get();
+        if (semesterDoc.exists) {
+          readableSemester = semesterDoc.data().semester || readableSemester;
+        }
+      } catch (err) {
+        console.error("Error fetching semester name:", err);
+      }
+    }
+
+    // ================= Fetch allowed collections =================
     const allowedSnap = await db.collection("allowedCollections").get();
     const allowedCollections = allowedSnap.docs.map(doc => doc.data().name).filter(Boolean);
 
@@ -51,7 +65,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const studentOffice = matchedStudentData ? String(matchedStudentData.sourceOffice || "").trim() : String(student.sourceOffice || "").trim();
     const studentDepartment = matchedStudentData ? String(matchedStudentData.sourceDepartment || "").trim() : String(student.sourceDepartment || "").trim();
 
-    // Fetch all requirements
+    // ================= Fetch all requirements =================
     const reqSnap = await db.collection("RequirementsTable").get();
     const groupedReqs = {};
     let anyRequirementsFound = false;
@@ -70,10 +84,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       let showRequirement = false;
 
       // ================= RULES =================
-      if (["302","303","304","305","306"].includes(reqOffice)) showRequirement = true;
-      else if (["401","403"].includes(reqCategory)) showRequirement = true;
+      if (["302", "303", "304", "305", "306"].includes(reqOffice)) showRequirement = true;
+      else if (["401", "403"].includes(reqCategory)) showRequirement = true;
       else if (reqOffice === "309" && studentClubs.includes(reqCategory)) showRequirement = true;
-      else if (["301","310","311","312","313"].includes(reqOffice)) {
+      else if (["301", "310", "311", "312", "313"].includes(reqOffice)) {
         try {
           const groupSnap = await db.collection("groupTable").get();
           for (const doc of groupSnap.docs) {
@@ -105,7 +119,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           console.error("Error checking labTable for office 314:", err);
         }
       }
-      else if (["307","308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) showRequirement = true;
+      else if (["307", "308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) showRequirement = true;
       else if (isDeptGlobal && isCategoryGlobal) showRequirement = true;
 
       if (!showRequirement) continue;
@@ -116,14 +130,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       groupedReqs[key].requirements.push(req.requirement);
     }
 
-    // Fetch validation data for this student
+    // ================= Fetch validation data =================
     const valDoc = await db.collection("ValidateRequirementsTable").doc(studentId).get();
     const officesData = valDoc?.exists ? valDoc.data().offices || {} : {};
 
     // Track overall clearance
     let overallCleared = true;
 
-    // Render sections with approval/not cleared
+    // 🔹 Show semester label
+    const semesterHeader = document.createElement("h3");
+    
+    container.appendChild(semesterHeader);
+
+    // 🔹 Prepare offices log for Firestore update
+    const officesLog = {};
+
+    // ================= Render sections =================
     for (const groupKey in groupedReqs) {
       const group = groupedReqs[groupKey];
 
@@ -170,21 +192,48 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (allChecked) {
         approvalDiv.innerHTML = `
-          <img src="../../Tatak.png" alt="Approved Icon" />
+          <img src="../../Tatak.png" alt="Approved Icon" style="width:40px;height:auto;" />
           <label><i>approved by ${lastCheckedBy || "Unknown"}</i></label>
         `;
+        officesLog[headerTitle] = {
+          status: "Cleared",
+          approvedBy: lastCheckedBy || "Unknown"
+        };
       } else {
         approvalDiv.innerHTML = `<label><i>Not Cleared</i></label>`;
+        officesLog[headerTitle] = {
+          status: "Pending",
+          approvedBy: null
+        };
       }
 
       sectionGroupDiv.appendChild(approvalDiv);
       container.appendChild(sectionGroupDiv);
     }
 
-    // Set overall status
+    // ================= Overall status =================
     statusElement.innerHTML = overallCleared
       ? `<span style="color:green">Completed</span>`
       : `<span style="color:red">Pending</span>`;
+
+    // ================= Save to StudentsClearanceLog if completed =================
+    if (overallCleared) {
+      const clearanceLogRef = db.collection("StudentsClearanceLog").doc(studentId);
+      await clearanceLogRef.set(
+        {
+          schoolID: studentId,
+          fullName: `${student.firstName} ${student.lastName}`,
+          clearances: {
+            [semesterId]: {
+              semesterName: readableSemester,
+              offices: officesLog
+            }
+          }
+        },
+        { merge: true }
+      );
+      console.log("✅ Clearance log updated for student:", studentId);
+    }
 
     if (!anyRequirementsFound) {
       container.innerHTML = `<div class="section-item"><label class="section-header">No Requirements Found</label><p>You currently have no active requirements.</p></div>`;

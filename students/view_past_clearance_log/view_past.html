@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TATAK - Designee</title>
+  <title>TATAK - View Past Clearance</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="stylesheet" href="view_past.css" />
 </head>
@@ -15,20 +15,20 @@
       <div class="titled">
         <span class="system-name">TATAK</span>
         <span class="divider">|</span>
-        <span class="dashboard-title">Student - View Clearance Status</span>
+        <span class="dashboard-title">Student - View Past Clearance Logs</span>
       </div>
     </div>
     <div class="header-right">
       <div class="user-dropdown" id="userDropdownToggle">
         <div class="user-info">
-          <div class="username">Crizwa</div>
-          <div class="email">Student</div>
+          <div class="username">Student</div>
+          <div class="email">Account</div>
         </div>
         <i class="fas fa-angle-down dropdown-arrow"></i>
       </div>
       <div class="dropdown-menu" id="dropdownMenu">
-      <a href="settings/settings.html">Settings</a>
-      <a href="#" id="logoutBtn">Logout</a>
+        <a href="settings/settings.html">Settings</a>
+        <a href="#" id="logoutBtn">Logout</a>
       </div>
     </div>
   </header>
@@ -36,129 +36,66 @@
   <!-- SIDEBAR -->
   <div class="content-wrapper">
     <aside class="sidebar">
-      <div class="sidebar-header">
-       
-      </div>
       <nav>
         <ul>
-          <li><a href="../student.html" ><i class="fas fa-tachometer-alt"></i>Home Page</a></li>
-          <li><a href="../view_clearance/view.html" ><i class="fas fa-table"></i>View Clearance Status</a></li>
+          <li><a href="../student.html"><i class="fas fa-tachometer-alt"></i>Home Page</a></li>
+          <li><a href="../view_clearance/view.html"><i class="fas fa-table"></i>View Clearance Status</a></li>
           <li><a href="#" class="active"><i class="fas fa-table"></i>View Past Clearance Logs</a></li>
-            </ul>
+        </ul>
       </nav>
     </aside>
+
     <div class="clearance-container">
-  <div class="semester-dropdown">
-    <select>
-      <option value="1st_sem_2024-2025">1st Semester 2024-2025</option>
-      <option value="2nd_sem_2024-2025">2nd Semester 2024-2025</option>
-      <!-- Add more options as needed -->
-    </select>
-  </div>
+      <!-- Semester Dropdown -->
+      <div class="semester-dropdown">
+        <select id="semesterSelect">
+          <option value="">Select Semester</option>
+        </select>
+      </div>
 
-  <div class="head">
-    <div class="head-left">
-      <img src="../../ndmu_logo.png" alt="University Logo">
-    </div>
-    <div class="head-center">
-      <h3>JMJ Marist Brothers</h3>
-      <h1>Notre Dame of Marbel University</h1>
-      <p>City of Koronadal South Cotabato</p>
-    </div>
-    <div class="head-right">
-      <img src="../../green_univ.png" alt="Learning Icon">
-    </div>
-  </div>
+      <!-- Clearance Header -->
+      <div class="head">
+        <div class="head-left">
+          <img src="../../ndmu_logo.png" alt="University Logo">
+        </div>
+        <div class="head-center">
+          <h3>JMJ Marist Brothers</h3>
+          <h1>Notre Dame of Marbel University</h1>
+          <p>City of Koronadal South Cotabato</p>
+        </div>
+        <div class="head-right">
+          <img src="../../green_univ.png" alt="Learning Icon">
+        </div>
+      </div>
 
-  <div class="title">
-    CLEARANCE
-    <p style="font-size: 16px; margin-top: 5px;">1st Semester 2024-2025</p>
-  </div>
+      <!-- Title -->
+      <div class="title">
+        CLEARANCE
+        <p id="semesterLabel" style="font-size: 16px; margin-top: 5px;">Select a semester</p>
+      </div>
 
-  <div class="info-section">
-    <div>I.D No.: <span>2021</span></div>
-    <div>Name: <span>Crizle Pantaleon</span></div>
-    <div>Status: <span id="status">Completed</span></div>
-  </div>
+      <!-- Student Info -->
+      <div class="info-section">
+        <div>I.D No.: <span id="studentId"></span></div>
+        <div>Name: <span id="studentName"></span></div>
+        <div>Status: <span id="status"></span></div>
+      </div>
 
-  <div class="divider"></div>
+      <div class="divider"></div>
 
-  <div class="sections-grid">
-    <div class="section-item">
-      
-      <label>College Dean</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-      <label>CEAC Council</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-     <label>CEAC Guidance</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-     <label>PEC</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-      <label>SSG</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-     <label>PSITS</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-     <label>CSD</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-     <label>Clinic</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-      <label>Computer Lab</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-     <label>Library</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
+      <!-- Offices -->
+      <div id="officesContainer" class="sections-grid"></div>
+
+      <!-- Note -->
+      <div class="note">
+        NOTE: The <strong>RECORDS SECTION</strong> will release your <strong>EXAM PERMIT</strong> for the <strong>FINALS</strong> if you can present this clearance fully accomplished.
+      </div>
     </div>
   </div>
 
-  <div class="non-academic-section">
-    <div class="section-item">
-     <label>GHAD</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-    <div class="section-item">
-      <label>DSA</label>
-      <img src="../../Tatak.png">
-      <label><i>approved by Karla Gacias</i></label>
-    </div>
-  </div>
+ <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+<script src="view_past.js"></script>
 
-  <div class="note">
-    NOTE: The <strong>RECORDS SECTION</strong> will release your <strong>EXAM PERMIT</strong> for the <strong>FINALS</strong> if you can present this clearance fully accomplished.
-  </div>
-</div>
-  
-
-  <script src="view_past.js"></script>
-
-
-  </div>
 </body>
 </html>
