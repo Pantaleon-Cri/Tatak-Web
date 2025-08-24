@@ -80,12 +80,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }));
 
     // 🔁 Fetch lookup tables
-    const [clubsSnap, groupsSnap, departmentsSnap, officesSnap] =
+    const [clubsSnap, groupsSnap, departmentsSnap, officesSnap, labsSnap] =
       await Promise.all([
         db.collection("acadClubTable").get(),
         db.collection("groupTable").get(),
         db.collection("departmentTable").get(),
         db.collection("officeTable").get(),
+        db.collection("labTable").get(), // ✅ Fetch labs
       ]);
 
     const clubsMap = {};
@@ -112,6 +113,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       officesMap[doc.id] = data.office || "";
     });
 
+    const labsMap = {};
+    labsSnap.forEach((doc) => {
+      const data = doc.data();
+      labsMap[doc.id] = data.lab || "";
+    });
+
     // 🔁 Render designees
     tbody.innerHTML = "";
     designeeList.forEach((designee) => {
@@ -120,12 +127,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         categoryName =
           clubsMap[designee.category] ||
           groupsMap[designee.category] ||
+          labsMap[designee.category] || // ✅ Added lab check for category
           designee.category;
       }
 
       const deptName =
         departmentsMap[designee.department] || designee.department || "";
       const officeName = officesMap[designee.office] || designee.office || "";
+      const labName = labsMap[designee.laboratory] || designee.laboratory || ""; // ✅ For separate lab column if present
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -135,6 +144,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         <td>${officeName || "N/A"}</td>
         <td>${deptName || "N/A"}</td>
         <td>${categoryName || "N/A"}</td>
+        <td>${labName || "N/A"}</td>
         <td>${designee.institutionalEmail || ""}</td>
         <td>
           <button class="action-btn delete" data-id="${designee.id}">
@@ -177,7 +187,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         location.reload(); // refresh to show changes
       } catch (error) {
         console.error("Error deleting designee:", error);
-        
       }
     });
   } catch (error) {

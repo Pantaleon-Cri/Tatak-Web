@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modalBody: document.getElementById("checklistModal").querySelector(".modal-body"),
     cancelBtn: document.getElementById("cancelBtn"),
     saveBtn: document.getElementById("saveBtn"),
-    approveBtn: document.getElementById("approveBtn") // may be null if not in HTML
+    approveBtn: document.getElementById("approveBtn")
   };
 
   const logoutBtn = document.getElementById("logoutBtn");
@@ -167,6 +167,22 @@ document.addEventListener('DOMContentLoaded', () => {
     studentsTableBody.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
 
     try {
+      // --- Step 1: Fetch current semester ---
+      const semesterSnapshot = await db.collection("semesterTable")
+        .where("currentSemester", "==", true)
+        .limit(1)
+        .get();
+
+      if (semesterSnapshot.empty) {
+        studentsTableBody.innerHTML = "<tr><td colspan='8'>No active semester found.</td></tr>";
+        return;
+      }
+
+      const currentSemesterDoc = semesterSnapshot.docs[0].data();
+      const currentSemesterId = currentSemesterDoc.id; // e.g., "1"
+      const currentSemesterName = currentSemesterDoc.semester; // e.g., "1st Semester 2025-2026"
+
+      // --- Step 2: Get department & collection mappings ---
       const deptSnapshot = await db.collection("departmentTable").get();
       const departmentMap = {};
       deptSnapshot.forEach(doc => {
@@ -177,7 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const groupSnapshot = await db.collection("groupTable").get();
       const labSnapshot = await db.collection("labTable").get();
       const collectionMap = {};
-
       groupSnapshot.forEach(doc => {
         const data = doc.data();
         if (data.id && data.club) collectionMap[String(data.id)] = data.club;
@@ -187,9 +202,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
       });
 
+      // --- Step 3: Fetch students collection ---
       let querySnapshot;
       const personalOffices = ["301","310","311","312","313","314"];
       const excludeCategories = ["401","403"];
+      let isGeneralStudentsCollection = true;
 
       if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
         const collectionName = collectionMap[designeeCategory];
@@ -198,8 +215,10 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         querySnapshot = await db.collection(collectionName).get();
+        isGeneralStudentsCollection = false;
       } else {
         querySnapshot = await db.collection("Students").get();
+        isGeneralStudentsCollection = true;
       }
 
       if (querySnapshot.empty) {
@@ -207,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      // --- Step 4: Map student documents ---
       const allStudents = [];
       querySnapshot.forEach(doc => {
         const data = doc.data();
@@ -222,26 +242,37 @@ document.addEventListener('DOMContentLoaded', () => {
           departmentDisplay: deptDisplay,
           yearLevel: data.yearLevel || "",
           email: data.institutionalEmail || data.gmail || "",
-          clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : []
+          clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
+          semester: data.semester // Keep original format for filtering
         });
       });
 
-      // Filtering
+      // --- Step 5: Filter by current semester ---
+      let filteredBySemester;
+      if (isGeneralStudentsCollection) {
+        // Students collection: semester is stored as ID
+        filteredBySemester = allStudents.filter(s => s.semester === currentSemesterId);
+      } else {
+        // Personal office collection: semester is stored as full name
+        filteredBySemester = allStudents.filter(s => s.semester === currentSemesterName);
+      }
+
+      // --- Step 6: Filter by designee office/category/club ---
       let filteredStudents = [];
       const showAllCategories = ["401","403"];
       const showAllOffices = ["302","303","304","305","306"];
 
       if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
-        filteredStudents = allStudents;
+        filteredStudents = filteredBySemester;
       } else if (designeeOffice === "307" || designeeOffice === "308") {
-        filteredStudents = allStudents.filter(student => student.department === designeeDepartment);
+        filteredStudents = filteredBySemester.filter(student => student.department === designeeDepartment);
       } else if (designeeOffice === "309") {
         const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
-        filteredStudents = allStudents.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
+        filteredStudents = filteredBySemester.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
       } else if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
-        filteredStudents = allStudents;
+        filteredStudents = filteredBySemester;
       } else {
-        filteredStudents = allStudents;
+        filteredStudents = filteredBySemester;
       }
 
       renderStudents(filteredStudents);

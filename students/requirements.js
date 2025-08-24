@@ -10,6 +10,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     const requirementsContainer = document.querySelector(".student-main-content");
     requirementsContainer.innerHTML = "";
 
+    // ✅ Get current semester
+    const semesterSnap = await db.collection("semesterTable")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
+
+    if (semesterSnap.empty) {
+      requirementsContainer.innerHTML = `
+        <div class="clearance-section-card">
+          <div class="section-header">No Active Semester</div>
+          <div class="notes-section">
+            <p>No requirements available because there is no active semester.</p>
+          </div>
+        </div>
+      `;
+      return;
+    }
+    const currentSemester = semesterSnap.docs[0].data().semester;
+    console.log("📖 Active semester:", currentSemester);
+
     // Fetch student document from Students collection
     const studentDoc = await db.collection("Students").doc(studentId).get();
     if (!studentDoc.exists) throw new Error("Student not found");
@@ -27,12 +47,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // 2️⃣ Search each allowed collection for this student to get sourceCategory, sourceOffice, sourceDepartment
     let matchedStudentData = null;
+    let allowedCollectionMemberships = new Set();
     for (const collName of allowedCollections) {
       try {
         const doc = await db.collection(collName).doc(studentId).get();
         if (doc.exists) {
           matchedStudentData = doc.data();
-          break; // stop at first match
+          allowedCollectionMemberships.add(collName); // track which clubs student is in
         }
       } catch (err) {
         console.error(`Failed to check allowed collection ${collName}:`, err);
@@ -44,8 +65,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const studentOffice = matchedStudentData ? String(matchedStudentData.sourceOffice || "").trim() : String(student.sourceOffice || "").trim();
     const studentDepartment = matchedStudentData ? String(matchedStudentData.sourceDepartment || "").trim() : String(student.sourceDepartment || "").trim();
 
-    // Fetch all requirements
-    const reqSnap = await db.collection("RequirementsTable").get();
+    // ✅ Fetch only requirements for the current semester
+    const reqSnap = await db.collection("RequirementsTable")
+      .where("semester", "==", currentSemester)
+      .get();
+
     const groupedReqs = {};
     let anyRequirementsFound = false;
 
@@ -78,8 +102,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         showRequirement = true;
       }
 
-      // 4️⃣ Offices 301,310–313 → check groupTable.club collections
-      else if (["301","310","311","312","313"].includes(reqOffice)) {
+      // 4️⃣ Office 301 special handling (Institutional Orgs)
+      else if (reqOffice === "301") {
+        if (["401", "403"].includes(reqCategory)) {
+          // Always visible: SSG + OMNIANA
+          showRequirement = true;
+        } else {
+          // Check allowed collection membership for 402, 404, 405, 406
+          const categoryName = await getCategoryName(reqCategory); // e.g. "Honors’ Society"
+          if (allowedCollectionMemberships.has(categoryName)) {
+            showRequirement = true;
+          }
+        }
+      }
+
+      // 5️⃣ Offices 310–313 → check groupTable.club collections
+      else if (["310","311","312","313"].includes(reqOffice)) {
         try {
           const groupSnap = await db.collection("groupTable").get();
           for (const doc of groupSnap.docs) {
@@ -97,7 +135,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
-      // 5️⃣ Office 314 → check labTable.lab collections
+      // 6️⃣ Office 314 → check labTable.lab collections
       else if (reqOffice === "314") {
         try {
           const labSnap = await db.collection("labTable").get();
@@ -116,14 +154,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
-      // 6️⃣ Offices 307, 308 → match department
+      // 7️⃣ Offices 307, 308 → match department
       else if (["307","308"].includes(reqOffice) && !isDeptGlobal) {
         if (normalizeString(reqDept) === normalizeString(studentDepartment)) {
           showRequirement = true;
         }
       }
 
-      // 7️⃣ Strict match: only sourceCategory & sourceOffice from allowed collections
+      // 8️⃣ Strict match: only sourceCategory & sourceOffice from allowed collections
       else if (
         reqCategory && reqOffice &&
         normalizeString(reqCategory) === normalizeString(studentCategory) &&
@@ -132,7 +170,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         showRequirement = true;
       }
 
-      // 8️⃣ Department-global fallback
+      // 9️⃣ Department-global fallback
       else if (isDeptGlobal && isCategoryGlobal) {
         showRequirement = true;
       }
@@ -149,12 +187,18 @@ document.addEventListener("DOMContentLoaded", async () => {
       groupedReqs[key].requirements.push(req.requirement);
     }
 
-    // Fetch validation data
+    // ✅ Fetch validation data
     const validationDoc = await db.collection("ValidateRequirementsTable").doc(studentId).get();
-    const validationData = validationDoc.exists ? validationDoc.data() : {};
+    let validationData = {};
+    if (validationDoc.exists) {
+      validationData = validationDoc.data();
+    }
 
-    // Fetch notes
-    const notesSnap = await db.collection("notesTable").get();
+    // ✅ Fetch notes only for current semester
+    const notesSnap = await db.collection("notesTable")
+      .where("semester", "==", currentSemester)
+      .get();
+
     const notesMap = {};
     notesSnap.forEach(doc => {
       const data = doc.data();
@@ -202,7 +246,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             const checkedArray = validationData.offices[officeKey];
             if (Array.isArray(checkedArray)) {
               for (const item of checkedArray) {
-                if (normalizeString(item.requirement) === normalizeString(reqText) && item.status === true) {
+                const sameRequirement = normalizeString(item.requirement) === normalizeString(reqText);
+                const validStatus = item.status === true;
+                const validSemester = !item.semester || normalizeString(item.semester) === normalizeString(currentSemester);
+
+                if (sameRequirement && validStatus && validSemester) {
                   isChecked = true;
                   break;
                 }
@@ -245,7 +293,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         <div class="clearance-section-card">
           <div class="section-header">No Requirements Found</div>
           <div class="notes-section">
-            <p>You currently have no active requirements.</p>
+            <p>You currently have no active requirements for this semester.</p>
           </div>
         </div>
       `;

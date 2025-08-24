@@ -1,9 +1,3 @@
-// Assumes Firebase app is initialized and firestore is assigned to `db`
-// Also assumes user session variables/functions:
-//   - currentUser (with .id)
-//   - userOffice, userCategory, userDepartment
-//   - getCurrentUserData() loads those values and currentUser
-
 document.addEventListener("DOMContentLoaded", async () => {
   // Elements
   const notesContent = document.getElementById("notesContent");
@@ -15,12 +9,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   // State vars
   let originalNotes = "";
   let existingDocId = null;
+  let currentSemesterId = null;
+  let currentSemesterName = null;
 
   // Utility: Place caret at end of contenteditable div
   function placeCaretAtEnd(el) {
     el.focus();
-    if (typeof window.getSelection !== "undefined"
-      && typeof document.createRange !== "undefined") {
+    if (typeof window.getSelection !== "undefined" && typeof document.createRange !== "undefined") {
       const range = document.createRange();
       range.selectNodeContents(el);
       range.collapse(false);
@@ -36,15 +31,33 @@ document.addEventListener("DOMContentLoaded", async () => {
   cancelBtn.style.display = "none";
   editBtn.style.display = "inline-block";
 
-  // Load user data and fetch note
+  // --- Step 1: Load current semester ---
+  try {
+    const semesterSnapshot = await db.collection("semesterTable")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
+
+    if (semesterSnapshot.empty) throw new Error("No active semester found.");
+
+    const semesterDoc = semesterSnapshot.docs[0].data();
+    currentSemesterId = semesterDoc.id;
+    currentSemesterName = semesterDoc.semester;
+    console.log("Current semester:", currentSemesterName);
+  } catch (err) {
+    console.error("Error fetching current semester:", err);
+    notesContent.innerText = "Failed to load semester info.";
+    editBtn.disabled = true;
+    return;
+  }
+
+  // --- Step 2: Load user data and fetch note ---
   try {
     await getCurrentUserData();
 
-    // Check db and currentUser exist
     if (!db) throw new Error("Firestore (db) not initialized.");
     if (!currentUser || !currentUser.id) throw new Error("User not logged in.");
 
-    // Normalize filters — remove .toLowerCase() to match Firestore case exactly
     const normalizedOffice = (userOffice || "").trim();
     const normalizedCategory = (userCategory || "").trim();
     const normalizedDepartment = (userDepartment || "").trim();
@@ -53,13 +66,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       office: normalizedOffice,
       category: normalizedCategory,
       department: normalizedDepartment,
+      semester: currentSemesterName
     });
 
-    // Query Firestore for latest note matching filters
+    // Query Firestore for latest note matching filters AND current semester
     const querySnapshot = await db.collection("notesTable")
       .where("office", "==", normalizedOffice)
       .where("category", "==", normalizedCategory)
       .where("department", "==", normalizedDepartment)
+      .where("semester", "==", currentSemesterName)
       .orderBy("createdAt", "desc")
       .limit(1)
       .get();
@@ -72,10 +87,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       originalNotes = noteData.note || "";
       notesContent.innerText = originalNotes;
       charCountDisplay.innerText = `${originalNotes.length} / 150`;
-      // Remove placeholder attribute if present
       notesContent.removeAttribute("data-placeholder");
     } else {
-      // No note found - show empty editable area with placeholder styling
       existingDocId = null;
       originalNotes = "";
       notesContent.innerText = "";
@@ -108,7 +121,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   editBtn.addEventListener("click", () => {
     originalNotes = notesContent.innerText.trim();
     if (originalNotes === "No note yet." || originalNotes === "") {
-      notesContent.innerText = ""; // Clear placeholder for fresh note
+      notesContent.innerText = "";
     }
     notesContent.contentEditable = true;
     notesContent.focus();
@@ -117,8 +130,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     saveBtn.style.display = "inline-block";
     cancelBtn.style.display = "inline-block";
     editBtn.style.display = "none";
-
-    // Remove placeholder attribute if present
     notesContent.removeAttribute("data-placeholder");
   });
 
@@ -130,11 +141,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     cancelBtn.style.display = "none";
     editBtn.style.display = "inline-block";
     charCountDisplay.innerText = `${originalNotes.length} / 150`;
-
-    // If note empty, restore placeholder
-    if (!originalNotes) {
-      notesContent.setAttribute("data-placeholder", "No note yet. Click Edit to add.");
-    }
+    if (!originalNotes) notesContent.setAttribute("data-placeholder", "No note yet. Click Edit to add.");
   });
 
   // Save button: save or update Firestore document
@@ -152,27 +159,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     try {
-      // Normalize again before saving — no toLowerCase()
       const normalizedOffice = (userOffice || "").trim();
       const normalizedCategory = (userCategory || "").trim();
       const normalizedDepartment = (userDepartment || "").trim();
 
       if (existingDocId) {
-        // Update existing note
         await db.collection("notesTable").doc(existingDocId).update({
           note: noteText,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          semester: currentSemesterName // Keep semester updated
         });
         alert("Note updated successfully.");
       } else {
-        // Create new note document
         const docRef = await db.collection("notesTable").add({
           note: noteText,
           addedBy: currentUser.id,
           office: normalizedOffice,
           category: normalizedCategory,
           department: normalizedDepartment,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          semester: currentSemesterName,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         existingDocId = docRef.id;
         alert("Note created successfully.");

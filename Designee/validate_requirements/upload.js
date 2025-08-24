@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const uploadBtn = document.getElementById("uploadBtn");
     const uploadInput = document.getElementById("uploadInput");
     const studentsTableBody = document.getElementById("studentsTableBody");
-     const usernameDisplay = document.getElementById("usernameDisplay");
+    const usernameDisplay = document.getElementById("usernameDisplay");
 
     if (!uploadBtn || !uploadInput || !studentsTableBody) {
         console.error("Upload button, input, or table body not found in DOM");
@@ -83,6 +83,26 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // ✅ Get the current semester string
+    async function getCurrentSemester() {
+        try {
+            const snapshot = await db.collection("semesterTable")
+                .where("currentSemester", "==", true)
+                .limit(1)
+                .get();
+
+            if (!snapshot.empty) {
+                return snapshot.docs[0].data().semester || null;
+            } else {
+                console.warn("⚠️ No active semester found in semesterTable");
+                return null;
+            }
+        } catch (err) {
+            console.error("Error fetching current semester:", err);
+            return null;
+        }
+    }
+
     // Open file dialog
     uploadBtn.addEventListener("click", () => uploadInput.click());
 
@@ -94,6 +114,12 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const collectionName = await resolveCollectionName();
             console.log("📂 Using collection:", collectionName);
+
+            const currentSemester = await getCurrentSemester();
+            if (!currentSemester) {
+                alert("No active semester found. Please contact admin.");
+                return;
+            }
 
             const reader = new FileReader();
             reader.onload = async (e) => {
@@ -114,7 +140,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     yearLevel: row[4] || "",
                     sourceDepartment: row[3] || department || null,
                     sourceCategory: category || null,
-                    sourceOffice: office || null
+                    sourceOffice: office || null,
+                    semester: currentSemester   // ✅ Add semester field
                 })).filter(s => s.idNo);
 
                 const collectionRef = db.collection(collectionName);
@@ -136,8 +163,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     await collectionRef.doc(student.idNo.toString()).set(student, { merge: true });
                 }
 
-                console.log(`✅ Uploaded ${studentData.length} records to "${collectionName}"`);
-                alert(`Uploaded ${studentData.length} students successfully!`);
+                console.log(`✅ Uploaded ${studentData.length} records to "${collectionName}" with semester "${currentSemester}"`);
+                alert(`Uploaded ${studentData.length} students successfully for ${currentSemester}!`);
                 uploadInput.value = ""; // reset
                 loadStudents(); // refresh table
             };
@@ -149,8 +176,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Load only students uploaded in that office’s collection
-    
+    // (Your existing loadStudents function should go here if needed)
 
     // Load immediately
-   
+    // loadStudents();  <-- (uncomment if loadStudents is defined elsewhere)
 });

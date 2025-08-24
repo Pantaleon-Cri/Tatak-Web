@@ -21,12 +21,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!studentDoc.exists) throw new Error("Student not found");
     const student = studentDoc.data();
 
-    const studentClubs =
+    // Normalize and fetch readable student clubs
+    const studentClubsIds =
       typeof student.clubs === "string"
         ? student.clubs.split(",").map(c => c.trim())
         : Array.isArray(student.clubs)
         ? student.clubs.map(c => String(c).trim())
         : [];
+
+    const studentClubs = [];
+    for (const cId of studentClubsIds) {
+      const cName = await getCategoryName(cId);
+      if (cName) studentClubs.push(cName);
+    }
+
     const studentDept = String(student.department || "").trim();
 
     // ✅ Fetch readable semester name
@@ -47,23 +55,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     const allowedSnap = await db.collection("allowedCollections").get();
     const allowedCollections = allowedSnap.docs.map(doc => doc.data().name).filter(Boolean);
 
-    // Check allowed collections for this student
-    let matchedStudentData = null;
+    const allowedMemberships = new Set();
     for (const collName of allowedCollections) {
       try {
         const doc = await db.collection(collName).doc(studentId).get();
-        if (doc.exists) {
-          matchedStudentData = doc.data();
-          break;
+        if (doc && doc.exists) {
+          const name = await getCategoryName(collName);
+          if (name) allowedMemberships.add(name);
         }
       } catch (err) {
         console.error(`Error checking allowed collection ${collName}:`, err);
       }
     }
 
-    const studentCategory = matchedStudentData ? String(matchedStudentData.sourceCategory || "").trim() : String(student.sourceCategory || "").trim();
-    const studentOffice = matchedStudentData ? String(matchedStudentData.sourceOffice || "").trim() : String(student.sourceOffice || "").trim();
-    const studentDepartment = matchedStudentData ? String(matchedStudentData.sourceDepartment || "").trim() : String(student.sourceDepartment || "").trim();
+    const studentCategory = String(student.sourceCategory || "").trim();
+    const studentOffice = String(student.sourceOffice || "").trim();
 
     // ================= Fetch all requirements =================
     const reqSnap = await db.collection("RequirementsTable").get();
@@ -84,20 +90,36 @@ document.addEventListener("DOMContentLoaded", async () => {
       let showRequirement = false;
 
       // ================= RULES =================
-      if (["302", "303", "304", "305", "306"].includes(reqOffice)) showRequirement = true;
-      else if (["401", "403"].includes(reqCategory)) showRequirement = true;
-      else if (reqOffice === "309" && studentClubs.includes(reqCategory)) showRequirement = true;
-      else if (["301", "310", "311", "312", "313"].includes(reqOffice)) {
+      if (["302", "303", "304", "305", "306"].includes(reqOffice)) {
+        showRequirement = true;
+      }
+      else if (["401", "403"].includes(reqCategory)) {
+        showRequirement = true;
+      }
+      else if (reqOffice === "301") {
+        if (["401", "403"].includes(reqCategory)) {
+          showRequirement = true;
+        } else {
+          const reqCatName = await getCategoryName(reqCategory) || reqCategory;
+          if (allowedMemberships.has(reqCatName) || normalizeString(reqCatName) === normalizeString(studentCategory)) {
+            showRequirement = true;
+          }
+        }
+      }
+      else if (reqOffice === "309") {
+        const reqCategoryName = await getCategoryName(reqCategory);
+        if (studentClubs.some(club => normalizeString(club) === normalizeString(reqCategoryName))) {
+          showRequirement = true;
+        }
+      }
+      else if (["310", "311", "312", "313"].includes(reqOffice)) {
         try {
           const groupSnap = await db.collection("groupTable").get();
           for (const doc of groupSnap.docs) {
             const collName = doc.data().club;
             if (!collName) continue;
             const studentInColl = await db.collection(collName).doc(studentId).get();
-            if (studentInColl.exists) {
-              showRequirement = true;
-              break;
-            }
+            if (studentInColl.exists) { showRequirement = true; break; }
           }
         } catch (err) {
           console.error(`Error checking groupTable for office ${reqOffice}:`, err);
@@ -110,23 +132,27 @@ document.addEventListener("DOMContentLoaded", async () => {
             const collName = doc.data().lab;
             if (!collName) continue;
             const studentInLab = await db.collection(collName).doc(studentId).get();
-            if (studentInLab.exists) {
-              showRequirement = true;
-              break;
-            }
+            if (studentInLab.exists) { showRequirement = true; break; }
           }
         } catch (err) {
           console.error("Error checking labTable for office 314:", err);
         }
       }
-      else if (["307", "308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) showRequirement = true;
-      else if (isDeptGlobal && isCategoryGlobal) showRequirement = true;
+      else if (["307", "308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) {
+        showRequirement = true;
+      }
+      else if (isDeptGlobal && isCategoryGlobal) {
+        showRequirement = true;
+      }
+      // ================= END RULES =================
 
       if (!showRequirement) continue;
       anyRequirementsFound = true;
 
       const key = `${reqCategory}||${reqDept}||${reqOffice}||${reqLab}`;
-      if (!groupedReqs[key]) groupedReqs[key] = { category: reqCategory, department: reqDept, office: reqOffice, lab: reqLab, requirements: [], addedByDesigneeId };
+      if (!groupedReqs[key]) {
+        groupedReqs[key] = { category: reqCategory, department: reqDept, office: reqOffice, lab: reqLab, requirements: [], addedByDesigneeId };
+      }
       groupedReqs[key].requirements.push(req.requirement);
     }
 
@@ -134,43 +160,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     const valDoc = await db.collection("ValidateRequirementsTable").doc(studentId).get();
     const officesData = valDoc?.exists ? valDoc.data().offices || {} : {};
 
-    // Track overall clearance
     let overallCleared = true;
 
-    // 🔹 Show semester label
-    const semesterHeader = document.createElement("h3");
-    
-    container.appendChild(semesterHeader);
-
-    // 🔹 Prepare offices log for Firestore update
-    const officesLog = {};
-
-    // ================= Render sections =================
     for (const groupKey in groupedReqs) {
       const group = groupedReqs[groupKey];
-
       const isDeptGlobal = normalizeString(group.department) === "n/a" || group.department === "";
       const isCategoryGlobal = normalizeString(group.category) === "n/a" || group.category === "";
 
-      let headerTitle = "";
-      if (!isCategoryGlobal) {
-        headerTitle = (await getCategoryName(group.category)) || group.category;
-        if (/^\d+$/.test(headerTitle)) {
-          const labName = await getLabName(group.category);
-          if (labName) headerTitle = labName;
-        }
-      } else if (isCategoryGlobal && isDeptGlobal) {
-        headerTitle = (await getOfficeName(group.office)) || group.office;
-      } else if (isCategoryGlobal && !isDeptGlobal) {
-        const officeName = (await getOfficeName(group.office)) || group.office;
-        const deptName = (await getDepartmentName(group.department)) || group.department;
-        headerTitle = `${officeName} - ${deptName}`;
-      }
+     let headerTitle = "";
 
-      if (group.lab) {
-        const labName = await getLabName(group.lab);
-        if (labName) headerTitle += ` - ${labName}`;
-      }
+if (!isCategoryGlobal) {
+  if (/^2\d{2}$/.test(group.category)) {
+    // IDs 200–299 are labs
+    headerTitle = (await getLabName(group.category)) || group.category;
+  } else {
+    headerTitle = (await getCategoryName(group.category)) || group.category;
+  }
+} else if (isCategoryGlobal && isDeptGlobal) {
+  headerTitle = (await getOfficeName(group.office)) || group.office;
+} else if (isCategoryGlobal && !isDeptGlobal) {
+  const officeName = (await getOfficeName(group.office)) || group.office;
+  const deptName = (await getDepartmentName(group.department)) || group.department;
+  headerTitle = `${officeName} - ${deptName}`;
+}
+
+// keep this for explicit lab field
+if (group.lab) {
+  const labName = await getLabName(group.lab);
+  if (labName) headerTitle += ` - ${labName}`;
+}
 
       const sectionGroupDiv = document.createElement("div");
       sectionGroupDiv.classList.add("section-group");
@@ -180,60 +198,25 @@ document.addEventListener("DOMContentLoaded", async () => {
       headerLabel.textContent = headerTitle;
       sectionGroupDiv.appendChild(headerLabel);
 
-      // Fetch validation array using addedByDesigneeId
       const validatedArray = officesData[group.addedByDesigneeId] || [];
       const allChecked = validatedArray.length > 0 && validatedArray.every(item => item.status === true);
       if (!allChecked) overallCleared = false;
-
       const lastCheckedBy = validatedArray.filter(item => item.status === true && item.checkedBy).map(item => item.checkedBy).pop() || null;
 
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");
-
-      if (allChecked) {
-        approvalDiv.innerHTML = `
-          <img src="../../Tatak.png" alt="Approved Icon" style="width:40px;height:auto;" />
-          <label><i>approved by ${lastCheckedBy || "Unknown"}</i></label>
-        `;
-        officesLog[headerTitle] = {
-          status: "Cleared",
-          approvedBy: lastCheckedBy || "Unknown"
-        };
-      } else {
-        approvalDiv.innerHTML = `<label><i>Not Cleared</i></label>`;
-        officesLog[headerTitle] = {
-          status: "Pending",
-          approvedBy: null
-        };
-      }
+      approvalDiv.innerHTML = allChecked
+        ? `<img src="../../Tatak.png" alt="Approved Icon" style="width:50px; height:50px;" /><br />
+           <label style="font-size:14px; color:#333;"><i>approved by ${String(lastCheckedBy || "Unknown")}</i><hr /></label>`
+        : `<label><i>Not Cleared</i><hr /></label>`;
 
       sectionGroupDiv.appendChild(approvalDiv);
       container.appendChild(sectionGroupDiv);
     }
 
-    // ================= Overall status =================
     statusElement.innerHTML = overallCleared
       ? `<span style="color:green">Completed</span>`
       : `<span style="color:red">Pending</span>`;
-
-    // ================= Save to StudentsClearanceLog if completed =================
-    if (overallCleared) {
-      const clearanceLogRef = db.collection("StudentsClearanceLog").doc(studentId);
-      await clearanceLogRef.set(
-        {
-          schoolID: studentId,
-          fullName: `${student.firstName} ${student.lastName}`,
-          clearances: {
-            [semesterId]: {
-              semesterName: readableSemester,
-              offices: officesLog
-            }
-          }
-        },
-        { merge: true }
-      );
-      console.log("✅ Clearance log updated for student:", studentId);
-    }
 
     if (!anyRequirementsFound) {
       container.innerHTML = `<div class="section-item"><label class="section-header">No Requirements Found</label><p>You currently have no active requirements.</p></div>`;

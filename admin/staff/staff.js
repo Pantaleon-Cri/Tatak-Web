@@ -39,6 +39,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     console.warn("logoutBtn not found");
   }
+
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
 
@@ -77,7 +78,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   try {
     // 🔁 Fetch all staff
     const staffSnap = await db.collection("staffTable").get();
-    const staffList = staffSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const staffList = staffSnap.docs.map(doc => ({
+      docId: doc.id,   // Firestore doc ID
+      ...doc.data()
+    }));
 
     // 🔁 Fetch lookup tables (parallel)
     const [clubsSnap, groupsSnap, departmentsSnap, officesSnap] = await Promise.all([
@@ -128,7 +132,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${staff.id || ""}</td>
+        <td>${staff.id || ""}</td> <!-- manual staff ID -->
         <td>${staff.firstName || ""}</td>
         <td>${staff.lastName || ""}</td>
         <td>${officeName}</td>
@@ -136,7 +140,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         <td>${categoryName || "N/A"}</td>
         <td>${staff.email || ""}</td>
         <td>
-          <button class="action-btn delete" data-id="${staff.id}">
+          <button class="action-btn delete" data-docid="${staff.docId}">
             <i class="fas fa-trash-alt"></i>
           </button>
         </td>
@@ -149,12 +153,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const deleteCancelBtn = document.getElementById("deleteCancelBtn");
     const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
 
-    let currentDeleteId = null;
+    let currentDeleteDocId = null;
 
     // 🔁 Attach delete button click events
     document.querySelectorAll(".action-btn.delete").forEach((btn) => {
       btn.addEventListener("click", () => {
-        currentDeleteId = btn.dataset.id;
+        currentDeleteDocId = btn.dataset.docid; // ✅ use Firestore doc ID
         deleteModal.style.display = "flex";
       });
     });
@@ -162,15 +166,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 🔁 Cancel delete
     deleteCancelBtn.addEventListener("click", () => {
       deleteModal.style.display = "none";
-      currentDeleteId = null;
+      currentDeleteDocId = null;
     });
 
     // 🔁 Confirm delete
     deleteConfirmBtn.addEventListener("click", async () => {
-      if (!currentDeleteId) return;
+      if (!currentDeleteDocId) return;
 
       try {
-        await db.collection("staffTable").doc(currentDeleteId).delete();
+        await db.collection("staffTable").doc(currentDeleteDocId).delete();
         alert("✅ Staff deleted successfully!");
         deleteModal.style.display = "none";
         location.reload(); // refresh to update table

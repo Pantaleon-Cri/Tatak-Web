@@ -64,7 +64,6 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // -------------------- Main Clearance Loader --------------------
-// -------------------- Main Clearance Loader --------------------
 window.openViewClearanceCard = async function(studentID, db) {
   const modal = document.getElementById("clearanceModal");
   modal.style.display = "block";
@@ -77,47 +76,48 @@ window.openViewClearanceCard = async function(studentID, db) {
   document.getElementById("nonAcademicSectionsGrid").innerHTML = "";
 
   try {
-    // Fetch student info
+    // ================= Fetch student =================
     const studentDoc = await db.collection("Students").doc(studentID).get();
     if (!studentDoc.exists) {
       document.getElementById("studentName").textContent = "Student not found";
       return;
     }
-    const studentData = studentDoc.data();
+    const student = studentDoc.data();
     document.getElementById("studentName").textContent =
-      [studentData.firstName, studentData.middleName, studentData.lastName].filter(Boolean).join(" ");
+      [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" ");
 
-    const studentClubs = Array.isArray(studentData.clubs)
-      ? studentData.clubs.map(String)
-      : typeof studentData.clubs === "string"
-        ? studentData.clubs.split(",").map(c => c.trim())
-        : [];
-    const studentDept = String(studentData.department || "").trim();
-    const studentSemesterId = String(studentData.semester || "").trim(); // e.g., "1"
+    // Convert student clubs to readable names
+    const studentClubsIds = Array.isArray(student.clubs) ? student.clubs.map(String) :
+                            typeof student.clubs === "string" ? student.clubs.split(",").map(c => c.trim()) : [];
+    const studentClubs = [];
+    for (const cId of studentClubsIds) {
+      const cName = await getCategoryName(db, cId);
+      if (cName) studentClubs.push(cName);
+    }
 
-    // 🔹 Convert student semester ID to readable name
+    const studentDept = String(student.department || "").trim();
+    const studentSemesterId = String(student.semester || "").trim();
+
+    // 🔹 Get readable semester name
     let studentSemesterName = "";
     const semesterSnap = await db.collection("semesterTable").doc(studentSemesterId).get();
     if (semesterSnap.exists) studentSemesterName = String(semesterSnap.data().semester || "").trim();
     document.getElementById("semesterText").textContent = studentSemesterName || "Unknown Semester";
 
-    // Allowed collections
+    // ================= Allowed collections =================
     const allowedSnap = await db.collection("allowedCollections").get();
     const allowedCollections = allowedSnap.docs.map(doc => doc.data().name).filter(Boolean);
 
-    let matchedStudentData = null;
+    const allowedMemberships = new Set();
     for (const collName of allowedCollections) {
-      try {
-        const doc = await db.collection(collName).doc(studentID).get();
-        if (doc.exists) { matchedStudentData = doc.data(); break; }
-      } catch {}
+      const doc = await db.collection(collName).doc(studentID).get().catch(()=>null);
+      if (doc && doc.exists) {
+        const name = await getCategoryName(db, collName);
+        if (name) allowedMemberships.add(name);
+      }
     }
 
-    const studentCategory = matchedStudentData?.sourceCategory || studentData.sourceCategory || "";
-    const studentOffice = matchedStudentData?.sourceOffice || studentData.sourceOffice || "";
-    const studentDepartment = matchedStudentData?.sourceDepartment || studentData.sourceDepartment || "";
-
-    // Fetch requirements
+    // ================= Fetch requirements =================
     const reqSnap = await db.collection("RequirementsTable").get();
     const groupedReqs = {};
     let anyRequirementsFound = false;
@@ -125,7 +125,7 @@ window.openViewClearanceCard = async function(studentID, db) {
     for (const reqDoc of reqSnap.docs) {
       const req = reqDoc.data();
 
-      // 🔹 Filter by student semester name
+      // 🔹 Filter by student semester
       if (String(req.semester || "").trim() !== studentSemesterName) continue;
 
       const reqDept = String(req.department || "").trim();
@@ -139,11 +139,26 @@ window.openViewClearanceCard = async function(studentID, db) {
 
       let showRequirement = false;
 
-      // Rules
-      if (["302","303","304","305","306"].includes(reqOffice)) showRequirement = true;
-      else if (["401","403"].includes(reqCategory)) showRequirement = true;
-      else if (reqOffice === "309" && studentClubs.includes(reqCategory)) showRequirement = true;
-      else if (["301","310","311","312","313"].includes(reqOffice)) {
+      // ---------------- RULES ----------------
+      if (["302","303","304","305","306"].includes(reqOffice)) {
+        showRequirement = true;
+      }
+      else if (["401","403"].includes(reqCategory)) {
+        showRequirement = true;
+      }
+      else if (reqOffice === "301") {
+        if (["401","403"].includes(reqCategory)) {
+          showRequirement = true;
+        } else {
+          const categoryName = await getCategoryName(db, reqCategory);
+          if (allowedMemberships.has(categoryName)) showRequirement = true;
+        }
+      }
+      else if (reqOffice === "309") {
+        const categoryName = await getCategoryName(db, reqCategory);
+        if (studentClubs.includes(categoryName)) showRequirement = true;
+      }
+      else if (["310","311","312","313"].includes(reqOffice)) {
         const groupSnap = await db.collection("groupTable").get();
         for (const doc of groupSnap.docs) {
           const collName = doc.data().club;
@@ -161,8 +176,12 @@ window.openViewClearanceCard = async function(studentID, db) {
           if (studentInLab.exists) { showRequirement = true; break; }
         }
       }
-      else if (["307","308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) showRequirement = true;
-      else if (isDeptGlobal && isCategoryGlobal) showRequirement = true;
+      else if (["307","308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) {
+        showRequirement = true;
+      }
+      else if (isDeptGlobal && isCategoryGlobal) {
+        showRequirement = true;
+      }
 
       if (!showRequirement) continue;
       anyRequirementsFound = true;
@@ -172,9 +191,11 @@ window.openViewClearanceCard = async function(studentID, db) {
       groupedReqs[key].requirements.push(req.requirement);
     }
 
+    // ================= Validation data =================
     const valDoc = await db.collection("ValidateRequirementsTable").doc(studentID).get();
     const officesData = valDoc?.exists ? valDoc.data().offices || {} : {};
 
+    // ================= Render =================
     let overallCleared = true;
     const containerEl = document.getElementById("officeSectionsGrid");
     containerEl.innerHTML = "";
@@ -242,4 +263,3 @@ window.openViewClearanceCard = async function(studentID, db) {
     document.getElementById("status").innerHTML = `<span style="color:red">Pending</span>`;
   }
 };
-
