@@ -7,6 +7,17 @@ function toggleSubMenu(id) {
   if (chevron) chevron.classList.toggle("rotated");
 }
 
+function displayFirstName() {
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  if (!usernameDisplay) return;
+
+  const studentName = localStorage.getItem("studentName");
+  if (!studentName) return;
+
+  // Split by space and take the first word as first name
+  const firstName = studentName.split(" ")[0] || "";
+  usernameDisplay.textContent = firstName;
+}
 document.addEventListener("DOMContentLoaded", async () => {
   // ------------------ 🔹 Firebase Init ------------------ //
   const firebaseConfig = {
@@ -23,7 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     firebase.initializeApp(firebaseConfig);
   }
   const db = firebase.firestore();
-
+  displayFirstName();
   // ------------------ 🔹 Logout Logic ------------------ //
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
@@ -86,86 +97,104 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const semesterSelect = document.getElementById("semesterSelect");
   const semesterLabel = document.getElementById("semesterLabel");
-  const studentIdEl = document.getElementById("studentId");
-  const studentNameEl = document.getElementById("studentName");
-  const statusEl = document.getElementById("status");
   const officesContainer = document.getElementById("officesContainer");
+  const studentNameSpan = document.getElementById("studentName");
+  const studentIdSpan = document.getElementById("studentId");
+  const statusSpan = document.getElementById("status");
 
-  try {
-    // 🔹 Fetch clearance log of this student
-    const logDoc = await db.collection("StudentsClearanceLog").doc(studentId).get();
-    if (!logDoc.exists) {
-      semesterSelect.innerHTML = `<option>No past clearances found</option>`;
+  // Populate student basic info
+  studentIdSpan.textContent = studentId;
+  studentNameSpan.textContent = localStorage.getItem("studentName") || "Unknown";
+
+  // 🔹 Step 1: Fetch from History collection
+  const historyDoc = await db.collection("History").doc(studentId).get();
+  if (!historyDoc.exists) {
+    officesContainer.innerHTML = `<p>No history records found.</p>`;
+    return;
+  }
+
+  const historyData = historyDoc.data();
+  const semestersData = historyData.semesters || {};
+
+  const semesters = Object.keys(semestersData);
+  semesters.sort(); // optional
+
+  // Populate dropdown
+  semesters.forEach((sem) => {
+    const option = document.createElement("option");
+    option.value = sem;
+    option.textContent = sem;
+    semesterSelect.appendChild(option);
+  });
+
+  // 🔹 Step 2: Render clearance logs by semester
+  function renderClearance(selectedSemester) {
+    officesContainer.innerHTML = "";
+
+    if (!selectedSemester || !semestersData[selectedSemester]) {
+      semesterLabel.textContent = "Select a semester";
+      statusSpan.textContent = "";
       return;
     }
 
-    const logData = logDoc.data();
+    semesterLabel.textContent = selectedSemester;
 
-    // 🔹 Populate dropdown with available semesters
-    semesterSelect.innerHTML = `<option value="">Select Semester</option>`;
-    Object.keys(logData.clearances).forEach((semId) => {
-      const sem = logData.clearances[semId];
-      const opt = document.createElement("option");
-      opt.value = semId;
-      opt.textContent = sem.semesterName;
-      semesterSelect.appendChild(opt);
-    });
+    const semesterInfo = semestersData[selectedSemester];
+    const snapshot = semesterInfo.snapshot || {};
+    const offices = snapshot.offices || {};
+    const overallStatus = semesterInfo.overallStatus || "Pending";
 
-    // 🔹 Fill student info
-    studentIdEl.textContent = logData.schoolID || studentId;
-    studentNameEl.textContent = logData.fullName || "";
+    statusSpan.textContent = overallStatus;
 
-    // 🔹 Auto-load the first semester if exists
-    const firstSemId = Object.keys(logData.clearances)[0];
-    if (firstSemId) {
-      semesterSelect.value = firstSemId;
-      renderSemester(logData.clearances[firstSemId]);
-    }
+    Object.entries(offices).forEach(([officeName, requirementsArray]) => {
+      if (!Array.isArray(requirementsArray)) return;
 
-    // 🔹 Change event for dropdown
-    semesterSelect.addEventListener("change", (e) => {
-      const selectedSemId = e.target.value;
-      if (!selectedSemId) {
-        semesterLabel.textContent = "Select a semester";
-        officesContainer.innerHTML = "";
-        statusEl.textContent = "";
-        return;
-      }
-      renderSemester(logData.clearances[selectedSemId]);
-    });
+      // Determine if ALL requirements cleared
+      const allOfficeCleared = requirementsArray.every((req) => req.status === true);
 
-    // 🔹 Render semester offices
-    function renderSemester(sem) {
-      semesterLabel.textContent = sem.semesterName;
-      officesContainer.innerHTML = "";
+      // Get the latest approver (last checkedBy)
+      let lastCheckedBy = "N/A";
+      let lastCheckedAt = null;
 
-      let overallCleared = true;
-
-      for (const [officeName, officeData] of Object.entries(sem.offices)) {
-        const div = document.createElement("div");
-        div.classList.add("section-item");
-
-        const statusCleared = officeData.status === "Cleared";
-        if (!statusCleared) overallCleared = false;
-
-        div.innerHTML = `
-          <label>${officeName}</label>
-          ${
-            statusCleared
-              ? `<img src="../../Tatak.png" style="width:40px;">
-                 <label><i>approved by ${officeData.approvedBy || "Unknown"}</i></label>`
-              : `<label><i>Not Cleared</i></label>`
+      requirementsArray.forEach((req) => {
+        if (req.checkedAt) {
+          const time = new Date(req.checkedAt);
+          if (!lastCheckedAt || time > lastCheckedAt) {
+            lastCheckedAt = time;
+            lastCheckedBy = req.checkedBy || "N/A";
           }
+        }
+      });
+
+      // Build office section
+      const officeDiv = document.createElement("div");
+      officeDiv.classList.add("office-section");
+
+      const officeHeader = document.createElement("h3");
+      officeHeader.textContent = officeName;
+      officeDiv.appendChild(officeHeader);
+
+      const contentDiv = document.createElement("div");
+      contentDiv.classList.add("office-status");
+
+      if (allOfficeCleared) {
+        contentDiv.innerHTML = `
+          <img src="../../Tatak.png" alt="Cleared" class="tatak-img" style="width:50px; height:50px;" />
+          <p>Approved By: ${lastCheckedBy}</p>
         `;
-        officesContainer.appendChild(div);
+      } else {
+        contentDiv.innerHTML = `
+          <p>Status: ❌ Pending</p>
+        `;
       }
 
-      statusEl.innerHTML = overallCleared
-        ? `<span style="color:green">Completed</span>`
-        : `<span style="color:red">Pending</span>`;
-    }
-  } catch (err) {
-    console.error("Error loading past clearance:", err);
-    semesterSelect.innerHTML = `<option>Error loading</option>`;
+      officeDiv.appendChild(contentDiv);
+      officesContainer.appendChild(officeDiv);
+    });
   }
+
+  // 🔹 Step 3: Listen for semester change
+  semesterSelect.addEventListener("change", (e) => {
+    renderClearance(e.target.value);
+  });
 });

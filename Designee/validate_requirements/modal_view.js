@@ -68,27 +68,47 @@ window.openViewClearanceCard = async function(studentID, db) {
   const modal = document.getElementById("clearanceModal");
   modal.style.display = "block";
 
+  const containerEl = document.getElementById("officeSectionsGrid");
+  const statusEl = document.getElementById("status");
+
+  statusEl.textContent = "Loading...";
   document.getElementById("studentId").textContent = studentID;
   document.getElementById("studentName").textContent = "Loading...";
-  document.getElementById("status").textContent = "Loading...";
   document.getElementById("semesterText").textContent = "";
-  document.getElementById("officeSectionsGrid").innerHTML = "<p>Loading offices...</p>";
-  document.getElementById("nonAcademicSectionsGrid").innerHTML = "";
 
   try {
+    // ================= Fetch current semester =================
+    let currentSemesterId = null;
+    let currentSemesterName = "Unknown Semester";
+
+    const semesterSnap = await db.collection("semesterTable")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
+
+    if (!semesterSnap.empty) {
+      const semesterDoc = semesterSnap.docs[0];
+      currentSemesterId = semesterDoc.id;
+      currentSemesterName = semesterDoc.data().semester;
+    }
+
     // ================= Fetch student =================
     const studentDoc = await db.collection("Students").doc(studentID).get();
-    if (!studentDoc.exists) {
-      document.getElementById("studentName").textContent = "Student not found";
-      return;
-    }
+    if (!studentDoc.exists) throw new Error("Student not found");
     const student = studentDoc.data();
+
     document.getElementById("studentName").textContent =
       [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" ");
+    document.getElementById("semesterText").textContent = currentSemesterName;
 
-    // Convert student clubs to readable names
-    const studentClubsIds = Array.isArray(student.clubs) ? student.clubs.map(String) :
-                            typeof student.clubs === "string" ? student.clubs.split(",").map(c => c.trim()) : [];
+    // Normalize and fetch readable student clubs
+    const studentClubsIds =
+      typeof student.clubs === "string"
+        ? student.clubs.split(",").map(c => c.trim())
+        : Array.isArray(student.clubs)
+        ? student.clubs.map(c => String(c).trim())
+        : [];
+
     const studentClubs = [];
     for (const cId of studentClubsIds) {
       const cName = await getCategoryName(db, cId);
@@ -96,25 +116,22 @@ window.openViewClearanceCard = async function(studentID, db) {
     }
 
     const studentDept = String(student.department || "").trim();
-    const studentSemesterId = String(student.semester || "").trim();
+    const studentCategory = String(student.sourceCategory || "").trim();
+    const studentOffice = String(student.sourceOffice || "").trim();
 
-    // 🔹 Get readable semester name
-    let studentSemesterName = "";
-    const semesterSnap = await db.collection("semesterTable").doc(studentSemesterId).get();
-    if (semesterSnap.exists) studentSemesterName = String(semesterSnap.data().semester || "").trim();
-    document.getElementById("semesterText").textContent = studentSemesterName || "Unknown Semester";
-
-    // ================= Allowed collections =================
+    // ================= Fetch allowed collections =================
     const allowedSnap = await db.collection("allowedCollections").get();
     const allowedCollections = allowedSnap.docs.map(doc => doc.data().name).filter(Boolean);
 
     const allowedMemberships = new Set();
     for (const collName of allowedCollections) {
-      const doc = await db.collection(collName).doc(studentID).get().catch(()=>null);
-      if (doc && doc.exists) {
-        const name = await getCategoryName(db, collName);
-        if (name) allowedMemberships.add(name);
-      }
+      try {
+        const doc = await db.collection(collName).doc(studentID).get();
+        if (doc && doc.exists) {
+          const name = await getCategoryName(db, collName);
+          if (name) allowedMemberships.add(name);
+        }
+      } catch (err) { console.error(err); }
     }
 
     // ================= Fetch requirements =================
@@ -125,8 +142,11 @@ window.openViewClearanceCard = async function(studentID, db) {
     for (const reqDoc of reqSnap.docs) {
       const req = reqDoc.data();
 
-      // 🔹 Filter by student semester
-      if (String(req.semester || "").trim() !== studentSemesterName) continue;
+      // ------------------ Filter by current semester ------------------
+      if (req.semester) {
+        const reqSemester = String(req.semester || "");
+        if (reqSemester !== currentSemesterId && reqSemester !== currentSemesterName) continue;
+      }
 
       const reqDept = String(req.department || "").trim();
       const reqCategory = String(req.category || "").trim();
@@ -139,26 +159,22 @@ window.openViewClearanceCard = async function(studentID, db) {
 
       let showRequirement = false;
 
-      // ---------------- RULES ----------------
+      // ================= RULES =================
       if (["302","303","304","305","306"].includes(reqOffice)) {
         showRequirement = true;
-      }
-      else if (["401","403"].includes(reqCategory)) {
+      } else if (["401","403"].includes(reqCategory)) {
         showRequirement = true;
-      }
-      else if (reqOffice === "301") {
+      } else if (reqOffice === "301") {
         if (["401","403"].includes(reqCategory)) {
           showRequirement = true;
         } else {
           const categoryName = await getCategoryName(db, reqCategory);
-          if (allowedMemberships.has(categoryName)) showRequirement = true;
+          if (allowedMemberships.has(categoryName) || normalizeString(categoryName) === normalizeString(studentCategory)) showRequirement = true;
         }
-      }
-      else if (reqOffice === "309") {
+      } else if (reqOffice === "309") {
         const categoryName = await getCategoryName(db, reqCategory);
-        if (studentClubs.includes(categoryName)) showRequirement = true;
-      }
-      else if (["310","311","312","313"].includes(reqOffice)) {
+        if (studentClubs.some(club => normalizeString(club) === normalizeString(categoryName))) showRequirement = true;
+      } else if (["310","311","312","313"].includes(reqOffice)) {
         const groupSnap = await db.collection("groupTable").get();
         for (const doc of groupSnap.docs) {
           const collName = doc.data().club;
@@ -166,8 +182,7 @@ window.openViewClearanceCard = async function(studentID, db) {
           const studentInColl = await db.collection(collName).doc(studentID).get();
           if (studentInColl.exists) { showRequirement = true; break; }
         }
-      }
-      else if (reqOffice === "314") {
+      } else if (reqOffice === "314") {
         const labSnap = await db.collection("labTable").get();
         for (const doc of labSnap.docs) {
           const collName = doc.data().lab;
@@ -175,13 +190,12 @@ window.openViewClearanceCard = async function(studentID, db) {
           const studentInLab = await db.collection(collName).doc(studentID).get();
           if (studentInLab.exists) { showRequirement = true; break; }
         }
-      }
-      else if (["307","308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) {
+      } else if (["307","308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) {
+        showRequirement = true;
+      } else if (isDeptGlobal && isCategoryGlobal) {
         showRequirement = true;
       }
-      else if (isDeptGlobal && isCategoryGlobal) {
-        showRequirement = true;
-      }
+      // ================= END RULES =================
 
       if (!showRequirement) continue;
       anyRequirementsFound = true;
@@ -191,14 +205,20 @@ window.openViewClearanceCard = async function(studentID, db) {
       groupedReqs[key].requirements.push(req.requirement);
     }
 
-    // ================= Validation data =================
+    // ================= Fetch validation data =================
     const valDoc = await db.collection("ValidateRequirementsTable").doc(studentID).get();
     const officesData = valDoc?.exists ? valDoc.data().offices || {} : {};
 
+    // ------------------ Filter validation by semester ------------------
+    for (const officeId in officesData) {
+      officesData[officeId] = officesData[officeId].filter(item => {
+        if (!item.semester) return true;
+        return item.semester === currentSemesterId || item.semester === currentSemesterName;
+      });
+    }
+
     // ================= Render =================
     let overallCleared = true;
-    const containerEl = document.getElementById("officeSectionsGrid");
-    containerEl.innerHTML = "";
 
     for (const groupKey in groupedReqs) {
       const group = groupedReqs[groupKey];
@@ -248,18 +268,18 @@ window.openViewClearanceCard = async function(studentID, db) {
       containerEl.appendChild(sectionGroupDiv);
     }
 
-    document.getElementById("status").innerHTML = overallCleared
+    statusEl.innerHTML = overallCleared
       ? `<span style="color:green">Completed</span>`
       : `<span style="color:red">Pending</span>`;
 
     if (!anyRequirementsFound) {
       containerEl.innerHTML = `<div class="section-item"><label class="section-header">No Requirements Found</label><p>You currently have no active requirements.</p></div>`;
-      document.getElementById("status").innerHTML = `<span style="color:red">Pending</span>`;
+      statusEl.innerHTML = `<span style="color:red">Pending</span>`;
     }
 
   } catch (err) {
     console.error("Error loading clearance:", err);
-    document.getElementById("officeSectionsGrid").innerHTML = "<p>Failed to load clearance.</p>";
-    document.getElementById("status").innerHTML = `<span style="color:red">Pending</span>`;
+    containerEl.innerHTML = "<p>Failed to load clearance.</p>";
+    statusEl.innerHTML = `<span style="color:red">Pending</span>`;
   }
 };

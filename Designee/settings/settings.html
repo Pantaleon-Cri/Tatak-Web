@@ -10,98 +10,82 @@
 </head>
 <body>
   <!-- HEADER -->
-    <header class="header">
-        <div class="header-left">
-            <img src="../../logo.png" alt="Logo" class="logo" />
-            <div class="title">
-                <span class="system-name">TATAK</span>
-                <span class="divider">|</span>
-                <span class="dashboard-title">Designee - Settings</span>
-            </div>
-        </div>
+  <header class="header">
+      <div class="header-left">
+          <img src="../../logo.png" alt="Logo" class="logo" />
+          <div class="title">
+              <span class="system-name">TATAK</span>
+              <span class="divider">|</span>
+              <span class="dashboard-title">Designee - Settings</span>
+          </div>
+      </div>
 
-        <div class="header-right">
-            <div class="user-dropdown" id="userDropdownToggle">
-                <div class="user-info">
-                    <div class="username" id="usernameDisplay"></div>
-                    <div class="email" id="userRoleDisplay">Settings</div>
-                </div>
-                <i class="fas fa-angle-down dropdown-arrow"></i>
-            </div>
+      <div class="header-right">
+          <div class="user-dropdown" id="userDropdownToggle">
+              <div class="user-info">
+                  <div class="username" id="usernameDisplay"></div>
+                  <div class="email" id="userRoleDisplay">Settings</div>
+              </div>
+              <i class="fas fa-angle-down dropdown-arrow"></i>
+          </div>
 
-            <div class="dropdown-menu" id="dropdownMenu">
-           <a href="../settings.html">Settings</a>
-      <a href="#" id="logoutBtn">Logout</a>
-            </div>
-        </div>
-    </header>
+          <div class="dropdown-menu" id="dropdownMenu">
+             <a href="../settings.html">Settings</a>
+             <a href="#" id="logoutBtn">Logout</a>
+          </div>
+      </div>
+  </header>
 
-    <!-- Wrapper for the existing settings UI content -->
-    <div class="main-content-wrapper">
-        <div class="container">
-            <!-- Back Button -->
-            <div class="back-button-wrapper">
-               <a href="../designee.html" class="back-button">
-                   <!-- Back icon (SVG) -->
-                   <svg xmlns="http://www.w3.org/2000/svg" class="back-button-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                       <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                   </svg>
-               </a>
-                    <span class="back-button-text">Back to Homepage</span>
-                </button>
-            </div>
+  <!-- Wrapper for the existing settings UI content -->
+  <div class="main-content-wrapper">
+      <div class="container">
+          <!-- Back Button -->
+          <div class="back-button-wrapper">
+             <a href="../designee.html" class="back-button">
+                 <!-- Back icon (SVG) -->
+                 <svg xmlns="http://www.w3.org/2000/svg" class="back-button-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                 </svg>
+             </a>
+             <span class="back-button-text">Back to Homepage</span>
+          </div>
 
-            <!-- Administrator Settings Title -->
-            <h1 class="main-title">Designee Settings</h1>
+          <!-- Administrator Settings Title -->
+          <h1 class="main-title">Designee Settings</h1>
 
-            <!-- Account Settings Section -->
-            <div class="account-settings-section">
-                <h2 class="account-settings-title">
-                    <i class="fas fa-user-cog"></i>
-                    Account Settings
-                </h2>
+          <!-- Account Settings Section -->
+          <div class="account-settings-section">
+              <h2 class="account-settings-title">
+                  <i class="fas fa-user-cog"></i>
+                  Account Settings
+              </h2>
 
-                <!-- Change Password Subsection -->
-                <div class="change-password-subsection">
-                    <h3 class="subsection-title">
-                        <i class="fas fa-key"></i>
-                        Change Password
-                    </h3>
-                    <div class="grid-layout">
-                        <input type="password" placeholder="Current Password">
-                        <input type="password" placeholder="New Password (min 6 characters)">
-                        <input type="password" placeholder="Confirm New Password">
-                        <button class="action-button">
-                            Change Password
-                        </button>
-                    </div>
-                </div>
+              <!-- Change Password Subsection -->
+              <div class="change-password-subsection">
+                  <h3 class="subsection-title">
+                      <i class="fas fa-key"></i>
+                      Change Password
+                  </h3>
+                  <div class="grid-layout">
+                      <input type="password" id="currentPassword" placeholder="Current Password">
+                      <input type="password" id="newPassword" placeholder="New Password (min 6 characters)">
+                      <input type="password" id="confirmPassword" placeholder="Confirm New Password">
+                      <button class="action-button" id="changePasswordBtn">
+                          Change Password
+                      </button>
+                  </div>
+                  <div id="passwordMessage" class="password-message"></div>
+              </div>
+          </div>
+      </div>
+  </div>
 
-                <!-- Change Admin ID Subsection -->
-                <div>
-                    <h3 class="subsection-title">
-                        <i class="fas fa-id-badge"></i>
-                        Change Designee ID
-                    </h3>
-                    <div class="grid-layout">
-                        <div class="current-admin-id">
-                            Current Designee ID: <span class="admin-id-value">CeacGuidance</span>
-                        </div>
-                        <input type="text" placeholder="New Designee ID">
-                        <div class="empty-grid-cell"></div> <!-- Empty div for grid alignment -->
-                        <button class="action-button">
-                            Change Designee ID
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-  
-
+  <!-- Firebase App (required) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<!-- Firebase Auth (optional, but required if using auth) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<!-- Firebase Firestore -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="settings.js"></script>
-  
- 
-
 </body>
 </html>

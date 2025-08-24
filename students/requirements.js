@@ -1,3 +1,7 @@
+
+
+
+
 document.addEventListener("DOMContentLoaded", async () => {
   const studentId = localStorage.getItem("schoolID");
   if (!studentId) {

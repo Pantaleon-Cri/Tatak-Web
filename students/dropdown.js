@@ -1,4 +1,16 @@
+function displayFirstName() {
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  if (!usernameDisplay) return;
+
+  const studentName = localStorage.getItem("studentName");
+  if (!studentName) return;
+
+  // Split by space and take the first word as first name
+  const firstName = studentName.split(" ")[0] || "";
+  usernameDisplay.textContent = firstName;
+}
 document.addEventListener("DOMContentLoaded", () => {
+ displayFirstName();
   const toggle = document.getElementById("userDropdownToggle");
   const menu = document.getElementById("dropdownMenu");
 

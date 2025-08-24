@@ -1,3 +1,4 @@
+// view.js
 document.addEventListener("DOMContentLoaded", async () => {
   const studentId = localStorage.getItem("schoolID");
   if (!studentId) {
@@ -16,6 +17,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   statusElement.textContent = "Loading...";
 
   try {
+    // ================= Fetch current semester =================
+    let currentSemesterId = null;
+    let currentSemesterName = "Unknown Semester";
+
+    const semesterSnap = await db.collection("semesterTable")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
+
+    if (!semesterSnap.empty) {
+      const semesterDoc = semesterSnap.docs[0];
+      currentSemesterId = semesterDoc.id;
+      currentSemesterName = semesterDoc.data().semester;
+    }
+
     // ================= Fetch student =================
     const studentDoc = await db.collection("Students").doc(studentId).get();
     if (!studentDoc.exists) throw new Error("Student not found");
@@ -36,20 +52,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const studentDept = String(student.department || "").trim();
-
-    // ✅ Fetch readable semester name
-    let readableSemester = "Unknown Semester";
-    let semesterId = String(student.semester || "");
-    if (semesterId) {
-      try {
-        const semesterDoc = await db.collection("semesterTable").doc(semesterId).get();
-        if (semesterDoc.exists) {
-          readableSemester = semesterDoc.data().semester || readableSemester;
-        }
-      } catch (err) {
-        console.error("Error fetching semester name:", err);
-      }
-    }
 
     // ================= Fetch allowed collections =================
     const allowedSnap = await db.collection("allowedCollections").get();
@@ -78,6 +80,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     for (const reqDoc of reqSnap.docs) {
       const req = reqDoc.data();
+
+      // ------------------ Filter by current semester ------------------
+      if (req.semester) {
+        const reqSemester = String(req.semester || "");
+        if (reqSemester !== currentSemesterId && reqSemester !== currentSemesterName) continue;
+      }
+
       const reqDept = String(req.department || "").trim();
       const reqCategory = String(req.category || "").trim();
       const reqOffice = String(req.office || "").trim();
@@ -160,6 +169,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const valDoc = await db.collection("ValidateRequirementsTable").doc(studentId).get();
     const officesData = valDoc?.exists ? valDoc.data().offices || {} : {};
 
+    // ------------------ Filter validation by semester if present ------------------
+    for (const officeId in officesData) {
+      officesData[officeId] = officesData[officeId].filter(item => {
+        if (!item.semester) return true; // include if no semester stored
+        return item.semester === currentSemesterId || item.semester === currentSemesterName;
+      });
+    }
+
     let overallCleared = true;
 
     for (const groupKey in groupedReqs) {
@@ -167,28 +184,26 @@ document.addEventListener("DOMContentLoaded", async () => {
       const isDeptGlobal = normalizeString(group.department) === "n/a" || group.department === "";
       const isCategoryGlobal = normalizeString(group.category) === "n/a" || group.category === "";
 
-     let headerTitle = "";
+      let headerTitle = "";
 
-if (!isCategoryGlobal) {
-  if (/^2\d{2}$/.test(group.category)) {
-    // IDs 200–299 are labs
-    headerTitle = (await getLabName(group.category)) || group.category;
-  } else {
-    headerTitle = (await getCategoryName(group.category)) || group.category;
-  }
-} else if (isCategoryGlobal && isDeptGlobal) {
-  headerTitle = (await getOfficeName(group.office)) || group.office;
-} else if (isCategoryGlobal && !isDeptGlobal) {
-  const officeName = (await getOfficeName(group.office)) || group.office;
-  const deptName = (await getDepartmentName(group.department)) || group.department;
-  headerTitle = `${officeName} - ${deptName}`;
-}
+      if (!isCategoryGlobal) {
+        if (/^2\d{2}$/.test(group.category)) {
+          headerTitle = (await getLabName(group.category)) || group.category;
+        } else {
+          headerTitle = (await getCategoryName(group.category)) || group.category;
+        }
+      } else if (isCategoryGlobal && isDeptGlobal) {
+        headerTitle = (await getOfficeName(group.office)) || group.office;
+      } else if (isCategoryGlobal && !isDeptGlobal) {
+        const officeName = (await getOfficeName(group.office)) || group.office;
+        const deptName = (await getDepartmentName(group.department)) || group.department;
+        headerTitle = `${officeName} - ${deptName}`;
+      }
 
-// keep this for explicit lab field
-if (group.lab) {
-  const labName = await getLabName(group.lab);
-  if (labName) headerTitle += ` - ${labName}`;
-}
+      if (group.lab) {
+        const labName = await getLabName(group.lab);
+        if (labName) headerTitle += ` - ${labName}`;
+      }
 
       const sectionGroupDiv = document.createElement("div");
       sectionGroupDiv.classList.add("section-group");
