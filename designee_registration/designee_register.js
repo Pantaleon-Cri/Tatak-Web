@@ -146,6 +146,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
+      // **Check if userID already exists**
+      const existingUser = await db.collection("Designees").doc(userID).get();
+      if (existingUser.exists) {
+        showMessage("This User ID is already registered.", 'error');
+        return;
+      }
+
       const officeID = officeSelect.value;
       let departmentID = "";
       if (departmentGroup.style.display === 'block') {

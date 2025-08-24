@@ -21,7 +21,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const semesterSelect = document.getElementById('semester'); // ✅ Added
   const departmentInput = document.getElementById('department');
   const clubsInput = document.getElementById('clubs');
- 
   const messageBox = document.getElementById('messageBox');
   const passwordInput = document.getElementById('password');
   const confirmPasswordInput = document.getElementById('confirmPassword');
@@ -29,7 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Store course metadata by ID
   const courseDataMap = {};
 
-  // Load semesters visible to students ✅
+  // Load semesters visible to students
   const semesterSnapshot = await db.collection("semesterTable")
     .where("visibleToStudents", "==", true)
     .get();
@@ -53,7 +52,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     courseDataMap[doc.id] = {
       deptCodeName: data.deptCodeName || '',
       clubCodeName: data.clubCodeName || '',
-     
     };
   });
 
@@ -67,18 +65,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     yearLevelSelect.appendChild(option);
   });
 
-  // Auto-fill department and clubs ONLY
+  // Auto-fill department and clubs
   courseSelect.addEventListener('change', () => {
     const selected = courseSelect.value;
     const courseInfo = courseDataMap[selected];
     if (courseInfo) {
       departmentInput.value = courseInfo.deptCodeName;
       clubsInput.value = courseInfo.clubCodeName;
-    
     } else {
       departmentInput.value = '';
       clubsInput.value = '';
-   
     }
   });
 
@@ -102,7 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const lastName = document.getElementById('lastName').value.trim();
     const course = courseSelect.value;
     const yearLevel = yearLevelSelect.value;
-    const semester = semesterSelect.value; // ✅ Added
+    const semester = semesterSelect.value;
     const institutionalEmail = document.getElementById('institutionalEmail').value.trim();
     const password = passwordInput.value;
     const confirmPassword = confirmPasswordInput.value;
@@ -110,7 +106,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const courseInfo = courseDataMap[course];
     const deptCodeName = courseInfo?.deptCodeName || '';
     const clubCodeName = courseInfo?.clubCodeName || '';
-   
 
     // Validation
     if (!schoolId || !firstName || !lastName || !course || !yearLevel || !semester || !institutionalEmail || !password || !confirmPassword) {
@@ -127,6 +122,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
+      // Check if schoolId already exists
+      const studentDoc = await db.collection("Students").doc(schoolId).get();
+      if (studentDoc.exists) {
+        showMessage("This School ID is already registered.", true);
+        return;
+      }
+
       // Get department ID
       const deptSnap = await db.collection("departmentTable").where("code", "==", deptCodeName).limit(1).get();
       const department = deptSnap.empty ? "N/A" : deptSnap.docs[0].id;
@@ -137,19 +139,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const clubCodeList = clubCodeName.split(',').map(name => name.trim());
         for (const code of clubCodeList) {
           const snap = await db.collection("acadClubTable").where("codeName", "==", code).limit(1).get();
-          if (!snap.empty) {
-            clubs.push(snap.docs[0].id);
-          }
+          if (!snap.empty) clubs.push(snap.docs[0].id);
         }
       } else if (clubCodeName.trim() !== "") {
         const singleSnap = await db.collection("acadClubTable").where("codeName", "==", clubCodeName.trim()).limit(1).get();
-        if (!singleSnap.empty) {
-          clubs.push(singleSnap.docs[0].id);
-        }
+        if (!singleSnap.empty) clubs.push(singleSnap.docs[0].id);
       }
 
-      // Get laboratory ID (optional, manual input now)
-  
       // Prepare data
       const studentData = {
         schoolId,
@@ -157,10 +153,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         lastName,
         course,
         yearLevel,
-        semester, // ✅ Included in save
+        semester,
         department,
         clubs,
-        
         institutionalEmail,
         password,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
