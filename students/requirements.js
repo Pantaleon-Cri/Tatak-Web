@@ -1,7 +1,3 @@
-
-
-
-
 document.addEventListener("DOMContentLoaded", async () => {
   const studentId = localStorage.getItem("schoolID");
   if (!studentId) {
@@ -14,8 +10,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const requirementsContainer = document.querySelector(".student-main-content");
     requirementsContainer.innerHTML = "";
 
-    // ✅ Get current semester
+    // 🔹 Fetch student first
+    const studentDoc = await db.collection("Students").doc(studentId).get();
+    if (!studentDoc.exists) throw new Error("Student not found");
+    const student = studentDoc.data();
+    const studentSemesterId = String(student.semester || "").trim();
+
+    // 🔹 Match semesterTable with student.semester AND currentSemester == true
     const semesterSnap = await db.collection("semesterTable")
+      .where("id", "==", studentSemesterId)
       .where("currentSemester", "==", true)
       .limit(1)
       .get();
@@ -23,33 +26,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (semesterSnap.empty) {
       requirementsContainer.innerHTML = `
         <div class="clearance-section-card">
-          <div class="section-header">No Active Semester</div>
+          <div class="section-header">No Active Semester Found</div>
           <div class="notes-section">
-            <p>No requirements available because there is no active semester.</p>
+            <p>No requirements available because your semester is not currently active.</p>
           </div>
         </div>
       `;
       return;
     }
-    const currentSemester = semesterSnap.docs[0].data().semester;
-    console.log("📖 Active semester:", currentSemester);
 
-    // Fetch student document from Students collection
-    const studentDoc = await db.collection("Students").doc(studentId).get();
-    if (!studentDoc.exists) throw new Error("Student not found");
+    const semesterRecord = semesterSnap.docs[0].data();
+    const currentSemesterId = semesterRecord.id;            // e.g. "2"
+    const currentSemesterName = semesterRecord.semester;    // e.g. "2nd Semester 2025-2026"
+    console.log("📖 Student mapped to ACTIVE semester:", currentSemesterName);
 
-    const student = studentDoc.data();
+    // 🔹 Clubs normalization
     const studentClubs = Array.isArray(student.clubs)
       ? student.clubs.map(c => String(c).trim())
       : typeof student.clubs === "string"
         ? student.clubs.split(",").map(c => c.trim())
         : [];
 
-    // 1️⃣ Fetch allowed collections dynamically
+    // 🔹 Allowed collections (Org membership)
     const allowedSnap = await db.collection("allowedCollections").get();
     const allowedCollections = allowedSnap.docs.map(doc => doc.data().name).filter(Boolean);
 
-    // 2️⃣ Search each allowed collection for this student to get sourceCategory, sourceOffice, sourceDepartment
     let matchedStudentData = null;
     let allowedCollectionMemberships = new Set();
     for (const collName of allowedCollections) {
@@ -57,21 +58,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         const doc = await db.collection(collName).doc(studentId).get();
         if (doc.exists) {
           matchedStudentData = doc.data();
-          allowedCollectionMemberships.add(collName); // track which clubs student is in
+          allowedCollectionMemberships.add(collName);
         }
       } catch (err) {
         console.error(`Failed to check allowed collection ${collName}:`, err);
       }
     }
 
-    // If not found in allowed collections, fallback to Students collection
     const studentCategory = matchedStudentData ? String(matchedStudentData.sourceCategory || "").trim() : String(student.sourceCategory || "").trim();
     const studentOffice = matchedStudentData ? String(matchedStudentData.sourceOffice || "").trim() : String(student.sourceOffice || "").trim();
-    const studentDepartment = matchedStudentData ? String(matchedStudentData.sourceDepartment || "").trim() : String(student.sourceDepartment || "").trim();
+    const studentDepartment = matchedStudentData ? String(matchedStudentData.department || "").trim() : String(student.department || "").trim();
 
-    // ✅ Fetch only requirements for the current semester
+    // 🔹 Fetch requirements only for student's active semester
     const reqSnap = await db.collection("RequirementsTable")
-      .where("semester", "==", currentSemester)
+      .where("semester", "==", currentSemesterName)
       .get();
 
     const groupedReqs = {};
@@ -90,44 +90,27 @@ document.addEventListener("DOMContentLoaded", async () => {
       let showRequirement = false;
 
       // ========================= RULES =========================
-
-      // 1️⃣ Offices 302–306 → show to all students
       if (["302","303","304","305","306"].includes(reqOffice)) {
         showRequirement = true;
-      }
-
-      // 2️⃣ Category 401 or 403 → global, show to all students
-      else if (["401","403"].includes(reqCategory)) {
+      } else if (["401","403"].includes(reqCategory)) {
         showRequirement = true;
-      }
-
-      // 3️⃣ Office 309 → match if student’s clubs contain this category
-      else if (reqOffice === "309" && studentClubs.includes(reqCategory)) {
+      } else if (reqOffice === "309" && studentClubs.includes(reqCategory)) {
         showRequirement = true;
-      }
-
-      // 4️⃣ Office 301 special handling (Institutional Orgs)
-      else if (reqOffice === "301") {
+      } else if (reqOffice === "301") {
         if (["401", "403"].includes(reqCategory)) {
-          // Always visible: SSG + OMNIANA
           showRequirement = true;
         } else {
-          // Check allowed collection membership for 402, 404, 405, 406
-          const categoryName = await getCategoryName(reqCategory); // e.g. "Honors’ Society"
+          const categoryName = await getCategoryName(reqCategory);
           if (allowedCollectionMemberships.has(categoryName)) {
             showRequirement = true;
           }
         }
-      }
-
-      // 5️⃣ Offices 310–313 → check groupTable.club collections
-      else if (["310","311","312","313"].includes(reqOffice)) {
+      } else if (["310","311","312","313"].includes(reqOffice)) {
         try {
           const groupSnap = await db.collection("groupTable").get();
           for (const doc of groupSnap.docs) {
             const collName = doc.data().club;
             if (!collName) continue;
-
             const categoryDoc = await db.collection(collName).doc(studentId).get();
             if (categoryDoc.exists) {
               showRequirement = true;
@@ -137,16 +120,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (err) {
           console.error(`Failed to check groupTable for office ${reqOffice}:`, err);
         }
-      }
-
-      // 6️⃣ Office 314 → check labTable.lab collections
-      else if (reqOffice === "314") {
+      } else if (reqOffice === "314") {
         try {
           const labSnap = await db.collection("labTable").get();
           for (const doc of labSnap.docs) {
             const collName = doc.data().lab;
             if (!collName) continue;
-
             const labDoc = await db.collection(collName).doc(studentId).get();
             if (labDoc.exists) {
               showRequirement = true;
@@ -156,29 +135,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (err) {
           console.error("Failed to check labTable for office 314:", err);
         }
-      }
-
-      // 7️⃣ Offices 307, 308 → match department
-      else if (["307","308"].includes(reqOffice) && !isDeptGlobal) {
+      } else if (["307","308"].includes(reqOffice) && !isDeptGlobal) {
         if (normalizeString(reqDept) === normalizeString(studentDepartment)) {
           showRequirement = true;
         }
-      }
-
-      // 8️⃣ Strict match: only sourceCategory & sourceOffice from allowed collections
-      else if (
+      } else if (
         reqCategory && reqOffice &&
         normalizeString(reqCategory) === normalizeString(studentCategory) &&
         normalizeString(reqOffice) === normalizeString(studentOffice)
       ) {
         showRequirement = true;
-      }
-
-      // 9️⃣ Department-global fallback
-      else if (isDeptGlobal && isCategoryGlobal) {
+      } else if (isDeptGlobal && isCategoryGlobal) {
         showRequirement = true;
       }
-
       // =========================================================
 
       if (!showRequirement) continue;
@@ -191,16 +160,29 @@ document.addEventListener("DOMContentLoaded", async () => {
       groupedReqs[key].requirements.push(req.requirement);
     }
 
-    // ✅ Fetch validation data
-    const validationDoc = await db.collection("ValidateRequirementsTable").doc(studentId).get();
+    // 🔹 Fetch validation data (semester-consistent)
     let validationData = {};
+    const validationDoc = await db.collection("ValidateRequirementsTable").doc(studentId).get();
     if (validationDoc.exists) {
-      validationData = validationDoc.data();
+      const data = validationDoc.data();
+      // only keep offices/requirements tagged with this semester
+      if (data.offices && typeof data.offices === "object") {
+        const filteredOffices = {};
+        for (const officeKey in data.offices) {
+          const checkedArray = data.offices[officeKey];
+          if (Array.isArray(checkedArray)) {
+            filteredOffices[officeKey] = checkedArray.filter(
+              item => !item.semester || normalizeString(item.semester) === normalizeString(currentSemesterName)
+            );
+          }
+        }
+        validationData.offices = filteredOffices;
+      }
     }
 
-    // ✅ Fetch notes only for current semester
+    // 🔹 Fetch notes only for student's active semester
     const notesSnap = await db.collection("notesTable")
-      .where("semester", "==", currentSemester)
+      .where("semester", "==", currentSemesterName)
       .get();
 
     const notesMap = {};
@@ -211,7 +193,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (data.note) notesMap[key].push(data.note);
     });
 
-    // Render requirement cards
+    // 🔹 Render requirement cards
     for (const groupKey in groupedReqs) {
       const group = groupedReqs[groupKey];
       let headerTitle = "";
@@ -252,9 +234,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               for (const item of checkedArray) {
                 const sameRequirement = normalizeString(item.requirement) === normalizeString(reqText);
                 const validStatus = item.status === true;
-                const validSemester = !item.semester || normalizeString(item.semester) === normalizeString(currentSemester);
-
-                if (sameRequirement && validStatus && validSemester) {
+                if (sameRequirement && validStatus) {
                   isChecked = true;
                   break;
                 }
@@ -291,7 +271,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       requirementsContainer.appendChild(requirementSection);
     }
 
-    // Fallback if no requirements
+    // 🔹 Fallback if no requirements
     if (!anyRequirementsFound) {
       requirementsContainer.innerHTML = `
         <div class="clearance-section-card">
