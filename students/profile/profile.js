@@ -88,16 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     document.getElementById('profileDepartment').textContent = departmentName;
 
-    // 🏢 Laboratory Name
-    let labName = student.laboratories;
-    if (student.laboratories) {
-      const labDoc = await db.collection('labTable').doc(student.laboratories).get();
-      if (labDoc.exists) {
-        labName = labDoc.data().lab || student.laboratories;
-      }
-    }
-    document.getElementById('profileLaboratories').textContent = labName;
-
+ 
     // 🎯 Clubs (Support multiple club IDs stored as array)
     let clubNames = "N/A";
     if (Array.isArray(student.clubs)) {

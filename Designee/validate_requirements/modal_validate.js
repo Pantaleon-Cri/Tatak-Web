@@ -36,6 +36,17 @@ async function getCurrentSemester() {
   return null;
 }
 
+// Fetch student's year level
+async function getStudentYearLevel(studentID) {
+  if (!dbInstance) return null;
+  const studentDoc = await dbInstance.collection("Students").doc(studentID).get();
+  if (studentDoc.exists) {
+    const data = studentDoc.data();
+    return data.yearLevel || null;
+  }
+  return null;
+}
+
 /**
  * Copy the latest ValidateRequirementsTable snapshot
  * into History/{studentID} under semesters[{semesterName}]
@@ -92,6 +103,7 @@ async function autoValidateRequirements(designeeId, studentID) {
 
   try {
     const currentSemester = await getCurrentSemester();
+    const studentYearLevel = await getStudentYearLevel(studentID);
 
     // Fetch master requirements for this designee
     const reqSnapshot = await dbInstance.collection("RequirementsTable")
@@ -99,15 +111,21 @@ async function autoValidateRequirements(designeeId, studentID) {
       .orderBy("createdAt", "desc")
       .get();
 
+    // Apply semester + yearLevel filtering
     const masterRequirements = reqSnapshot.docs
       .map(doc => doc.data())
       .filter(d => !d.semester || d.semester === currentSemester)
+      .filter(d => {
+        if (!d.yearLevel || d.yearLevel.toLowerCase() === "all") return true;
+        return d.yearLevel === studentYearLevel;
+      })
       .map(d => ({
         requirement: d.requirement,
         status: false,
         checkedBy: null,
         checkedAt: null,
-        semester: currentSemester
+        semester: currentSemester,
+        yearLevel: d.yearLevel || "All"
       }));
 
     // Load student's existing validated requirements
@@ -140,7 +158,7 @@ async function autoValidateRequirements(designeeId, studentID) {
       studentID: studentID
     }, { merge: true });
 
-    console.log(`Auto-validated requirements for student ${studentID}, office ${designeeId}, semester ${currentSemester}`);
+    console.log(`Auto-validated requirements for student ${studentID}, office ${designeeId}, semester ${currentSemester}, yearLevel ${studentYearLevel}`);
 
     // ✅ Also copy the entire ValidateRequirementsTable doc into History for this semester
     await copyValidateToHistory(studentID, currentSemester);

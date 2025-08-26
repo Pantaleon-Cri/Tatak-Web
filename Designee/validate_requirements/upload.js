@@ -40,7 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const department = userData.department || null;
 
     // Hide upload button for restricted offices
-    const restrictedOffices = ["302","303","304","305","306","307","308","309"];
+    const restrictedOffices = ["302","303","304","305","306","307","308","309", "315"];
     const officeFromStorage = (office || "").toString().trim();
     const categoryFromStorage = (category || "").toString().trim();
 

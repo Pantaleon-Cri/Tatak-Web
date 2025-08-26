@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!studentDoc.exists) throw new Error("Student not found");
     const student = studentDoc.data();
     const studentSemesterId = String(student.semester || "").trim();
+    const studentYearLevel = String(student.yearLevel || "").trim().toLowerCase();
 
     // 🔹 Match semesterTable with student.semester AND currentSemester == true
     const semesterSnap = await db.collection("semesterTable")
@@ -36,9 +37,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const semesterRecord = semesterSnap.docs[0].data();
-    const currentSemesterId = semesterRecord.id;            // e.g. "2"
-    const currentSemesterName = semesterRecord.semester;    // e.g. "2nd Semester 2025-2026"
-    console.log("📖 Student mapped to ACTIVE semester:", currentSemesterName);
+    const currentSemesterId = semesterRecord.id;
+    const currentSemesterName = semesterRecord.semester;
+    console.log("📖 Student mapped to ACTIVE semester:", currentSemesterName, "| Year Level:", studentYearLevel);
 
     // 🔹 Clubs normalization
     const studentClubs = Array.isArray(student.clubs)
@@ -79,6 +80,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     for (const reqDoc of reqSnap.docs) {
       const req = reqDoc.data();
+
+      const reqYearLevel = String(req.yearLevel || "").trim().toLowerCase();
       const reqCategory = String(req.category || "").trim();
       const reqOffice = String(req.office || "").trim();
       const reqDept = String(req.department || "").trim();
@@ -151,6 +154,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       // =========================================================
 
       if (!showRequirement) continue;
+
+      // 🔹 Year-level filtering PER requirement (not per group)
+      if (reqYearLevel && reqYearLevel !== "n/a" && reqYearLevel !== "" &&
+          reqYearLevel !== studentYearLevel && reqYearLevel !== "all") {
+        continue; // skip just this requirement
+      }
+
       anyRequirementsFound = true;
 
       const key = `${reqCategory}||${reqDept}||${reqOffice}||${reqLab}`;
@@ -165,7 +175,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const validationDoc = await db.collection("ValidateRequirementsTable").doc(studentId).get();
     if (validationDoc.exists) {
       const data = validationDoc.data();
-      // only keep offices/requirements tagged with this semester
       if (data.offices && typeof data.offices === "object") {
         const filteredOffices = {};
         for (const officeKey in data.offices) {
@@ -196,6 +205,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 🔹 Render requirement cards
     for (const groupKey in groupedReqs) {
       const group = groupedReqs[groupKey];
+      if (!group.requirements.length) continue; // ⛔ skip groups with no visible requirements
+
       let headerTitle = "";
       const isDeptGlobal = normalizeString(group.department) === "n/a" || group.department === "";
       const isCategoryGlobal = normalizeString(group.category) === "n/a" || group.category === "";

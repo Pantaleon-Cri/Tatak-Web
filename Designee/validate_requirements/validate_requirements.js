@@ -272,7 +272,7 @@ if (usernameDisplay) {
       // --- Step 6: Filter by designee office/category/club ---
       let filteredStudents = [];
       const showAllCategories = ["401","403"];
-      const showAllOffices = ["302","303","304","305","306"];
+      const showAllOffices = ["302","303","304","305","306","315"];
 
       if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
         filteredStudents = filteredBySemester;

@@ -31,7 +31,6 @@ saveBtn.addEventListener("click", async () => {
   const courseName = courseInput.value.trim();
   const deptCodeName = document.getElementById("deptCodeName").value.trim();
   const clubCodeName = document.getElementById("clubCodeName").value.trim();
-  const laboratories = document.getElementById("laboratories").value.trim();
 
   if (!courseName) {
     alert("Please enter a course name.");
@@ -48,8 +47,7 @@ saveBtn.addEventListener("click", async () => {
       id: nextId,
       course: courseName,
       deptCodeName,
-      clubCodeName,
-      laboratories
+      clubCodeName,s
     };
 
     await db.collection("courseTable").doc(nextId).set(data);
@@ -120,7 +118,6 @@ function addRowToTable(id, data) {
     <td class="course-name">${data.course || ""}</td>
     <td>${data.deptCodeName || ""}</td>
     <td>${data.clubCodeName || ""}</td>
-    <td>${data.laboratories || ""}</td>
     <td>
       <button class="action-btn edit" data-id="${id}"><i class="fas fa-edit"></i></button>
       <button class="action-btn delete" data-id="${id}"><i class="fas fa-trash-alt"></i></button>
@@ -250,7 +247,6 @@ async function handleFileUpload(e) {
       const course = row["Course"]?.trim();
       const dept = row["Dept Code Name"]?.trim() || "";
       const club = row["Club Code Name"]?.trim() || "";
-      const labs = row["Laboratories"]?.trim() || "";
 
       if (!id || !course) continue;
 
@@ -264,7 +260,6 @@ async function handleFileUpload(e) {
           course,
           deptCodeName: dept,
           clubCodeName: club,
-          laboratories: labs
         };
 
         await docRef.set(payload);

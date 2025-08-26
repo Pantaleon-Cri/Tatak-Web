@@ -355,6 +355,7 @@ tbody td {
     display: flex;
     flex-direction: column;
     text-align: left;
+    
 }
 
 /* Close button */
@@ -454,5 +455,20 @@ tbody td {
   transition: background-color 0.3s ease;
 }
 #clearanceModal{
-    display: none;
+    display: none; /* default hidden */
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6); /* dark backdrop */
+  z-index: 1000;
+  overflow-y: auto;  /* allow scroll if content too tall */
+}
+
+#clearanceModal .modal-content {
+  background: #fff;
+  margin: 5% auto;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 800px;
+  max-height: 80vh;   /* keep content visible */
+  overflow-y: auto;   /* scroll inside content */
 }

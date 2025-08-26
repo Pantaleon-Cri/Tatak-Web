@@ -70,7 +70,7 @@ window.openViewClearanceCard = async function(studentID, db) {
 
   const containerEl = document.getElementById("officeSectionsGrid");
   const statusEl = document.getElementById("status");
-
+  containerEl.innerHTML = "";
   statusEl.textContent = "Loading...";
   document.getElementById("studentId").textContent = studentID;
   document.getElementById("studentName").textContent = "Loading...";
@@ -160,7 +160,7 @@ window.openViewClearanceCard = async function(studentID, db) {
       let showRequirement = false;
 
       // ================= RULES =================
-      if (["302","303","304","305","306"].includes(reqOffice)) {
+      if (["302","303","304","305","306","315"].includes(reqOffice)) {
         showRequirement = true;
       } else if (["401","403"].includes(reqCategory)) {
         showRequirement = true;
