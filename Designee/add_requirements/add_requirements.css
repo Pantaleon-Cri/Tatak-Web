@@ -195,6 +195,30 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
         }
 
+          .notes-buttons {
+    display: flex;
+    justify-content: flex-end; /* Align all buttons to the right like Add Requirement */
+    gap: 10px; /* spacing between buttons */
+    margin-top: 20px; /* space above buttons */
+}
+
+.notes-button-bottom {
+    background-color: var(--primary-green);
+    color: var(--card-bg);
+    padding: 10px 25px;
+    border: none;
+    border-radius: 20px;
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: var(--box-shadow);
+    transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.notes-button-bottom:hover {
+    background-color: var(--dark-green);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
 
         /* Responsive Design - Media Queries */
 

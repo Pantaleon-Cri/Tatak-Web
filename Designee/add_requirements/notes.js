@@ -167,7 +167,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         await db.collection("notesTable").doc(existingDocId).update({
           note: noteText,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          semester: currentSemesterName // Keep semester updated
+          semester: currentSemesterName
         });
         alert("Note updated successfully.");
       } else {

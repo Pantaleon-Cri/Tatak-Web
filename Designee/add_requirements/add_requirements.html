@@ -73,23 +73,25 @@
           </div>
 
          <!-- Add Notes Panel -->
+<!-- Add Notes Panel -->
 <div class="add-notes-panel">
   <div class="panel-header">
     <span>Add Notes (Optional)</span>
-    <div class="notes-actions">
-      <button id="editNotesBtn" title="Edit Notes"><i class="fas fa-edit"></i></button>
-      <button id="saveNotesBtn" title="Save Notes" style="display: none;"><i class="fas fa-save"></i></button>
-      <button id="cancelNotesBtn" title="Cancel Edit" style="display: none;"><i class="fas fa-times"></i></button>
-    </div>
   </div>
-  <div id="notesContent" class="notes-content-editable" contenteditable="false" maxlength="150">
 
-  </div>
-  <div style="align-self: flex-end; width: 100%;">
+  <div id="notesContent" class="notes-content-editable" contenteditable="false" maxlength="150"></div>
+  <div style="align-self: flex-end; width: 100%; margin-top: 5px;">
      <span id="noteCharCount">0 / 150</span>
-   
+  </div>
+
+  <!-- Bottom buttons: Edit / Save / Cancel -->
+  <div class="notes-buttons">
+    <button id="editNotesBtn" class="notes-button-bottom" title="Edit Notes"><i class="fas fa-edit"></i> Edit</button>
+    <button id="saveNotesBtn" class="notes-button-bottom" title="Save Notes" style="display: none;"><i class="fas fa-save"></i> Save</button>
+    <button id="cancelNotesBtn" class="notes-button-bottom" title="Cancel Edit" style="display: none;"><i class="fas fa-times"></i> Cancel</button>
   </div>
 </div>
+
 
         </div>
       </main>
