@@ -44,7 +44,7 @@
         <ul>
           <li><a href="../student.html"><i class="fas fa-tachometer-alt"></i>Home Page</a></li>
           <li><a href="#" class="active"><i class="fas fa-table"></i>View Clearance Status</a></li>
-          <li><a href="../view_past_clearance_log/view_past.html"><i class="fas fa-table"></i>View Past Clearance Logs</a></li>
+          <li><a href="../view_past_clearance_log/view_past.html"><i class="fa-solid fa-file-invoice"></i></i>View Past Clearance Logs</a></li>
         </ul>
       </nav>
     </aside>
@@ -59,16 +59,16 @@
           <h3>JMJ Marist Brothers</h3>
           <h1>Notre Dame of Marbel University</h1>
           <p>City of Koronadal South Cotabato</p>
+          <div class="title">CLEARANCE
+        <p style="font-size: 16px; margin-top: 5px;" class="sem">Loading semester...</p>
+      </div>
         </div>
         <div class="head-right">
           <img src="../../green_univ.png" alt="Learning Icon" />
         </div>
       </div>
 
-      <div class="title">
-        CLEARANCE
-        <p style="font-size: 16px; margin-top: 5px;" class="sem">Loading semester...</p>
-      </div>
+      
 
       <div class="info-section">
         <div>I.D No.: <span id="studentId">Loading...</span></div>
@@ -106,7 +106,7 @@
 
       // Update header username (first name only)
       if (studentName) {
-        const firstName = studentName.split(" ")[0];
+        const firstName = studentName;
         document.querySelector(".username").textContent = firstName;
       } else {
         document.querySelector(".username").textContent = "Student";

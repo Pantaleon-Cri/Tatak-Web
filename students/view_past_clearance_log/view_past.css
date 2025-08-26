@@ -186,6 +186,7 @@ html, body {
   min-height: calc(100vh - 72px); /* adjust if header height differs */
   margin-top: 0; /* ensure no top margin */
   padding-top: 0;
+  margin-left: 250px;   /* exactly the sidebar width */
 }
 
 .logs-container {
@@ -221,12 +222,15 @@ html, body {
    SIDEBAR STYLES
 ======================= */
 .sidebar {
+  position: fixed;
+  top: 60px;              /* height of your fixed header */
+  left: 0;
   width: 250px;
-  background-color: #ffffff;
+  height: calc(100% - 60px); /* full height minus header */
+  background: #ffffff;
   padding: 24px;
   box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.05);
   box-sizing: border-box;
-  flex-shrink: 0;
   overflow: hidden; /* no scroll allowed */
 }
 
@@ -327,22 +331,46 @@ nav ul ul.submenu > li:first-child {
 .main {
   flex: 1;
   padding: 32px;
-  margin-top: 0; /* Remove top margin if exists */
+  margin-top: 0;
+  margin-left: 300px;   /* same as .sidebar width */
   box-sizing: border-box;
 }
 
 
 /* Main Content Area - Clearance Form */
     .clearance-container {
-      flex-grow: 1;
-      padding: 30px;
-      background-color: white;
-      margin-left: 400px; /* Margin around the clearance form */
-      border: 5px solid #a6d96a; /* Green border from the image */
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      max-width: 800px; /* Limit width of the clearance form */
-      align-self: center; /* Align to the top of the content-wrapper */
-    }
+  margin: 20px auto;          /* center horizontally */
+  padding: 25px;
+  background: #fff;           /* paper-like background */
+  border-radius: 10px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  max-width: 900px;           /* limit width on large screens */
+  width: 100%;                /* let it shrink on smaller screens */
+  box-sizing: border-box;  
+  min-height: 100%;   /* include padding in width calc */
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .clearance-container {
+    max-width: 80%;           /* shrink a bit on medium screens */
+  }
+}
+
+@media (max-width: 768px) {
+  .clearance-container {
+    max-width: 95%;           /* almost full width on tablets/small laptops */
+    padding: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .clearance-container {
+    max-width: 100%;          /* full width on phones (just in case) */
+    padding: 10px;
+    border-radius: 5px;
+  }
+}
 
     /* Semester Dropdown */
     .semester-dropdown {
@@ -406,18 +434,13 @@ nav ul ul.submenu > li:first-child {
     }
 
     /* Title Section */
-    .title {
+      .title {
       text-align: center;
       font-size: 20px;
       font-weight: bold;
-      margin-top: 20px;
-      margin-bottom: 10px;
     }
 
-    .title p {
-      font-size: 16px;
-      margin-top: 5px;
-    }
+    
 
     /* Info Section (ID and Name) */
     .info-section {
@@ -469,7 +492,11 @@ nav ul ul.submenu > li:first-child {
       color: #666;
       font-weight: bold;
     }
-
+    
+     .office-section {
+      text-align: center;
+      font-size: 12px;
+    }
     /* Non-Academic Section */
     .non-academic-section {
       display: flex;
@@ -485,11 +512,13 @@ nav ul ul.submenu > li:first-child {
 
     /* Note Section */
     .note {
-      margin-top: 30px;
-      font-size: 14px;
-      border-top: 1px solid #eee;
-      padding-top: 15px;
-    }
+  margin-top: auto;   /* pushes it to the bottom inside container */
+  font-size: 14px;
+  border-top: 1px solid #eee;
+  padding: 15px;
+  background: #fff;
+  text-align: center;
+}
 
     .note strong {
       color: #c0392b; /* Red for important words */

@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const storedAdminID = localStorage.getItem("adminID");
 
   if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
+    usernameDisplay.textContent = storedAdminID; // show saved ID
   } else {
     usernameDisplay.textContent = "Unknown"; // fallback
   }
@@ -12,23 +12,45 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupExportButton();
 });
 
-async function loadRequirementApprovalLogs() {
+async function loadRequirementApprovalLogs(full = false) {
   const db = firebase.firestore();
 
-  const fullLogTable = document.getElementById("fullCheckedByLog");
-  if (fullLogTable) {
-    fullLogTable.innerHTML = `<tr><td colspan="6">Loading requirement logs...</td></tr>`;
+  // Detect which container exists
+  const dashboardList = document.getElementById("requirementLogsList");
+  const fullTable = document.getElementById("fullCheckedByLog");
+
+  if (!dashboardList && !fullTable) {
+    console.warn("⚠️ No requirement logs container found on this page.");
+    return;
+  }
+
+  // Loading placeholder
+  if (dashboardList) {
+    dashboardList.innerHTML = `<li>Loading requirement logs...</li>`;
+  }
+  if (fullTable) {
+    fullTable.innerHTML = `<tr><td colspan="6">Loading requirement logs...</td></tr>`;
   }
 
   try {
-    const snapshot = await db.collection("ValidateRequirementsTable").get();
-    if (snapshot.empty) {
-      if (fullLogTable) fullLogTable.innerHTML = `<tr><td colspan="6">No requirement approvals found.</td></tr>`;
+    // 🔹 Get current semester
+    const semesterSnap = await db.collection("semesterTable").where("currentSemester", "==", true).limit(1).get();
+    if (semesterSnap.empty) {
+      console.warn("⚠️ No current semester found.");
+      if (dashboardList) dashboardList.innerHTML = `<li>No current semester set.</li>`;
+      if (fullTable) fullTable.innerHTML = `<tr><td colspan="6">No current semester set.</td></tr>`;
       return;
     }
+    const currentSemester = semesterSnap.docs[0].data().semester;
+
+    let query = db.collection("ValidateRequirementsTable");
+    if (dashboardList) {
+      // If we're on Dashboard → show only latest 5
+      query = query.limit(5);
+    }
+    const snapshot = await query.get();
 
     const allLogs = [];
-
     for (const doc of snapshot.docs) {
       const data = doc.data();
       if (!data.offices) continue;
@@ -39,7 +61,8 @@ async function loadRequirementApprovalLogs() {
         const officeName = await resolveOfficeName(db, userID);
 
         for (const req of requirementsArr) {
-          if (!req.status || !req.checkedBy) continue; // only approved
+          // 🔹 Only include logs for current semester
+          if (!req.status || !req.checkedBy || req.semester !== currentSemester) continue;
 
           const studentID = data.studentID || req.studentID;
           let studentName = studentID || "Unknown Student";
@@ -68,28 +91,48 @@ async function loadRequirementApprovalLogs() {
       }
     }
 
-    // Sort newest first
+    // Sort by latest
     allLogs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-    if (fullLogTable) {
-      fullLogTable.innerHTML = "";
-      allLogs.forEach(log => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${log.office}</td>
-          <td>${log.personnel}</td>
-          <td>${log.action}</td>
-          <td>${log.student}</td>
-          <td>${log.requirement}</td>
-          <td>${log.timestamp ? log.timestamp.toLocaleString() : "No time"}</td>
-        `;
-        fullLogTable.appendChild(row);
-      });
+    // Render for Dashboard
+    if (dashboardList) {
+      dashboardList.innerHTML = "";
+      if (allLogs.length === 0) {
+        dashboardList.innerHTML = `<li>No approvals yet for ${currentSemester}.</li>`;
+      } else {
+        allLogs.forEach(log => {
+          const li = document.createElement("li");
+          li.textContent = `${log.personnel} approved "${log.requirement}" for ${log.student} (${log.office})`;
+          dashboardList.appendChild(li);
+        });
+      }
+    }
+
+    // Render for Full Logs page
+    if (fullTable) {
+      fullTable.innerHTML = "";
+      if (allLogs.length === 0) {
+        fullTable.innerHTML = `<tr><td colspan="6">No approvals yet for ${currentSemester}.</td></tr>`;
+      } else {
+        allLogs.forEach(log => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${log.office}</td>
+            <td>${log.personnel}</td>
+            <td>${log.action}</td>
+            <td>${log.student}</td>
+            <td>${log.requirement}</td>
+            <td>${log.timestamp ? log.timestamp.toLocaleString() : "No time"}</td>
+          `;
+          fullTable.appendChild(row);
+        });
+      }
     }
 
   } catch (err) {
     console.error("Error loading requirement logs:", err);
-    if (fullLogTable) fullLogTable.innerHTML = `<tr><td colspan="6">Error loading requirement logs.</td></tr>`;
+    if (dashboardList) dashboardList.innerHTML = `<li>Error loading requirement logs.</li>`;
+    if (fullTable) fullTable.innerHTML = `<tr><td colspan="6">Error loading requirement logs.</td></tr>`;
   }
 }
 
@@ -143,13 +186,6 @@ async function setupExportButton() {
   exportBtn.addEventListener("click", async () => {
     try {
       const db = firebase.firestore();
-      const tableRows = document.querySelectorAll("#fullCheckedByLog tr");
-      const data = [["Office","Personnel","Action","Student Name","Requirement","Timestamp"]];
-
-      tableRows.forEach(tr => {
-        const row = Array.from(tr.children).map(td => td.textContent);
-        if (row.length === 6) data.push(row);
-      });
 
       // Get current semester
       const semesterSnap = await db.collection("semesterTable").where("currentSemester", "==", true).limit(1).get();
@@ -157,6 +193,14 @@ async function setupExportButton() {
       if (!semesterSnap.empty) {
         semesterName = semesterSnap.docs[0].data().semester.replace(/\s+/g, "_");
       }
+
+      const tableRows = document.querySelectorAll("#fullCheckedByLog tr");
+      const data = [["Office","Personnel","Action","Student Name","Requirement","Timestamp"]];
+
+      tableRows.forEach(tr => {
+        const row = Array.from(tr.children).map(td => td.textContent);
+        if (row.length === 6) data.push(row);
+      });
 
       const ws = XLSX.utils.aoa_to_sheet(data);
       const wb = XLSX.utils.book_new();

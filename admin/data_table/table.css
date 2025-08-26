@@ -1,9 +1,12 @@
 
 
-    .main {
-      max-width: 1400px;
-      margin: auto;
-    }
+   .main {
+  max-width: 1400px;
+  margin: auto;
+  margin-left: 250px;   /* ✅ push beside sidebar */
+  padding: 20px;
+  box-sizing: border-box;
+}
 
     .logs-container {
       display: grid;

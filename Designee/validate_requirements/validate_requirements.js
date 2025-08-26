@@ -1,3 +1,4 @@
+const usernameDisplay = document.getElementById("usernameDisplay");
 document.addEventListener('DOMContentLoaded', () => {
 
   const firebaseConfig = {
@@ -52,32 +53,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Designee info
-  let designeeName = "Designee";
-  let designeeFirstName = "";
-  let designeeCategory = "";
-  let designeeDepartment = "";
-  let designeeOffice = "";
-  let designeeUserID = null;
+// Designee info
+let designeeName = "Designee";
+let designeeFirstName = "";
+let designeeLastName = ""; // add this
+let designeeCategory = "";
+let designeeDepartment = "";
+let designeeOffice = "";
+let designeeUserID = null;
+let designeeFullName = ""; // initialize
 
-  const userDataString = localStorage.getItem("userData");
-  if (userDataString) {
-    try {
-      const userDataObj = JSON.parse(userDataString);
-      designeeName = userDataObj.userID || userDataObj.id || designeeName;
-      designeeFirstName = userDataObj.firstName || "";
-      designeeCategory = (userDataObj.category || "").trim();
-      designeeDepartment = (userDataObj.department || "").trim();
-      designeeOffice = (userDataObj.office || "").trim();
-      designeeUserID = designeeName;
-    } catch (err) { console.error(err); }
-  } else {
-    designeeCategory = (localStorage.getItem("category") || "").trim();
-    designeeDepartment = (localStorage.getItem("department") || "").trim();
-    designeeOffice = (localStorage.getItem("office") || "").trim();
+const userDataString = localStorage.getItem("userData");
+if (userDataString) {
+  try {
+    const userDataObj = JSON.parse(userDataString);
+    designeeName = userDataObj.userID || userDataObj.id || designeeName;
+    designeeFirstName = userDataObj.firstName || "";
+    designeeLastName = userDataObj.lastName || "";
+    designeeCategory = (userDataObj.category || "").trim();
+    designeeDepartment = (userDataObj.department || "").trim();
+    designeeOffice = (userDataObj.office || "").trim();
+    designeeUserID = designeeName;
+  } catch (err) {
+    console.error(err);
   }
+} else {
+  designeeCategory = (localStorage.getItem("category") || "").trim();
+  designeeDepartment = (localStorage.getItem("department") || "").trim();
+  designeeOffice = (localStorage.getItem("office") || "").trim();
+}
 
-  usernameDisplay.textContent = designeeFirstName;
+// Combine first and last name correctly
+designeeFullName = `${designeeFirstName} ${designeeLastName}`.trim();
+
+
+if (usernameDisplay) {
+  usernameDisplay.textContent = designeeFullName || designeeName; // fallback if name missing
+}
 
   // Load user role display
   async function loadUserRoleDisplay() {

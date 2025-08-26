@@ -22,7 +22,7 @@
       <div class="user-dropdown" id="userDropdownToggle">
         <div class="user-info">
           <div class="username" id="usernameDisplay">Student</div>
-          <div class="email">Account</div>
+          <div class="email">Student</div>
         </div>
         <i class="fas fa-angle-down dropdown-arrow"></i>
       </div>
@@ -40,7 +40,7 @@
         <ul>
           <li><a href="../student.html"><i class="fas fa-tachometer-alt"></i>Home Page</a></li>
           <li><a href="../view_clearance/view.html"><i class="fas fa-table"></i>View Clearance Status</a></li>
-          <li><a href="#" class="active"><i class="fas fa-table"></i>View Past Clearance Logs</a></li>
+          <li><a href="#" class="active"><i class="fa-solid fa-file-invoice"></i>View Past Clearance Logs</a></li>
         </ul>
       </nav>
     </aside>
@@ -62,6 +62,9 @@
           <h3>JMJ Marist Brothers</h3>
           <h1>Notre Dame of Marbel University</h1>
           <p>City of Koronadal South Cotabato</p>
+           <div class="title">CLEARANCE
+        <p id="semesterLabel" style="font-size: 16px; margin-top: 5px;">Select a semester</p>
+      </div>
         </div>
         <div class="head-right">
           <img src="../../green_univ.png" alt="Learning Icon">
@@ -69,10 +72,7 @@
       </div>
 
       <!-- Title -->
-      <div class="title">
-        CLEARANCE
-        <p id="semesterLabel" style="font-size: 16px; margin-top: 5px;">Select a semester</p>
-      </div>
+     
 
       <!-- Student Info -->
       <div class="info-section">
@@ -96,6 +96,7 @@
  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 <script src="view_past.js"></script>
+<script src="utils.js"></script>
 
 </body>
 </html>

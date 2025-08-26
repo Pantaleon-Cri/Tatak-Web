@@ -17,12 +17,13 @@
 
         /* Main Content for Add Requirements */
         .add-requirements-main {
-            flex: 1;
-            padding: 25px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column; /* Use column layout for sections */
+             flex: 1;
+  padding: 32px;
+  margin-left: 290px; /* ✅ offset for sidebar width */
+  box-sizing: border-box; /* Use column layout for sections */
+            
         }
+
 
        .requirements-grid {
   display: flex;

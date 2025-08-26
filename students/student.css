@@ -1,14 +1,14 @@
-
 :root {
-            --primary-green: #4CAF50; /* Main accent color */
-            --dark-green: #388E3C;   /* Darker shade for hover/active states */
-            --light-grey-bg: #f5f6fa; /* Light background for the dashboard main area */
-            --medium-grey-text: #616161; /* General text color */
-            --dark-grey-text: #333;   /* Heading and strong text color */
-            --card-bg: #fff;         /* Background for cards and panels */
-            --border-color: #e0e0e0; /* Subtle border color */
-            --box-shadow: 0 2px 4px rgba(0,0,0,0.08); /* Soft shadow for depth */
-        }
+  --primary-green: #4CAF50; /* Main accent color */
+  --dark-green: #388E3C;   /* Darker shade for hover/active states */
+  --light-grey-bg: #f5f6fa; /* Light background for the dashboard main area */
+  --medium-grey-text: #616161; /* General text color */
+  --dark-grey-text: #333;   /* Heading and strong text color */
+  --card-bg: #fff;         /* Background for cards and panels */
+  --border-color: #e0e0e0; /* Subtle border color */
+  --box-shadow: 0 2px 4px rgba(0,0,0,0.08); /* Soft shadow for depth */
+}
+
 /* =======================
    GENERAL STYLES
 ======================= */
@@ -184,7 +184,7 @@ html, body {
   display: flex;
   flex-grow: 1;
   min-height: calc(100vh - 72px); /* adjust if header height differs */
-  margin-top: 0; /* ensure no top margin */
+  margin-top: 0;
   padding-top: 0;
 }
 
@@ -227,7 +227,13 @@ html, body {
   box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.05);
   box-sizing: border-box;
   flex-shrink: 0;
-  overflow: hidden; /* no scroll allowed */
+
+  /* Fixed sidebar */
+  position: fixed;
+  top: 72px;   /* height of header */
+  left: 0;
+  height: calc(100vh - 72px);
+  overflow-y: auto;
 }
 
 .sidebar-header {
@@ -264,7 +270,6 @@ html, body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Active & hover state - text and icon turn white */
 .sidebar nav ul li a.active,
 .sidebar nav ul li a:hover {
   background-color: #008000;
@@ -276,7 +281,6 @@ html, body {
   color: #fff;
 }
 
-/* Arrow icon aligned to right */
 .sidebar nav ul li a .arrow {
   margin-left: auto;
   font-size: 0.8rem;
@@ -284,32 +288,29 @@ html, body {
   color: #333;
 }
 
-/* Arrow icon turns white too on hover/active */
 .sidebar nav ul li a.active .arrow,
 .sidebar nav ul li a:hover .arrow {
   color: #fff;
 }
+
 nav ul ul.submenu > li:first-child {
-  margin-top: 8px; /* Adjust the value as needed */
+  margin-top: 8px;
 }
-/* Submenu hidden by default */
+
 .submenu {
   display: none;
   padding-left: 20px;
   margin-top: 4px;
 }
 
-/* Show submenu when parent is open */
 .has-submenu.open > .submenu {
   display: block;
 }
 
-/* Rotate arrow when open */
 .has-submenu.open > a .arrow {
   transform: rotate(180deg);
 }
 
-/* Nested submenu styling */
 .submenu .has-submenu > a {
   padding-left: 10px;
 }
@@ -318,20 +319,15 @@ nav ul ul.submenu > li:first-child {
   padding-left: 16px;
 }
 
-
-
-
 /* =======================
    MAIN CONTENT STYLES
 ======================= */
 .main {
   flex: 1;
   padding: 32px;
-  margin-top: 0; /* Remove top margin if exists */
+  margin-top: 0;
   box-sizing: border-box;
 }
-
-
 
 /* =======================
    RESPONSIVE STYLES
@@ -357,6 +353,7 @@ nav ul ul.submenu > li:first-child {
     width: 100%;
     height: auto;
     box-shadow: none;
+    position: relative;
   }
 
   .main {
@@ -416,6 +413,9 @@ nav ul ul.submenu > li:first-child {
   }
 }
 
+/* =======================
+   LOG HEADER
+======================= */
 .log-header {
   display: flex;
   justify-content: space-between;
@@ -427,126 +427,140 @@ nav ul ul.submenu > li:first-child {
   padding: 6px 14px;
   font-size: 13px;
   background-color: transparent;
-  color: #28a745; /* Bootstrap green */
+  color: #28a745;
   border: 1px solid #28a745;
-  border-radius: 9999px; /* fully rounded */
+  border-radius: 9999px;
   text-decoration: none;
   transition: all 0.3s ease;
-  margin-left: 20px; /* spacing from the heading */
+  margin-left: 20px;
 }
 
 .show-all-btn:hover {
   background-color: #28a745;
   color: #fff;
 }
-/* Main Content for Student Clearance */
+
+/* =======================
+   STUDENT CLEARANCE PAGE
+======================= */
 .student-main-content {
-    flex: 1;
-    padding: 25px;
-    overflow-y: auto; /* Allow scrolling for content */
-    display: flex;
-    flex-direction: column;
-    gap: 20px; /* Space between clearance sections */
+  flex: 1;
+  padding: 25px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  /* Push content away from sidebar */
+  margin-left: 250px; /* must match .sidebar width */
 }
 
 .clearance-section-card {
-    background-color: var(--card-bg);
-    border-radius: 8px;
-    box-shadow: var(--box-shadow);
-    padding: 20px;
-    display: grid;
-    grid-template-columns: 2fr 1fr; /* Requirements on left, Notes on right */
-    gap: 20px;
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: var(--box-shadow);
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 2fr 1fr; /* requirements left, notes right */
+  gap: 20px;
 }
 
 .section-header {
-    grid-column: 1 / -1; /* Spans across both columns */
-    font-size: 1.4em;
-    font-weight: 600;
-    color: var(--dark-grey-text);
-    margin-bottom: 10px;
+  grid-column: 1 / -1;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--dark-grey-text);
+  margin-bottom: 10px;
 }
 
 .requirements-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
 .requirement-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 10px;
-    font-size: 1em;
-    color: var(--medium-grey-text);
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 1.1em;
+  color: var(--medium-grey-text);
 }
 
 .requirement-item:last-child {
-    margin-bottom: 0;
+  margin-bottom: 0;
 }
 
 .requirement-item input[type="checkbox"] {
-    margin-right: 10px;
-    transform: scale(1.2);
-    accent-color: green; /* Temporary explicit color */
-    cursor: default; /* Since disabled */
-    filter: none; /* Remove any inherited filter */
-    opacity: 1; /* Make sure it’s not faded */
+  margin-right: 10px;
+  transform: scale(1.2);
+  accent-color: green;
+  cursor: default;
+  filter: none;
+  opacity: 1;
 }
 
-
-
 .notes-section {
-    background-color: var(--light-grey-bg);
-    border-radius: 5px;
-    padding: 15px;
-    border: 1px solid var(--border-color);
+  background-color: var(--light-grey-bg);
+  border-radius: 5px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+   /* Move it closer */
+  margin-top: -59px;   /* pull upward */
+  margin-left: -130px;  /* pull left */
 }
 
 .notes-section h4 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 1.1em;
-    color: var(--dark-grey-text);
+  margin-top: 1px;
+  font-size: 1.1em;
+  color: var(--dark-grey-text);
 }
 
 .notes-section p {
-    margin: 0;
-    font-size: 0.9em;
-    color: var(--medium-grey-text);
-    line-height: 1.4;
+  margin: 0;
+  font-size: 0.9em;
+  color: var(--medium-grey-text);
+  line-height: 1.4;
 }
 
 /* Responsive Design - Media Queries */
 @media (max-width: 992px) {
-    .student-main-content {
-        padding: 20px;
-    }
-    .clearance-section-card {
-        grid-template-columns: 1fr; /* Stack columns on smaller screens */
-    }
-    .section-header {
-        margin-bottom: 0; /* Adjust spacing */
-    }
-    .notes-section {
-        margin-top: 15px; /* Add space when stacked */
-    }
+  .student-main-content {
+    padding: 20px;
+    margin-left: 0; /* sidebar stacks on top */
+  }
+
+  .clearance-section-card {
+    grid-template-columns: 1fr; /* stack */
+  }
+
+  .section-header {
+    margin-bottom: 0;
+  }
+
+  .notes-section {
+    margin-top: 15px;
+  }
 }
 
 @media (max-width: 768px) {
-    .student-main-content {
-        padding: 15px;
-    }
-    .section-header {
-        font-size: 1.2em;
-    }
-    .requirement-item {
-        font-size: 0.95em;
-    }
-    .notes-section h4 {
-        font-size: 1em;
-    }
-    .notes-section p {
-        font-size: 0.85em;
-    }
+  .student-main-content {
+    padding: 15px;
+  }
+
+  .section-header {
+    font-size: 1.2em;
+  }
+
+  .requirement-item {
+    font-size: 0.95em;
+  }
+
+  .notes-section h4 {
+    font-size: 1em;
+  }
+
+  .notes-section p {
+    font-size: 0.85em;
+  }
 }

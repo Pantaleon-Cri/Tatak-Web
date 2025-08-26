@@ -255,13 +255,17 @@ window.openViewClearanceCard = async function(studentID, db) {
       const validatedArray = officesData[group.addedByDesigneeId] || [];
       const allChecked = validatedArray.length > 0 && validatedArray.every(item => item.status === true);
       if (!allChecked) overallCleared = false;
-      const lastCheckedBy = validatedArray.filter(item => item.status === true && item.checkedBy).map(item => item.checkedBy).pop() || null;
+
+      // Get last approver and last checkedAt
+      const lastCheckedItem = validatedArray.filter(item => item.status === true).pop() || {};
+      const lastCheckedBy = lastCheckedItem.checkedBy || "Unknown";
+      const lastCheckedAt = lastCheckedItem.checkedAt ? new Date(lastCheckedItem.checkedAt).toLocaleString() : "N/A";
 
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");
       approvalDiv.innerHTML = allChecked
-        ? `<img src="../../Tatak.png" alt="Approved Icon" style="width:50px; height:50px;" /><br />
-           <label style="font-size:14px; color:#333;"><i>approved by ${lastCheckedBy || "Unknown"}</i><hr /></label>`
+        ? `<img src="../../Tatak.png" alt="Approved Icon" /><br />
+           <label><i>Approved By: ${lastCheckedBy}<br />Checked At: ${lastCheckedAt}</i><hr /></label>`
         : `<label><i>Not Cleared</i><hr /></label>`;
 
       sectionGroupDiv.appendChild(approvalDiv);

@@ -1,4 +1,3 @@
-// view.js
 document.addEventListener("DOMContentLoaded", async () => {
   const studentId = localStorage.getItem("schoolID");
   if (!studentId) {
@@ -216,13 +215,26 @@ document.addEventListener("DOMContentLoaded", async () => {
       const validatedArray = officesData[group.addedByDesigneeId] || [];
       const allChecked = validatedArray.length > 0 && validatedArray.every(item => item.status === true);
       if (!allChecked) overallCleared = false;
-      const lastCheckedBy = validatedArray.filter(item => item.status === true && item.checkedBy).map(item => item.checkedBy).pop() || null;
+
+      // Get lastCheckedBy and checkedAt from validation array
+      const lastValidation = validatedArray
+        .filter(item => item.status === true && item.checkedBy)
+        .sort((a, b) => b.checkedAt - a.checkedAt) // most recent first
+        .pop() || null;
+
+      const lastCheckedBy = lastValidation?.checkedBy || null;
+      const checkedAt = lastValidation?.checkedAt ? new Date(lastValidation.checkedAt).toLocaleString() : "Unknown";
 
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");
+
       approvalDiv.innerHTML = allChecked
         ? `<img src="../../Tatak.png" alt="Approved Icon" style="width:50px; height:50px;" /><br />
-           <label style="font-size:14px; color:#333;"><i>approved by ${String(lastCheckedBy || "Unknown")}</i><hr /></label>`
+           <label>
+             <i>Approved by: ${String(lastCheckedBy || "Unknown")}</i><br />
+             <i>${checkedAt}</i>
+             <hr />
+           </label>`
         : `<label><i>Not Cleared</i><hr /></label>`;
 
       sectionGroupDiv.appendChild(approvalDiv);

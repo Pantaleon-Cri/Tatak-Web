@@ -211,12 +211,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else if (isCategoryGlobal && !isDeptGlobal) {
         const officeName = await getOfficeName(group.office) || group.office;
         const deptName = await getDepartmentName(group.department) || group.department;
-        headerTitle = `${officeName} - ${deptName}`;
+        headerTitle = `${officeName}-${deptName}`;
       }
 
       if (group.lab) {
         const labName = await getLabName(group.lab);
-        if (labName) headerTitle += ` - ${labName}`;
+        if (labName) headerTitle += `-${labName}`;
       }
 
       const requirementSection = document.createElement("div");

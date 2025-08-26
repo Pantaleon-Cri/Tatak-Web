@@ -125,13 +125,20 @@ function clearModalInputs() {
 
 const usernameDisplay = document.getElementById("usernameDisplay");
 
-const userDataString = localStorage.getItem("userData");
-  if (userDataString) {
-    try {
-      const userDataObj = JSON.parse(userDataString);
-            designeeFirstName = userDataObj.firstName || "";
-          } catch (err) { console.error(err); }
-  } 
-  
+let designeeFullName = ""; // initialize
 
-  usernameDisplay.textContent = designeeFirstName;
+const userDataString = localStorage.getItem("userData");
+if (userDataString) {
+  try {
+    const userDataObj = JSON.parse(userDataString);
+    const firstName = userDataObj.firstName || "";
+    const lastName = userDataObj.lastName || "";
+    
+    // Combine first and last name with a space
+    designeeFullName = `${firstName} ${lastName}`.trim();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+usernameDisplay.textContent = designeeFullName;
