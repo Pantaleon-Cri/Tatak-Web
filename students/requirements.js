@@ -71,14 +71,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       anyRequirementsFound = true;
 
-      // 🔹 Render each office as a section
-      const requirementSection = document.createElement("div");
-      requirementSection.className = "clearance-section-card";
+      // 🔹 Resolve office header (human-readable name)
+      let officeName = await resolveOfficeName(officeKey);
+      if (!officeName) officeName = officeKey; // fallback
 
-      // Office header (human-readable if possible)
-      let officeName = await getOfficeName(officeKey);
-      if (!officeName) officeName = officeKey;
-
+      // 🔹 Build requirements list
       let reqListHTML = "<ul class='requirements-list'>";
       for (const req of filteredReqs) {
         const safeId = req.requirement.replace(/\s+/g, "-").toLowerCase();
@@ -108,6 +105,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
       }
 
+      // 🔹 Render section
+      const requirementSection = document.createElement("div");
+      requirementSection.className = "clearance-section-card";
       requirementSection.innerHTML = `
         <div class="section-header">${officeName}</div>
         ${reqListHTML}
@@ -143,13 +143,67 @@ function normalizeString(str) {
   return String(str || "").trim().toLowerCase();
 }
 
-// 🔹 Helpers (you should already have these in your project)
-async function getOfficeName(officeId) {
+// 🔹 Resolve officeName using userID field in Designees
+// 🔹 Resolve officeName using userID field in Designees
+async function resolveOfficeName(userId) {
   try {
-    const doc = await db.collection("officesTable").doc(String(officeId)).get();
-    return doc.exists ? doc.data().name : null;
+    // 🔑 Always query by userID field (not docId)
+    const snap = await db.collection("Designees")
+      .where("userID", "==", String(userId))
+      .limit(1)
+      .get();
+
+    if (snap.empty) {
+      console.warn("⚠️ No Designee found for userID:", userId);
+      return null;
+    }
+
+    const designee = snap.docs[0].data();
+
+    // Case 1: Has category (priority: acadClub → lab → group)
+    if (designee.category) {
+      // acadClubTable → use .club
+      let catDoc = await db.collection("acadClubTable").doc(designee.category).get();
+      if (catDoc.exists && catDoc.data().club) return catDoc.data().club;
+
+      // labTable → use .lab
+      catDoc = await db.collection("labTable").doc(designee.category).get();
+      if (catDoc.exists && catDoc.data().lab) return catDoc.data().lab;
+
+      // groupTable → use .club
+      catDoc = await db.collection("groupTable").doc(designee.category).get();
+      if (catDoc.exists && catDoc.data().club) return catDoc.data().club;
+    }
+
+    // Case 2: Has department (+ maybe office)
+    if (designee.department) {
+      const depDoc = await db.collection("departmentTable").doc(designee.department).get();
+      const depName = depDoc.exists ? depDoc.data().department : "";
+
+      if (designee.office) {
+        const officeDoc = await db.collection("officeTable").doc(designee.office).get();
+        const officeName = officeDoc.exists ? officeDoc.data().office : "";
+        return depName && officeName ? `${depName} - ${officeName}` : depName || officeName;
+      }
+
+      return depName;
+    }
+
+    // Case 3: Only office
+    if (designee.office) {
+      const officeDoc = await db.collection("officeTable").doc(designee.office).get();
+      if (officeDoc.exists) return officeDoc.data().office;
+    }
+
+    // Case 4: Fallback → full name
+    if (designee.firstName || designee.lastName) {
+      return `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
+    }
+
+    return null;
   } catch (err) {
-    console.error("Error fetching office name:", err);
+    console.error("Error resolving office name:", err);
     return null;
   }
 }
+
