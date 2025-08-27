@@ -245,10 +245,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!designeeIdToUse) return;
 
-    const studentsSnapshot = await dbInstance.collection("ValidateRequirementsTable").get();
-    for (const doc of studentsSnapshot.docs) {
-      await autoValidateRequirements(designeeIdToUse, doc.id);
-    }
+   const studentsSnapshot = await dbInstance.collection("Students").get();
+for (const doc of studentsSnapshot.docs) {
+  await autoValidateRequirements(designeeIdToUse, doc.id);
+}
 
   } catch (err) {
     console.error("Auto-validation failed on load:", err);
