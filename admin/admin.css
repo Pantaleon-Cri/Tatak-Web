@@ -422,3 +422,13 @@ nav ul ul.submenu > li:first-child {
   background-color: #28a745;
   color: #fff;
 }
+
+.scrollable-horizontal {
+  display: flex;             /* Keep sidebar and main side by side */
+  width: 100%;
+  overflow-x: auto;          /* Always allow horizontal scroll if needed */
+  overflow-y: hidden;        /* Hide vertical scrollbar for this container */
+  white-space: nowrap;       /* Prevent inner content from wrapping */
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+}

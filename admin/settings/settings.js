@@ -14,6 +14,23 @@ if (!firebase.apps.length) {
 document.addEventListener("DOMContentLoaded", function () {
   const db = firebase.firestore();
 
+  // 🔁 Dropdown toggle
+  const dropdownToggle = document.getElementById("userDropdownToggle");
+  const dropdownMenu = document.getElementById("dropdownMenu");
+
+  if (dropdownToggle && dropdownMenu) {
+    dropdownToggle.addEventListener("click", () => {
+      dropdownMenu.style.display =
+        dropdownMenu.style.display === "block" ? "none" : "block";
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", (event) => {
+      if (!dropdownToggle.contains(event.target) && !dropdownMenu.contains(event.target)) {
+        dropdownMenu.style.display = "none";
+      }
+    });
+  }
   // 🔁 Display Admin Username / ID
   const usernameDisplay = document.getElementById("usernameDisplay");
   const currentAdminIDSpan = document.getElementById("currentAdminID");

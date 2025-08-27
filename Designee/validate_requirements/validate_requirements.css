@@ -472,3 +472,13 @@ tbody td {
   max-height: 80vh;   /* keep content visible */
   overflow-y: auto;   /* scroll inside content */
 }
+.flag-icon {
+  font-size: 20px;
+  color: gray; /* unflagged */
+  transition: color 0.2s, transform 0.2s;
+}
+
+.flag-icon.flagged {
+  color: red; /* flagged */
+  transform: scale(1.2);
+}

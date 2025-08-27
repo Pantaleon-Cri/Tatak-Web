@@ -98,7 +98,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       let showRequirement = false;
 
       // ================= RULES =================
-      if (["302", "303", "304", "305", "306"].includes(reqOffice)) {
+      if (["302", "303", "304", "305", "306", "315"].includes(reqOffice)) {
         showRequirement = true;
       }
       else if (["401", "403"].includes(reqCategory)) {

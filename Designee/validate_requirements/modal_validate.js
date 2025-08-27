@@ -47,6 +47,17 @@ async function getStudentYearLevel(studentID) {
   return null;
 }
 
+// Fetch student officer status
+async function isStudentOfficer(studentID) {
+  if (!dbInstance) return false;
+  const studentDoc = await dbInstance.collection("Students").doc(studentID).get();
+  if (studentDoc.exists) {
+    const data = studentDoc.data();
+    return Array.isArray(data.officer) && data.officer.length > 0; // officer is now array
+  }
+  return false;
+}
+
 /**
  * Copy the latest ValidateRequirementsTable snapshot
  * into History/{studentID} under semesters[{semesterName}]
@@ -56,14 +67,9 @@ async function copyValidateToHistory(studentID, semesterName) {
   try {
     const validateRef = dbInstance.collection("ValidateRequirementsTable").doc(studentID);
     const validateDoc = await validateRef.get();
-    if (!validateDoc.exists) {
-      console.warn("[History] No ValidateRequirementsTable doc to copy for:", studentID);
-      return;
-    }
+    if (!validateDoc.exists) return;
 
     const validateData = validateDoc.data() || {};
-
-    // Optional: compute an overall cleared flag to store alongside snapshot
     let overallCleared = true;
     const offices = validateData.offices || {};
     Object.values(offices).forEach(arr => {
@@ -75,13 +81,11 @@ async function copyValidateToHistory(studentID, semesterName) {
     });
 
     const historyRef = dbInstance.collection("History").doc(studentID);
-
     await historyRef.set({
       studentID,
       lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
       semesters: {
         [semesterName]: {
-          // Full snapshot of validate table at the time of copy
           snapshot: validateData,
           overallStatus: overallCleared ? "Cleared" : "Pending",
           snapshotAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -100,119 +104,123 @@ async function copyValidateToHistory(studentID, semesterName) {
 // Auto-sync requirements for a student+designee
 async function autoValidateRequirements(designeeId, studentID) {
   if (!dbInstance) return;
+  if (!designeeId || designeeId === "undefined") return;
 
   try {
     const currentSemester = await getCurrentSemester();
     const studentYearLevel = await getStudentYearLevel(studentID);
 
-    // Fetch master requirements for this designee
+    // Fetch student data
+    const studentDoc = await dbInstance.collection("Students").doc(studentID).get();
+    const studentData = studentDoc.exists ? studentDoc.data() : {};
+    const studentIsOfficer = Array.isArray(studentData.officer) && studentData.officer.length > 0;
+    const studentViolations = Array.isArray(studentData.violation) ? studentData.violation : [];
+
+    // Fetch all requirements for this designee
     const reqSnapshot = await dbInstance.collection("RequirementsTable")
       .where("addedByDesigneeId", "==", designeeId)
       .orderBy("createdAt", "desc")
       .get();
 
-    // Apply semester + yearLevel filtering
+    // Map and filter requirements according to semester, yearLevel, officer, violation
     const masterRequirements = reqSnapshot.docs
       .map(doc => doc.data())
       .filter(d => !d.semester || d.semester === currentSemester)
       .filter(d => {
-        if (!d.yearLevel || d.yearLevel.toLowerCase() === "all") return true;
-        return d.yearLevel === studentYearLevel;
+        const violationMatches = Array.isArray(d.violation) && d.violation.some(v => studentViolations.includes(v));
+        const isOfficerRequirement = Array.isArray(d.officer) && d.officer.length > 0;
+        const officerMatches = isOfficerRequirement && studentIsOfficer;
+        const yearLevelMatches = d.yearLevel && d.yearLevel.toLowerCase() !== "all" && d.yearLevel === studentYearLevel;
+        const allYearLevel = d.yearLevel && d.yearLevel.toLowerCase() === "all";
+
+        // Include if:
+        // 1. Officer requirement AND student is officer
+        // 2. Violation requirement matches student
+        // 3. Year level matches AND not officer-specific
+        // 4. "All" year level AND not officer-specific or violation-specific
+        if (officerMatches) return true;
+        if (violationMatches) return true;
+        if (yearLevelMatches && !isOfficerRequirement && (!d.violation || d.violation.length === 0)) return true;
+        if (allYearLevel && !isOfficerRequirement && (!d.violation || d.violation.length === 0)) return true;
+
+        return false;
       })
       .map(d => ({
         requirement: d.requirement,
         status: false,
-        checkedBy: null,
+        checkedBy: null,                  // string/null
         checkedAt: null,
         semester: currentSemester,
-        yearLevel: d.yearLevel || "All"
+        yearLevel: d.yearLevel || "All",
+        violation: Array.isArray(d.violation) ? d.violation : [],
+        officer: Array.isArray(d.officer) ? d.officer : [] // officer always as array
       }));
 
-    // Load student's existing validated requirements
+    // Merge with saved requirements
     const valDocRef = dbInstance.collection("ValidateRequirementsTable").doc(studentID);
     const valDoc = await valDocRef.get();
     let requirementsByOffice = {};
-    if (valDoc.exists) {
-      requirementsByOffice = valDoc.data().offices || {};
-    }
+    if (valDoc.exists) requirementsByOffice = valDoc.data().offices || {};
 
     const savedRequirementsForOffice = Array.isArray(requirementsByOffice[designeeId])
       ? requirementsByOffice[designeeId]
       : [];
 
-    // Merge master (current sem only) and saved (filtering out old semesters)
     const mergedRequirements = masterRequirements.map(masterReq => {
       const savedReq = savedRequirementsForOffice.find(
-        r =>
-          r.requirement?.toLowerCase() === masterReq.requirement?.toLowerCase() &&
-          r.semester === currentSemester
+        r => r.requirement?.toLowerCase() === masterReq.requirement?.toLowerCase() &&
+             r.semester === currentSemester
       );
       return savedReq ? { ...masterReq, ...savedReq } : masterReq;
     });
 
     requirementsByOffice[designeeId] = mergedRequirements;
 
-    // Save merged back into Firestore
     await valDocRef.set({
       offices: requirementsByOffice,
       studentID: studentID
     }, { merge: true });
 
-    console.log(`Auto-validated requirements for student ${studentID}, office ${designeeId}, semester ${currentSemester}, yearLevel ${studentYearLevel}`);
-
-    // ✅ Also copy the entire ValidateRequirementsTable doc into History for this semester
     await copyValidateToHistory(studentID, currentSemester);
+
+    console.log(`Auto-validated requirements for student ${studentID}, office ${designeeId}, semester ${currentSemester}`);
   } catch (error) {
     console.error("Error in autoValidateRequirements:", error);
   }
 }
 
+
 // -------------------- Modal Initialization --------------------
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if (!window.validateRequirementsData) {
-    console.error("window.validateRequirementsData is undefined!");
-    return;
-  }
+  if (!window.validateRequirementsData) return;
 
   ({ checklistModal, modalBody, cancelBtn, saveBtn, approveBtn } = window.validateRequirementsData);
 
-  // Attach event listeners
   cancelBtn.addEventListener("click", closeModal);
   saveBtn.addEventListener("click", saveRequirements);
 
-  // Allow clicking outside modal to close
   checklistModal.addEventListener("click", (e) => {
     if (e.target === checklistModal) closeModal();
   });
 
-  // ⚡ AUTO VALIDATE ON PAGE LOAD ⚡
   try {
     const currentUser = JSON.parse(localStorage.getItem("userData"));
     if (!currentUser || !currentUser.id) throw new Error("User not logged in");
 
     dbInstance = firebase.firestore();
 
-    let designeeIdToUse = null;
-    if (currentUser.role === "staff") {
-      designeeIdToUse = currentUser.createdByDesigneeID || null;
-    } else {
-      designeeIdToUse = currentUser.id; // if designee directly
-    }
+    let designeeIdToUse = currentUser.role === "staff"
+      ? (currentUser.createdByDesigneeID && currentUser.createdByDesigneeID !== "undefined" ? currentUser.createdByDesigneeID : null)
+      : currentUser.role === "designee" ? currentUser.id : null;
 
-    if (!designeeIdToUse) {
-      console.warn("No designee ID available for auto-validation");
-      return;
-    }
+    if (!designeeIdToUse) return;
 
-    // Fetch all students in ValidateRequirementsTable
     const studentsSnapshot = await dbInstance.collection("ValidateRequirementsTable").get();
     for (const doc of studentsSnapshot.docs) {
-      const studentID = doc.id;
-      await autoValidateRequirements(designeeIdToUse, studentID);
+      await autoValidateRequirements(designeeIdToUse, doc.id);
     }
 
-    console.log("✅ Auto-validation completed for all students on load");
   } catch (err) {
     console.error("Auto-validation failed on load:", err);
   }
@@ -220,15 +228,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // -------------------- Modal Actions --------------------
 
-// Open modal and load requirements for a given student and designee
 window.openRequirementsModal = async function(studentID, designeeUserID, db) {
   currentStudentID = studentID;
   dbInstance = db;
 
-  if (!modalBody || !checklistModal) {
-    console.error("Modal elements are not initialized yet.");
-    return;
-  }
+  if (!modalBody || !checklistModal) return;
 
   modalBody.innerHTML = "<p>Loading requirements...</p>";
   checklistModal.classList.add("active");
@@ -237,21 +241,19 @@ window.openRequirementsModal = async function(studentID, designeeUserID, db) {
     const currentUser = JSON.parse(localStorage.getItem("userData"));
     if (!currentUser || !currentUser.id) throw new Error("User not logged in");
 
-    let linkedDesigneeId = null;
-    if (currentUser.role === "staff") {
-      linkedDesigneeId = currentUser.createdByDesigneeID || null;
-      if (!linkedDesigneeId) {
-        modalBody.innerHTML = "<p>No requirements assigned to you.</p>";
-        return;
-      }
+    let linkedDesigneeId = currentUser.role === "staff"
+      ? (currentUser.createdByDesigneeID && currentUser.createdByDesigneeID !== "undefined" ? currentUser.createdByDesigneeID : null)
+      : currentUser.role === "designee" ? currentUser.id : designeeUserID;
+
+    if (!linkedDesigneeId) {
+      modalBody.innerHTML = "<p>No requirements assigned to you.</p>";
+      return;
     }
 
-    currentDesigneeUserID = (currentUser.role === "staff") ? linkedDesigneeId : designeeUserID;
+    currentDesigneeUserID = linkedDesigneeId;
 
-    // Run validation once before showing
     await autoValidateRequirements(currentDesigneeUserID, studentID);
 
-    // Now load for modal
     const valDocRef = dbInstance.collection("ValidateRequirementsTable").doc(studentID);
     const valDoc = await valDocRef.get();
     const data = valDoc.data();
@@ -264,7 +266,8 @@ window.openRequirementsModal = async function(studentID, designeeUserID, db) {
   }
 };
 
-// Render checklist in modal body
+// -------------------- Render & Save --------------------
+
 function renderRequirementsChecklist(requirements) {
   modalBody.innerHTML = "";
 
@@ -279,7 +282,7 @@ function renderRequirementsChecklist(requirements) {
       <label class="checkbox-item ${checkedClass}">
         <input type="checkbox" data-index="${i}" ${checkedAttr}>
         <i class="fa-solid fa-check-square checkbox-icon"></i>
-        <span>${req.requirement}${checkerText}</span>
+        <span>${req.requirement || ""}${checkerText}</span>
       </label>
     `);
   });
@@ -293,12 +296,10 @@ function renderRequirementsChecklist(requirements) {
   });
 }
 
-// Close modal
 function closeModal() {
   checklistModal.classList.remove("active");
 }
 
-// Save checked statuses back to Firestore
 async function saveRequirements() {
   const checkboxes = modalBody.querySelectorAll("input[type='checkbox']");
   const updatedRequirements = [];
@@ -353,7 +354,10 @@ async function saveRequirements() {
         status: isChecked,
         checkedBy: newCheckedBy,
         checkedAt: newCheckedAt,
-        semester: currentSemester
+        semester: currentSemester,
+        yearLevel: existingReq?.yearLevel || "All",
+        violation: Array.isArray(existingReq?.violation) ? existingReq.violation : [],
+        officer: Array.isArray(existingReq?.officer) ? existingReq.officer : []  // now array
       };
     }
 
@@ -364,7 +368,6 @@ async function saveRequirements() {
       studentID: currentStudentID
     }, { merge: true });
 
-    // ✅ Also refresh History after manual save so it stays in sync
     await copyValidateToHistory(currentStudentID, currentSemester);
 
     alert("Requirements saved successfully!");
