@@ -110,45 +110,67 @@ async function autoValidateRequirements(designeeId, studentID) {
     const currentSemester = await getCurrentSemester();
     const studentYearLevel = await getStudentYearLevel(studentID);
 
-    // Fetch student data
+    // 🔹 Fetch student data
     const studentDoc = await dbInstance.collection("Students").doc(studentID).get();
     const studentData = studentDoc.exists ? studentDoc.data() : {};
-    const studentIsOfficer = Array.isArray(studentData.officer) && studentData.officer.length > 0;
+    const studentOfficerRoles = Array.isArray(studentData.officer) ? studentData.officer : [];
     const studentViolations = Array.isArray(studentData.violation) ? studentData.violation : [];
 
-    // Fetch all requirements for this designee
+    // 🔹 Fetch all requirements for this designee
     const reqSnapshot = await dbInstance.collection("RequirementsTable")
       .where("addedByDesigneeId", "==", designeeId)
       .orderBy("createdAt", "desc")
       .get();
 
-    // Map and filter requirements according to semester, yearLevel, officer, violation
+    // 🔹 Map and filter requirements according to semester, yearLevel, officer, violation
     const masterRequirements = reqSnapshot.docs
       .map(doc => doc.data())
       .filter(d => !d.semester || d.semester === currentSemester)
       .filter(d => {
-        const violationMatches = Array.isArray(d.violation) && d.violation.some(v => studentViolations.includes(v));
+        const violationMatches =
+          Array.isArray(d.violation) && d.violation.some(v => studentViolations.includes(v));
+
         const isOfficerRequirement = Array.isArray(d.officer) && d.officer.length > 0;
-        const officerMatches = isOfficerRequirement && studentIsOfficer;
-        const yearLevelMatches = d.yearLevel && d.yearLevel.toLowerCase() !== "all" && d.yearLevel === studentYearLevel;
+        const officerMatches =
+          isOfficerRequirement &&
+          studentOfficerRoles.some(role => d.officer.includes(role));
+
+        const yearLevelMatches =
+          d.yearLevel &&
+          d.yearLevel.toLowerCase() !== "all" &&
+          d.yearLevel === studentYearLevel;
+
         const allYearLevel = d.yearLevel && d.yearLevel.toLowerCase() === "all";
 
-        // Include if:
-        // 1. Officer requirement AND student is officer
-        // 2. Violation requirement matches student
-        // 3. Year level matches AND not officer-specific
-        // 4. "All" year level AND not officer-specific or violation-specific
+        // ✅ Include if:
+        // 1. Officer requirement AND student is in that officer list
         if (officerMatches) return true;
+
+        // 2. Violation requirement matches student
         if (violationMatches) return true;
-        if (yearLevelMatches && !isOfficerRequirement && (!d.violation || d.violation.length === 0)) return true;
-        if (allYearLevel && !isOfficerRequirement && (!d.violation || d.violation.length === 0)) return true;
+
+        // 3. Year level requirement (not officer-specific or violation-specific)
+        if (
+          yearLevelMatches &&
+          !isOfficerRequirement &&
+          (!d.violation || d.violation.length === 0)
+        )
+          return true;
+
+        // 4. "All" year level requirement (not officer-specific or violation-specific)
+        if (
+          allYearLevel &&
+          !isOfficerRequirement &&
+          (!d.violation || d.violation.length === 0)
+        )
+          return true;
 
         return false;
       })
       .map(d => ({
         requirement: d.requirement,
         status: false,
-        checkedBy: null,                  // string/null
+        checkedBy: null, // string/null
         checkedAt: null,
         semester: currentSemester,
         yearLevel: d.yearLevel || "All",
@@ -156,7 +178,7 @@ async function autoValidateRequirements(designeeId, studentID) {
         officer: Array.isArray(d.officer) ? d.officer : [] // officer always as array
       }));
 
-    // Merge with saved requirements
+    // 🔹 Merge with saved requirements
     const valDocRef = dbInstance.collection("ValidateRequirementsTable").doc(studentID);
     const valDoc = await valDocRef.get();
     let requirementsByOffice = {};
@@ -168,26 +190,33 @@ async function autoValidateRequirements(designeeId, studentID) {
 
     const mergedRequirements = masterRequirements.map(masterReq => {
       const savedReq = savedRequirementsForOffice.find(
-        r => r.requirement?.toLowerCase() === masterReq.requirement?.toLowerCase() &&
-             r.semester === currentSemester
+        r =>
+          r.requirement?.toLowerCase() === masterReq.requirement?.toLowerCase() &&
+          r.semester === currentSemester
       );
       return savedReq ? { ...masterReq, ...savedReq } : masterReq;
     });
 
     requirementsByOffice[designeeId] = mergedRequirements;
 
-    await valDocRef.set({
-      offices: requirementsByOffice,
-      studentID: studentID
-    }, { merge: true });
+    await valDocRef.set(
+      {
+        offices: requirementsByOffice,
+        studentID: studentID
+      },
+      { merge: true }
+    );
 
     await copyValidateToHistory(studentID, currentSemester);
 
-    console.log(`Auto-validated requirements for student ${studentID}, office ${designeeId}, semester ${currentSemester}`);
+    console.log(
+      `Auto-validated requirements for student ${studentID}, office ${designeeId}, semester ${currentSemester}`
+    );
   } catch (error) {
     console.error("Error in autoValidateRequirements:", error);
   }
 }
+
 
 
 // -------------------- Modal Initialization --------------------
