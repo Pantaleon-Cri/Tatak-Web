@@ -127,55 +127,41 @@ async function autoValidateRequirements(designeeId, studentID) {
       .map(doc => doc.data())
       .filter(d => !d.semester || d.semester === currentSemester)
       .filter(d => {
-        const violationMatches =
-          Array.isArray(d.violation) && d.violation.some(v => studentViolations.includes(v));
+        const hasOfficer = Array.isArray(d.officer) && d.officer.length > 0;
+        const hasViolation = Array.isArray(d.violation) && d.violation.length > 0;
+        const hasYearLevel = d.yearLevel && d.yearLevel.toLowerCase() !== "all";
 
-        const isOfficerRequirement = Array.isArray(d.officer) && d.officer.length > 0;
-        const officerMatches =
-          isOfficerRequirement &&
-          studentOfficerRoles.some(role => d.officer.includes(role));
-
-        const yearLevelMatches =
-          d.yearLevel &&
-          d.yearLevel.toLowerCase() !== "all" &&
-          d.yearLevel === studentYearLevel;
-
+        const officerMatches = hasOfficer && studentOfficerRoles.some(role => d.officer.includes(role));
+        const violationMatches = hasViolation && d.violation.some(v => studentViolations.includes(v));
+        const yearLevelMatches = hasYearLevel && d.yearLevel === studentYearLevel;
         const allYearLevel = d.yearLevel && d.yearLevel.toLowerCase() === "all";
 
-        // ✅ Include if:
-        // 1. Officer requirement AND student is in that officer list
-        if (officerMatches) return true;
+        // ✅ Now combine conditions properly
+        // Officer + YearLevel
+        if (hasOfficer && hasYearLevel) return officerMatches && yearLevelMatches;
+        if (hasOfficer && !hasYearLevel) return officerMatches;
+        
+        // Violation + YearLevel
+        if (hasViolation && hasYearLevel) return violationMatches && yearLevelMatches;
+        if (hasViolation && !hasYearLevel) return violationMatches;
 
-        // 2. Violation requirement matches student
-        if (violationMatches) return true;
+        // YearLevel only
+        if (hasYearLevel && !hasOfficer && !hasViolation) return yearLevelMatches;
 
-        // 3. Year level requirement (not officer-specific or violation-specific)
-        if (
-          yearLevelMatches &&
-          !isOfficerRequirement &&
-          (!d.violation || d.violation.length === 0)
-        )
-          return true;
-
-        // 4. "All" year level requirement (not officer-specific or violation-specific)
-        if (
-          allYearLevel &&
-          !isOfficerRequirement &&
-          (!d.violation || d.violation.length === 0)
-        )
-          return true;
+        // "All" YearLevel only
+        if (allYearLevel && !hasOfficer && !hasViolation) return true;
 
         return false;
       })
       .map(d => ({
         requirement: d.requirement,
         status: false,
-        checkedBy: null, // string/null
+        checkedBy: null,
         checkedAt: null,
         semester: currentSemester,
         yearLevel: d.yearLevel || "All",
         violation: Array.isArray(d.violation) ? d.violation : [],
-        officer: Array.isArray(d.officer) ? d.officer : [] // officer always as array
+        officer: Array.isArray(d.officer) ? d.officer : []
       }));
 
     // 🔹 Merge with saved requirements
@@ -216,6 +202,7 @@ async function autoValidateRequirements(designeeId, studentID) {
     console.error("Error in autoValidateRequirements:", error);
   }
 }
+
 
 
 
