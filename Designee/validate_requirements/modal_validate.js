@@ -232,15 +232,93 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!designeeIdToUse) return;
 
-   const studentsSnapshot = await dbInstance.collection("Students").get();
-for (const doc of studentsSnapshot.docs) {
-  await autoValidateRequirements(designeeIdToUse, doc.id);
-}
+    // -------------------- FETCH CURRENT SEMESTER --------------------
+    const semesterSnapshot = await dbInstance.collection("semesterTable")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
+    if (semesterSnapshot.empty) return;
+    const currentSemesterDoc = semesterSnapshot.docs[0].data();
+    const currentSemesterId = currentSemesterDoc.id;
+    const currentSemesterName = currentSemesterDoc.semester;
+
+    // -------------------- FETCH DEPARTMENT & COLLECTION MAPS --------------------
+    const deptSnapshot = await dbInstance.collection("departmentTable").get();
+    const departmentMap = {};
+    deptSnapshot.forEach(doc => {
+      const data = doc.data();
+      departmentMap[doc.id] = data.code || doc.id;
+    });
+
+    const groupSnapshot = await dbInstance.collection("groupTable").get();
+    const labSnapshot = await dbInstance.collection("labTable").get();
+    const collectionMap = {};
+    groupSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.id && data.club) collectionMap[String(data.id)] = data.club;
+    });
+    labSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
+    });
+
+    // -------------------- FETCH ALL STUDENTS --------------------
+    const studentsSnapshot = await dbInstance.collection("Students").get();
+    const allStudents = [];
+    studentsSnapshot.forEach(doc => {
+      const data = doc.data();
+      allStudents.push({
+        schoolID: doc.id,
+        firstName: data.firstName || "",
+        middleName: data.middleName || "",
+        lastName: data.lastName || "",
+        department: data.department || "",
+        clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
+        semester: data.semester
+      });
+    });
+
+    // -------------------- APPLY FILTERS LIKE loadStudents --------------------
+    const designeeOffice = currentUser.office || ""; // or wherever this comes from
+    const designeeCategory = currentUser.category || "";
+    const designeeDepartment = currentUser.department || "";
+
+    const personalOffices = ["301","310","311","312","313","314"];
+    const excludeCategories = ["401","403"];
+    const showAllCategories = ["401","403"];
+    const showAllOffices = ["302","303","304","305","306"];
+
+    let filteredBySemester = allStudents.filter(s => s.semester === currentSemesterId || s.semester === currentSemesterName);
+
+    let filteredStudents = [];
+    if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
+      filteredStudents = filteredBySemester;
+    } else if (designeeOffice === "307" || designeeOffice === "308") {
+      filteredStudents = filteredBySemester.filter(student => student.department === designeeDepartment);
+    } else if (designeeOffice === "309") {
+      const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
+      filteredStudents = filteredBySemester.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
+    } else if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
+      const collectionName = collectionMap[designeeCategory];
+      if (collectionName) {
+        filteredStudents = filteredBySemester.filter(student => collectionMap[designeeCategory] === collectionName);
+      } else {
+        filteredStudents = [];
+      }
+    } else {
+      filteredStudents = filteredBySemester;
+    }
+
+    // -------------------- AUTO-VALIDATE ONLY FILTERED STUDENTS --------------------
+    for (const student of filteredStudents) {
+      await autoValidateRequirements(designeeIdToUse, student.schoolID);
+    }
 
   } catch (err) {
     console.error("Auto-validation failed on load:", err);
   }
 });
+
 
 // -------------------- Modal Actions --------------------
 

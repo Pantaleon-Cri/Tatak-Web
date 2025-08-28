@@ -448,7 +448,7 @@ nav ul ul.submenu > li:first-child {
 }
 
 .notes-section p {
-  margin: 0;
+  margin-left: 15px;
   font-size: 0.9em;
   color: var(--medium-grey-text);
   line-height: 1.4;

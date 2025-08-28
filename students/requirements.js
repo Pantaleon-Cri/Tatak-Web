@@ -45,9 +45,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       requirementsContainer.innerHTML = `
         <div class="clearance-section-card">
           <div class="section-header">No Requirements Found</div>
-          <div class="notes-section">
-            <p>You currently have no active requirements for this semester.</p>
-          </div>
+          
         </div>
       `;
       return;
@@ -91,19 +89,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       reqListHTML += "</ul>";
 
       // 🔹 Fetch notes for this office & semester
-      const notesSnap = await db.collection("notesTable")
-        .where("semester", "==", currentSemesterName)
-        .where("office", "==", officeKey)
-        .get();
+     // 🔹 Fetch notes for this officer & semester
+const notesSnap = await db.collection("notesTable")
+  .where("semester", "==", currentSemesterName)
+  .where("addedBy", "==", officeKey) // <-- match officer's userID
+  .get();
 
-      let notesHTML = `<p>No Notes Yet</p>`;
-      if (!notesSnap.empty) {
-        notesHTML = "";
-        notesSnap.forEach(doc => {
-          const noteData = doc.data();
-          if (noteData.note) notesHTML += `<p>${noteData.note}</p>`;
-        });
-      }
+let notesHTML = `<p>No Notes Yet</p>`;
+if (!notesSnap.empty) {
+  notesHTML = "";
+  notesSnap.forEach(doc => {
+    const noteData = doc.data();
+    if (noteData.note) notesHTML += `<p>${noteData.note}</p>`;
+  });
+}
+
 
       // 🔹 Render section
       const requirementSection = document.createElement("div");
