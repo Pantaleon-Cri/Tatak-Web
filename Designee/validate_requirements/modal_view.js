@@ -70,6 +70,7 @@ window.openViewClearanceCard = async function(studentID, db) {
 
   const containerEl = document.getElementById("officeSectionsGrid");
   const statusEl = document.getElementById("status");
+  const container = document.querySelector(".clearance-container");
   containerEl.innerHTML = "";
   statusEl.textContent = "Loading...";
   document.getElementById("studentId").textContent = studentID;
@@ -259,7 +260,16 @@ window.openViewClearanceCard = async function(studentID, db) {
       // Get last approver and last checkedAt
       const lastCheckedItem = validatedArray.filter(item => item.status === true).pop() || {};
       const lastCheckedBy = lastCheckedItem.checkedBy || "Unknown";
-      const lastCheckedAt = lastCheckedItem.checkedAt ? new Date(lastCheckedItem.checkedAt).toLocaleString() : "N/A";
+      const lastCheckedAt = lastCheckedItem.checkedAt
+  ? new Date(lastCheckedItem.checkedAt).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true // ensures 12-hour format
+    })
+  : "N/A";
 
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");
@@ -272,9 +282,13 @@ window.openViewClearanceCard = async function(studentID, db) {
       containerEl.appendChild(sectionGroupDiv);
     }
 
-    statusEl.innerHTML = overallCleared
-      ? `<span style="color:green">Completed</span>`
-      : `<span style="color:red">Pending</span>`;
+  if (overallCleared) {
+  statusEl.innerHTML = `<span style="color:green">Completed</span>`;
+  container.style.border = "5px solid #a6d96a"; // green border
+} else {
+  statusEl.innerHTML = `<span style="color:red">Pending</span>`;
+  container.style.border = "5px solid red"; // red border
+}
 
     if (!anyRequirementsFound) {
       containerEl.innerHTML = `<div class="section-item"><label class="section-header">No Requirements Found</label><p>You currently have no active requirements.</p></div>`;

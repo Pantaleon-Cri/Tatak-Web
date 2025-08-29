@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const usernameDisplay = document.querySelector(".username");
   const studentName = localStorage.getItem("studentName");
   if (usernameDisplay && studentName) {
-    usernameDisplay.textContent = studentName.split(" ")[0]; // first name only
+    usernameDisplay.textContent = studentName; // first name only
   }
 
   // 🔹 User dropdown toggle

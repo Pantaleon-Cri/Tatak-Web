@@ -461,9 +461,6 @@ nav ul ul.submenu > li:first-child {
       border-bottom: 2px dashed #ccc;
       margin: 20px 0;
     }
-#status{
-    color: red;
-}
     /* Sections Grid */
     .sections-grid {
       display: grid;

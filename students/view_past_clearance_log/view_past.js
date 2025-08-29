@@ -185,6 +185,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     statusSpan.textContent = overallStatus;
 
+    
+if (overallStatus === "Pending") {
+  statusSpan.style.color = "red";
+} else if (overallStatus === "Cleared") {
+  statusSpan.style.color = "green";
+} else {
+  statusSpan.style.color = "black"; // fallback/default
+}
+
     for (const [officeId, requirementsArray] of Object.entries(offices)) {
       if (!Array.isArray(requirementsArray)) continue;
 
@@ -221,7 +230,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       
 if (allOfficeCleared) {
-  const checkedDateStr = lastCheckedAt ? new Date(lastCheckedAt).toLocaleString() : "N/A";
+ const checkedDateStr = lastCheckedAt
+  ? new Date(lastCheckedAt).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true // 12-hour format
+    })
+  : "N/A";
+
   contentDiv.innerHTML = `
     <img src="../../Tatak.png" alt="Cleared" class="tatak-img" style="width:50px; height:50px;" /><br />
     <i>Approved By: ${lastCheckedBy}<br />

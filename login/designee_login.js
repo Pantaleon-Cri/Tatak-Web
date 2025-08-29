@@ -38,6 +38,13 @@ document.getElementById('registrationForm').addEventListener('submit', async (e)
       const designeeDoc = designeeSnapshot.docs[0];
       const designeeData = designeeDoc.data();
 
+      // ✅ Check status
+      if (designeeData.status !== "Approved") {
+        showMessage(`Your account status is "${designeeData.status}". You cannot log in.`, "error");
+        return;
+      }
+
+      // ✅ Login allowed
       localStorage.setItem("userData", JSON.stringify({
         id: designeeDoc.id,
         ...designeeData,
@@ -58,17 +65,24 @@ document.getElementById('registrationForm').addEventListener('submit', async (e)
       const staffDoc = staffSnapshot.docs[0];
       const staffData = staffDoc.data();
 
+      // ✅ Check status
+      if (staffData.status !== "Approved") {
+        showMessage(`Your account status is "${staffData.status}". You cannot log in.`, "error");
+        return;
+      }
+
+      // ✅ Login allowed
       localStorage.setItem("userData", JSON.stringify({
         id: staffDoc.id,
         ...staffData,
         role: "staff"
       }));
 
-      window.location.href = "../Designee/designee.html"; // ⬅️ Change this if your staff page is different
+      window.location.href = "../Designee/designee.html"; // ⬅️ Update if staff page differs
       return;
     }
 
-    // ❌ Not found in either
+    // ❌ Not found in either collection
     showMessage("Invalid User ID or Password.", "error");
 
   } catch (error) {

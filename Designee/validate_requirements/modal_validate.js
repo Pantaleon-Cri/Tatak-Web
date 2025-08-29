@@ -211,8 +211,10 @@ async function autoValidateRequirements(designeeId, studentID) {
 document.addEventListener("DOMContentLoaded", async () => {
   if (!window.validateRequirementsData) return;
 
+  // Destructure modal elements
   ({ checklistModal, modalBody, cancelBtn, saveBtn, approveBtn } = window.validateRequirementsData);
 
+  // Modal event listeners
   cancelBtn.addEventListener("click", closeModal);
   saveBtn.addEventListener("click", saveRequirements);
 
@@ -221,15 +223,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   try {
+    // Get current user
     const currentUser = JSON.parse(localStorage.getItem("userData"));
     if (!currentUser || !currentUser.id) throw new Error("User not logged in");
 
     dbInstance = firebase.firestore();
 
+    // Determine designee ID
     let designeeIdToUse = currentUser.role === "staff"
       ? (currentUser.createdByDesigneeID && currentUser.createdByDesigneeID !== "undefined" ? currentUser.createdByDesigneeID : null)
       : currentUser.role === "designee" ? currentUser.id : null;
-
     if (!designeeIdToUse) return;
 
     // -------------------- FETCH CURRENT SEMESTER --------------------
@@ -237,10 +240,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       .where("currentSemester", "==", true)
       .limit(1)
       .get();
-    if (semesterSnapshot.empty) return;
+    if (semesterSnapshot.empty) {
+      console.warn("No current semester found.");
+      return;
+    }
     const currentSemesterDoc = semesterSnapshot.docs[0].data();
     const currentSemesterId = currentSemesterDoc.id;
     const currentSemesterName = currentSemesterDoc.semester;
+    console.log("Current semester:", currentSemesterName);
 
     // -------------------- FETCH DEPARTMENT & COLLECTION MAPS --------------------
     const deptSnapshot = await dbInstance.collection("departmentTable").get();
@@ -262,8 +269,37 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
     });
 
-    // -------------------- FETCH ALL STUDENTS --------------------
-    const studentsSnapshot = await dbInstance.collection("Students").get();
+    // -------------------- DETERMINE COLLECTION --------------------
+    const designeeOffice = currentUser.office || "";
+    const designeeCategory = currentUser.category || "";
+    const designeeDepartment = currentUser.department || "";
+
+    const personalOffices = ["301","310","311","312","313","314"];
+    const excludeCategories = ["401","403"];
+    const showAllCategories = ["401","403"];
+    const showAllOffices = ["302","303","304","305","306","315","316"];
+
+    let collectionName = "Students"; // fallback
+    let useStudentsCollection = true;
+
+    if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
+      collectionName = "Students";
+      useStudentsCollection = true;
+    } else if (designeeOffice === "307" || designeeOffice === "308" || designeeOffice === "309") {
+      collectionName = "Students"; // always refer to main Students collection
+      useStudentsCollection = true;
+    } else if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
+      collectionName = collectionMap[designeeCategory] || null;
+      useStudentsCollection = false;
+      if (!collectionName) {
+        console.warn("No collection found for personal office category:", designeeCategory);
+        return;
+      }
+    }
+    console.log("Collection used for fetching students:", collectionName);
+
+    // -------------------- FETCH STUDENTS FROM COLLECTION --------------------
+    const studentsSnapshot = await dbInstance.collection(collectionName).get();
     const allStudents = [];
     studentsSnapshot.forEach(doc => {
       const data = doc.data();
@@ -272,24 +308,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         firstName: data.firstName || "",
         middleName: data.middleName || "",
         lastName: data.lastName || "",
-        department: data.department || "",
+        department: data.department || data.sourceDepartment || "",
         clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
         semester: data.semester
       });
     });
+    console.log(`Fetched ${allStudents.length} students from collection "${collectionName}"`);
 
-    // -------------------- APPLY FILTERS LIKE loadStudents --------------------
-    const designeeOffice = currentUser.office || ""; // or wherever this comes from
-    const designeeCategory = currentUser.category || "";
-    const designeeDepartment = currentUser.department || "";
+    // -------------------- FILTER STUDENTS BY SEMESTER --------------------
+    const filteredBySemester = allStudents.filter(s => s.semester === currentSemesterId || s.semester === currentSemesterName);
+    console.log(`Students after semester filter: ${filteredBySemester.length}`);
 
-    const personalOffices = ["301","310","311","312","313","314"];
-    const excludeCategories = ["401","403"];
-    const showAllCategories = ["401","403"];
-    const showAllOffices = ["302","303","304","305","306"];
-
-    let filteredBySemester = allStudents.filter(s => s.semester === currentSemesterId || s.semester === currentSemesterName);
-
+    // -------------------- FILTER STUDENTS BASED ON OFFICE RULES --------------------
     let filteredStudents = [];
     if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
       filteredStudents = filteredBySemester;
@@ -298,26 +328,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (designeeOffice === "309") {
       const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
       filteredStudents = filteredBySemester.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
-    } else if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
-      const collectionName = collectionMap[designeeCategory];
-      if (collectionName) {
-        filteredStudents = filteredBySemester.filter(student => collectionMap[designeeCategory] === collectionName);
-      } else {
-        filteredStudents = [];
-      }
+    } else if (!useStudentsCollection) {
+      // Personal office uploaded collection
+      filteredStudents = filteredBySemester;
     } else {
       filteredStudents = filteredBySemester;
     }
+    console.log(`Students after office/category filtering: ${filteredStudents.length}`);
 
     // -------------------- AUTO-VALIDATE ONLY FILTERED STUDENTS --------------------
     for (const student of filteredStudents) {
+      console.log(`Auto-validating student: ${student.schoolID}`);
       await autoValidateRequirements(designeeIdToUse, student.schoolID);
     }
+
+    console.log("Auto-validation completed for filtered students.");
 
   } catch (err) {
     console.error("Auto-validation failed on load:", err);
   }
 });
+
+
+
+
 
 
 // -------------------- Modal Actions --------------------
@@ -369,8 +403,15 @@ function renderRequirementsChecklist(requirements) {
     const checkedClass = req.status ? "checked" : "";
     const checkedAttr = req.status ? "checked" : "";
     const checkerText = req.checkedBy
-      ? ` (checked by ${req.checkedBy}${req.checkedAt ? " at " + new Date(req.checkedAt).toLocaleString() : ""})`
-      : "";
+  ? ` (checked by ${req.checkedBy}${req.checkedAt ? " at " + new Date(req.checkedAt).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true // 12-hour format with AM/PM
+      }) : ""})`
+  : "";
 
     modalBody.insertAdjacentHTML("beforeend", `
       <label class="checkbox-item ${checkedClass}">

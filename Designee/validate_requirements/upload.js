@@ -166,7 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.log(`✅ Uploaded ${studentData.length} records to "${collectionName}" with semester "${currentSemester}"`);
                 alert(`Uploaded ${studentData.length} students successfully for ${currentSemester}!`);
                 uploadInput.value = ""; // reset
-                loadStudents(); // refresh table
+                 // refresh table
             };
             reader.readAsArrayBuffer(file);
         } catch (err) {

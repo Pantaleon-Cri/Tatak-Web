@@ -432,3 +432,111 @@ nav ul ul.submenu > li:first-child {
   box-sizing: border-box;
   -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
 }
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  display: none; /* Hidden by default */
+}
+
+/* Modal Content Box */
+.modal-content {
+  background: #ffffff;
+  padding: 20px 25px;
+  border-radius: 10px;
+  width: 320px;
+  max-width: 90%;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+/* Modal Title */
+.modal-content h3 {
+  margin-top: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* Modal Name / Description */
+.modal-content p {
+  margin: 10px 0 15px;
+  font-size: 1rem;
+  color: #555;
+}
+
+/* Select Dropdown */
+#statusSelect {
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 15px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+}
+
+/* Modal Buttons Container */
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Modal Buttons Styling */
+.modal-buttons button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s;
+}
+
+/* Cancel Button */
+#statusCancelBtn {
+  background-color: #ccc;
+  color: #333;
+}
+#statusCancelBtn:hover {
+  background-color: #b3b3b3;
+}
+
+/* Confirm/Save Button */
+#statusConfirmBtn {
+  background-color: #4CAF50;
+  color: #fff;
+}
+#statusConfirmBtn:hover {
+  background-color: #45a049;
+}
+
+/* Optional: smaller select for mobile */
+@media (max-width: 480px) {
+  .modal-content {
+    padding: 15px 20px;
+    width: 90%;
+  }
+}
+
+.status-btn {
+  background-color: #28a745; /* Green background */
+  color: #fff;               /* White text */
+  border: none;
+  border-radius: 5px;
+  padding: 5px 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.status-btn:hover {
+  background-color: #1c501f; /* Darker green on hover */
+}

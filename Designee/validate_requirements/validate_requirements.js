@@ -163,153 +163,146 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Render students
-  function renderStudents(students) {
+  function renderStudents(students, collectionName) {
     if (!students || students.length === 0) {
       studentsTableBody.innerHTML = "<tr><td colspan='6'>No students found.</td></tr>";
       return;
     }
+
     studentsTableBody.innerHTML = students.map(createStudentRow).join("");
 
-    // Attach flag/officer checkboxes
-    if (typeof window.attachFlagButtons === "function") {
-      window.attachFlagButtons("Students");
+    if (typeof window.attachFlagButtons === "function" && collectionName) {
+      window.attachFlagButtons(collectionName);
     }
   }
 
   // Search handler
-  function attachSearchHandler(students) {
+  function attachSearchHandler(students, collectionName) {
     searchInput.addEventListener("input", () => {
       const searchTerm = searchInput.value.toLowerCase();
       const filtered = students.filter(s =>
         s.schoolID.toLowerCase().includes(searchTerm) || s.fullName.toLowerCase().includes(searchTerm)
       );
-      renderStudents(filtered);
+      renderStudents(filtered, collectionName);
     });
   }
 
   // Load students from Firestore
-  // Load students from Firestore
-async function loadStudents() {
-  studentsTableBody.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
+  async function loadStudents() {
+    studentsTableBody.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
 
-  try {
-    // --- Step 1: Fetch current semester ---
-    const semesterSnapshot = await db.collection("semesterTable")
-      .where("currentSemester", "==", true)
-      .limit(1)
-      .get();
+    try {
+      // --- Step 1: Fetch current semester ---
+      const semesterSnapshot = await db.collection("semesterTable")
+        .where("currentSemester", "==", true)
+        .limit(1)
+        .get();
 
-    if (semesterSnapshot.empty) {
-      studentsTableBody.innerHTML = "<tr><td colspan='8'>No active semester found.</td></tr>";
-      return;
-    }
-
-    const currentSemesterDoc = semesterSnapshot.docs[0].data();
-    const currentSemesterId = currentSemesterDoc.id;       // e.g., "1"
-    const currentSemesterName = currentSemesterDoc.semester; // e.g., "1st Semester 2025-2026"
-
-    // --- Step 2: Get department & collection mappings ---
-    const deptSnapshot = await db.collection("departmentTable").get();
-    const departmentMap = {};
-    deptSnapshot.forEach(doc => {
-      const data = doc.data();
-      departmentMap[doc.id] = data.code || doc.id;
-    });
-
-    const groupSnapshot = await db.collection("groupTable").get();
-    const labSnapshot = await db.collection("labTable").get();
-    const collectionMap = {};
-    groupSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.id && data.club) collectionMap[String(data.id)] = data.club;
-    });
-    labSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
-    });
-
-    // --- Step 3: Fetch students collection ---
-    let querySnapshot;
-    const personalOffices = ["301","310","311","312","313","314"];
-    const excludeCategories = ["401","403"];
-    let isGeneralStudentsCollection = true;
-
-    if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
-      const collectionName = collectionMap[designeeCategory];
-      if (!collectionName) {
-        studentsTableBody.innerHTML = "<tr><td colspan='8'>No matching collection found for this category.</td></tr>";
+      if (semesterSnapshot.empty) {
+        studentsTableBody.innerHTML = "<tr><td colspan='8'>No active semester found.</td></tr>";
         return;
       }
-      querySnapshot = await db.collection(collectionName).get();
-      isGeneralStudentsCollection = false;
-    } else {
-      querySnapshot = await db.collection("Students").get();
-      isGeneralStudentsCollection = true;
-    }
 
-    if (querySnapshot.empty) {
-      studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
-      return;
-    }
+      const semesterDoc = semesterSnapshot.docs[0];
+      const currentSemesterId = semesterDoc.id;
+      const currentSemesterName = semesterDoc.data().semester;
 
-    // --- Step 4: Map student documents ---
-    const allStudents = [];
-    querySnapshot.forEach(doc => {
-      const data = doc.data();
-      const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
-      let deptDisplay = data.department || "";
-      if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
-
-      allStudents.push({
-        schoolID: doc.id,
-        fullName,
-        course: data.course || "",
-        department: data.department || "",
-        departmentDisplay: deptDisplay,
-        yearLevel: data.yearLevel || "",
-        email: data.institutionalEmail || data.gmail || "",
-        clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
-        semester: data.semester // Keep original format for filtering
+      // --- Step 2: Get department & collection mappings ---
+      const deptSnapshot = await db.collection("departmentTable").get();
+      const departmentMap = {};
+      deptSnapshot.forEach(doc => {
+        const data = doc.data();
+        departmentMap[doc.id] = data.code || doc.id;
       });
-    });
 
-    // --- Step 5: Filter by current semester ---
-    let filteredBySemester;
-    if (isGeneralStudentsCollection) {
-      // Students collection: semester is stored as ID
-      filteredBySemester = allStudents.filter(s => s.semester === currentSemesterId);
-    } else {
-      // Personal office collection: semester is stored as full name
-      filteredBySemester = allStudents.filter(s => s.semester === currentSemesterName);
+      const groupSnapshot = await db.collection("groupTable").get();
+      const labSnapshot = await db.collection("labTable").get();
+      const collectionMap = {};
+      groupSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.id && data.club) collectionMap[String(data.id)] = data.club;
+      });
+      labSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
+      });
+
+      // --- Step 3: Fetch students collection ---
+      let querySnapshot;
+      let collectionName = "Students";
+      const personalOffices = ["301","310","311","312","313","314"];
+      const excludeCategories = ["401","403"];
+
+      if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
+        const mapped = collectionMap[designeeCategory];
+        if (!mapped) {
+          studentsTableBody.innerHTML = "<tr><td colspan='8'>No matching collection found for this category.</td></tr>";
+          return;
+        }
+        collectionName = mapped;
+        querySnapshot = await db.collection(collectionName).get();
+      } else {
+        querySnapshot = await db.collection("Students").get();
+      }
+
+      if (querySnapshot.empty) {
+        studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
+        return;
+      }
+
+      // --- Step 4: Map student documents ---
+      const allStudents = [];
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
+        let deptDisplay = data.department || "";
+        if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
+
+        allStudents.push({
+          schoolID: doc.id,
+          fullName,
+          course: data.course || "",
+          department: data.department || "",
+          departmentDisplay: deptDisplay,
+          yearLevel: data.yearLevel || "",
+          email: data.institutionalEmail || data.gmail || "",
+          clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
+          semester: data.semester
+        });
+      });
+
+      // --- Step 5: Filter by current semester ---
+      let filteredBySemester;
+      if (collectionName === "Students") {
+        filteredBySemester = allStudents.filter(s => s.semester === currentSemesterId);
+      } else {
+        filteredBySemester = allStudents.filter(s => s.semester === currentSemesterName);
+      }
+
+      // --- Step 6: Filter by designee office/category/club ---
+      let filteredStudents = [];
+      const showAllCategories = ["401","403"];
+      const showAllOffices = ["302","303","304","305","306"];
+
+      if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
+        filteredStudents = filteredBySemester;
+      } else if (designeeOffice === "307" || designeeOffice === "308") {
+        filteredStudents = filteredBySemester.filter(student => student.department === designeeDepartment);
+      } else if (designeeOffice === "309") {
+        const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
+        filteredStudents = filteredBySemester.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
+      } else {
+        filteredStudents = filteredBySemester;
+      }
+
+      renderStudents(filteredStudents, collectionName);
+      attachSearchHandler(filteredStudents, collectionName);
+
+    } catch (err) {
+      console.error(err);
+      studentsTableBody.innerHTML = "<tr><td colspan='8'>Failed to load students.</td></tr>";
     }
-
-    // --- Step 6: Filter by designee office/category/club ---
-    let filteredStudents = [];
-    const showAllCategories = ["401","403"];
-    const showAllOffices = ["302","303","304","305","306"];
-
-    if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
-      filteredStudents = filteredBySemester;
-    } else if (designeeOffice === "307" || designeeOffice === "308") {
-      filteredStudents = filteredBySemester.filter(student => student.department === designeeDepartment);
-    } else if (designeeOffice === "309") {
-      const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
-      filteredStudents = filteredBySemester.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
-    } else if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
-      filteredStudents = filteredBySemester;
-    } else {
-      filteredStudents = filteredBySemester;
-    }
-
-    renderStudents(filteredStudents);
-    attachSearchHandler(filteredStudents);
-
-  } catch (err) {
-    console.error(err);
-    studentsTableBody.innerHTML = "<tr><td colspan='8'>Failed to load students.</td></tr>";
   }
-}
-
 
   // Event delegation for validate and view buttons
   studentsTableBody.addEventListener("click", async (e) => {
@@ -334,5 +327,5 @@ async function loadStudents() {
 
   // Initial load
   loadStudents();
- 
+
 });

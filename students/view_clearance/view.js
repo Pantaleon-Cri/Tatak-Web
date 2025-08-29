@@ -223,7 +223,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         .pop() || null;
 
       const lastCheckedBy = lastValidation?.checkedBy || null;
-      const checkedAt = lastValidation?.checkedAt ? new Date(lastValidation.checkedAt).toLocaleString() : "Unknown";
+      const checkedAt = lastValidation?.checkedAt
+  ? new Date(lastValidation.checkedAt).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true // 12-hour format with AM/PM
+    })
+  : "Unknown";
+
 
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");

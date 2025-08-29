@@ -104,7 +104,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('profileClubs').textContent = clubNames;
 
     // 🧑 Set top dropdown label
-    document.getElementById('headerUsername').textContent = student.schoolId || 'Student';
+    const firstName = student.firstName || "";
+const lastName = student.lastName || "";
+const fullName = `${firstName} ${lastName}`.trim();
+
+    document.getElementById('headerUsername').textContent = fullName;
 
   } catch (error) {
     console.error('Error fetching student profile:', error);

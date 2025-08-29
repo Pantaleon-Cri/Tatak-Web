@@ -1,3 +1,4 @@
+
 // ✅ Initialize Firebase v8 (only once)
 if (!firebase.apps.length) {
   firebase.initializeApp({
@@ -15,25 +16,26 @@ document.addEventListener("DOMContentLoaded", function () {
   const db = firebase.firestore();
 
   // 🔽 Dropdown toggle
-  const toggle = document.getElementById('userDropdownToggle');
-  const menu = document.getElementById('dropdownMenu');
+  const toggle = document.getElementById("userDropdownToggle");
+  const menu = document.getElementById("dropdownMenu");
 
-  toggle.addEventListener('click', () => {
-    toggle.classList.toggle('active');
-    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-  });
+  if (toggle && menu) {
+    toggle.addEventListener("click", () => {
+      toggle.classList.toggle("active");
+      menu.style.display = menu.style.display === "block" ? "none" : "block";
+    });
 
-  // Close dropdown if clicked outside
-  document.addEventListener('click', (e) => {
-    if (!toggle.contains(e.target) && !menu.contains(e.target)) {
-      menu.style.display = 'none';
-      toggle.classList.remove('active');
-    }
-  });
+    // Close dropdown if clicked outside
+    document.addEventListener("click", (e) => {
+      if (!toggle.contains(e.target) && !menu.contains(e.target)) {
+        menu.style.display = "none";
+        toggle.classList.remove("active");
+      }
+    });
+  }
 
   // 🔽 Logout functionality
   const logoutBtn = document.getElementById("logoutBtn");
-
   if (logoutBtn) {
     logoutBtn.addEventListener("click", function (e) {
       e.preventDefault();
@@ -47,10 +49,9 @@ document.addEventListener("DOMContentLoaded", function () {
         "designeeID",
         "category",
         "office",
-        "department"
+        "department",
       ];
-
-      keysToRemove.forEach(key => localStorage.removeItem(key));
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
 
       window.location.href = "../../../logout.html";
     });
@@ -59,26 +60,29 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // 🔽 Display username dynamically
-  const usernameDisplay = document.getElementById("usernameDisplay");
-  let designeeFirstName = "";
-  let designeeUserID = "";
+ const usernameDisplay = document.getElementById("usernameDisplay");
+let displayFullName = "";
+let userRole = "";
+let userDataObj = null;
 
-  const userDataString = localStorage.getItem("userData");
-  if (userDataString) {
-    try {
-      const userDataObj = JSON.parse(userDataString);
-      designeeFirstName = userDataObj.firstName || "";
-      designeeUserID = userDataObj.userID || "";
-    } catch (err) {
-      console.error("Error parsing userData:", err);
-    }
+const userDataString = localStorage.getItem("userData");
+if (userDataString) {
+  try {
+    userDataObj = JSON.parse(userDataString);
+    const firstName = userDataObj.firstName || "";
+    const lastName = userDataObj.lastName || "";
+    displayFullName = `${firstName} ${lastName}`.trim();
+    userRole = userDataObj.role || "";
+  } catch (err) {
+    console.error("Error parsing userData:", err);
   }
+}
 
-  if (usernameDisplay) {
-    usernameDisplay.textContent = designeeFirstName;
-  } else {
-    console.warn("usernameDisplay element not found");
-  }
+if (usernameDisplay) {
+  usernameDisplay.textContent = displayFullName;
+} else {
+  console.warn("usernameDisplay element not found");
+}
 
   // 🔽 Change Password Logic
   const currentPasswordInput = document.getElementById("currentPassword");
@@ -87,68 +91,103 @@ document.addEventListener("DOMContentLoaded", function () {
   const changePasswordBtn = document.getElementById("changePasswordBtn");
   const passwordMessage = document.getElementById("passwordMessage");
 
-  changePasswordBtn.addEventListener("click", async () => {
-    passwordMessage.textContent = "";
-    passwordMessage.style.color = "red";
+  if (changePasswordBtn) {
+    changePasswordBtn.addEventListener("click", async () => {
+      passwordMessage.textContent = "";
+      passwordMessage.style.color = "red";
 
-    const currentPassword = currentPasswordInput.value.trim();
-    const newPassword = newPasswordInput.value.trim();
-    const confirmPassword = confirmPasswordInput.value.trim();
+      const currentPassword = currentPasswordInput.value.trim();
+      const newPassword = newPasswordInput.value.trim();
+      const confirmPassword = confirmPasswordInput.value.trim();
 
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      passwordMessage.textContent = "Please fill in all fields.";
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      passwordMessage.textContent = "New password must be at least 6 characters.";
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      passwordMessage.textContent = "New password and confirmation do not match.";
-      return;
-    }
-
-    if (!designeeUserID) {
-      passwordMessage.textContent = "Unable to identify user.";
-      return;
-    }
-
-    try {
-      // 🔽 Update the password in Firestore Designees Collection
-      const designeeDocRef = db.collection("Designees").doc(designeeUserID);
-      const docSnapshot = await designeeDocRef.get();
-
-      if (!docSnapshot.exists) {
-        passwordMessage.textContent = "User record not found.";
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        passwordMessage.textContent = "Please fill in all fields.";
         return;
       }
 
-      const data = docSnapshot.data();
-      if (data.password !== currentPassword) {
-        passwordMessage.textContent = "Current password is incorrect.";
+      if (newPassword.length < 6) {
+        passwordMessage.textContent =
+          "New password must be at least 6 characters.";
         return;
       }
 
-      await designeeDocRef.update({ password: newPassword });
+      if (newPassword !== confirmPassword) {
+        passwordMessage.textContent =
+          "New password and confirmation do not match.";
+        return;
+      }
 
-      passwordMessage.style.color = "green";
-      passwordMessage.textContent = "Password changed successfully!";
+      if (!userDataObj || !userRole) {
+        passwordMessage.textContent = "Unable to identify user.";
+        return;
+      }
 
-      // Clear inputs
-      currentPasswordInput.value = "";
-      newPasswordInput.value = "";
-      confirmPasswordInput.value = "";
+      try {
+        // ✅ Select collection & ID field
+        let collectionName = "";
+        let fieldName = "";
+        let docValue = "";
 
-      // 🔽 Update password in localStorage userData as well
-      const userDataObj = JSON.parse(localStorage.getItem("userData"));
-      userDataObj.password = newPassword;
-      localStorage.setItem("userData", JSON.stringify(userDataObj));
+        if (userRole === "designee") {
+          collectionName = "Designees";
+          fieldName = "userID";
+          docValue = userDataObj.userID;
+        } else if (userRole === "staff") {
+          collectionName = "staffTable";
+          fieldName = "id";
+          docValue = userDataObj.id;
+        } else {
+          passwordMessage.textContent = "Unknown user role.";
+          return;
+        }
 
-    } catch (error) {
-      console.error("Error updating password:", error);
-      passwordMessage.textContent = "Error updating password. Try again.";
-    }
-  });
+        // ✅ Build query with multiple filters to avoid duplicate ID conflicts
+        let queryRef = db.collection(collectionName).where(fieldName, "==", docValue);
+
+        if (userDataObj.office) {
+          queryRef = queryRef.where("office", "==", userDataObj.office);
+        }
+        if (userDataObj.category) {
+          queryRef = queryRef.where("category", "==", userDataObj.category);
+        }
+        if (userDataObj.department) {
+          queryRef = queryRef.where("department", "==", userDataObj.department);
+        }
+
+        const querySnapshot = await queryRef.limit(1).get();
+
+        if (querySnapshot.empty) {
+          passwordMessage.textContent = "User record not found.";
+          return;
+        }
+
+        const userDoc = querySnapshot.docs[0];
+        const userDocRef = userDoc.ref;
+        const data = userDoc.data();
+
+        if (data.password !== currentPassword) {
+          passwordMessage.textContent = "Current password is incorrect.";
+          return;
+        }
+
+        await userDocRef.update({ password: newPassword });
+
+        passwordMessage.style.color = "green";
+        passwordMessage.textContent = "Password changed successfully!";
+
+        // Clear inputs
+        currentPasswordInput.value = "";
+        newPasswordInput.value = "";
+        confirmPasswordInput.value = "";
+
+        // ✅ Update localStorage copy
+        userDataObj.password = newPassword;
+        localStorage.setItem("userData", JSON.stringify(userDataObj));
+      } catch (error) {
+        console.error("Error updating password:", error);
+        passwordMessage.textContent = "Error updating password. Try again.";
+      }
+    });
+  }
 });
+

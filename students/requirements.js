@@ -125,9 +125,7 @@ if (!notesSnap.empty) {
       requirementsContainer.innerHTML = `
         <div class="clearance-section-card">
           <div class="section-header">No Requirements Found</div>
-          <div class="notes-section">
-            <p>You currently have no active requirements for this semester.</p>
-          </div>
+          
         </div>
       `;
     }

@@ -390,11 +390,11 @@ nav ul ul.submenu > li:first-child {
   display: grid;
   grid-template-columns: 2fr 1fr; /* requirements left, notes right */
   gap: 20px;
-
-  min-width: 1366px;   /* fixed minimum width */
+  grid-template-rows: auto 1fr;
+  width: 100%;
+  min-width: 1200px;   /* fixed minimum width */
          /* keep width constant */
   height: 180px;      /* keep height fixed if desired */
-  flex-shrink: 0;     /* prevent shrinking in flex container */
 }
 
 .section-header {

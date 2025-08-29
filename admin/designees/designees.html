@@ -92,6 +92,7 @@
                 <th>Department</th>
                 <th>Category</th>
                 <th>Institutional Email</th>
+                <th>Status</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -122,6 +123,23 @@
     </div>
   </div>
 </div>
+
+<!-- Status Modal -->
+<div id="statusModalOverlay" class="modal-overlay" style="display:none;">
+  <div class="modal-content">
+    <h3>Change Status</h3>
+    <p id="statusModalName"></p>
+    <select id="statusSelect">
+      <option value="Approved">Approved</option>
+      <option value="Declined">Declined</option>
+    </select>
+    <div class="modal-buttons">
+      <button id="statusCancelBtn">Cancel</button>
+      <button id="statusConfirmBtn">Save</button>
+    </div>
+  </div>
+</div>
+
   <script src="designees.js"></script>
 
 </body>
