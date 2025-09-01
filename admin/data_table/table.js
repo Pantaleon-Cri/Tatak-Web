@@ -111,7 +111,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         <td>${data.course}</td>
         <td>${data.deptCodeName}</td>
         <td>${data.clubCodeName}</td>
-        <td>${data.laboratories}</td>
+       
       `;
       course.appendChild(row);
     });

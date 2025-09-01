@@ -39,8 +39,8 @@ html, body {
   align-items: center;
   justify-content: space-between; /* h1 left, tools right */
   gap: 15px;
-  margin-bottom: 20px;
 }
+
 
 .validate-header h1 {
   font-size: 24px;

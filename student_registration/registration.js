@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const registrationForm = document.getElementById('registrationForm');
   const courseSelect = document.getElementById('course');
   const yearLevelSelect = document.getElementById('yearLevel');
-  const semesterSelect = document.getElementById('semester'); // ✅ Added
+  const semesterSelect = document.getElementById('semester');
   const departmentInput = document.getElementById('department');
   const clubsInput = document.getElementById('clubs');
   const messageBox = document.getElementById('messageBox');
@@ -89,6 +89,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 4000);
   };
 
+  // Password validation function
+  const isPasswordValid = (password) => {
+    const regex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+    return regex.test(password);
+  };
+
   // Form Submit
   registrationForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -121,10 +127,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    if (!isPasswordValid(password)) {
+      showMessage("Password must be at least 8 characters long, include one uppercase letter, one number, and one special character.", true);
+      passwordInput.value = '';
+      confirmPasswordInput.value = '';
+      passwordInput.focus();
+      return;
+    }
+
     try {
       // Check if schoolId already exists
-      const studentDoc = await db.collection("Students").doc(schoolId).get();
-      if (studentDoc.exists) {
+      const existing = await db.collection("Students").doc(schoolId).get();
+      if (existing.exists) {
         showMessage("This School ID is already registered.", true);
         return;
       }
@@ -157,7 +171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         department,
         clubs,
         institutionalEmail,
-        password,
+        password, // ⚠️ NOTE: In production, store hashed passwords (e.g., Firebase Auth), not plain text!
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
 

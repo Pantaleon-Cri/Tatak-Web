@@ -297,7 +297,7 @@ window.openViewClearanceCard = async function(studentID, db) {
 
   } catch (err) {
     console.error("Error loading clearance:", err);
-    containerEl.innerHTML = "<p>Failed to load clearance.</p>";
+    containerEl.innerHTML = "<p>Failed to load clearance. Student is not yet Resgistered</p>";
     statusEl.innerHTML = `<span style="color:red">Pending</span>`;
   }
 };

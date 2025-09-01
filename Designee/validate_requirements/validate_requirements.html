@@ -58,15 +58,20 @@
 
     <!-- MAIN CONTENT AREA -->
     <div class="container">
-      <section class="validate-header">
-          <h1>Validate Requirements</h1>
-        <div class="search-box">
-          <input type="text" placeholder="Search by ID or Name" class="search-input" id="searchInput" />
-          <button class="search-button"><i class="fas fa-search"></i></button>
-        </div>
-        <input type="file" id="uploadInput" accept=".xlsx, .csv" style="display:none;" />
-        <button class="add-all-btn" id="uploadBtn"><i class="fas fa-upload"></i> Upload Sheet</button>
-      </section>
+     <section class="validate-header">
+  <div class="header-top">
+    <h1>Validate Requirements</h1>
+    <input type="file" id="uploadInput" accept=".xlsx, .csv" style="display:none;" />
+  <button class="add-all-btn" id="uploadBtn"><i class="fas fa-upload"></i> Upload Sheet</button>
+  </div>
+  
+  
+  <div class="search-box">
+      <input type="text" placeholder="Search by ID or Name" class="search-input" id="searchInput" />
+      <button class="search-button"><i class="fas fa-search"></i></button>
+    </div>
+</section>
+
 
       <main class="table-container">
         <table>
@@ -78,6 +83,7 @@
               <th>Full Name</th>
               <th>Dept</th>
               <th>Year Level</th>
+              <th>Pre Requisite</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
@@ -156,10 +162,13 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+   
   <script src="validate_requirements.js"></script>
+  <script src="preReq.js"></script>
   <script src="modal_validate.js"></script>
   <script src="upload.js"></script>
   <script src="modal_view.js"></script>
   <script src="flag.js"></script>
+ 
 </body>
 </html>

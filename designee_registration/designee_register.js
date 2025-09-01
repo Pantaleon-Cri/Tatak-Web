@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const departmentGroup = document.getElementById('departmentGroup');
   const departmentSelect = document.getElementById('department');
   const messageBox = document.getElementById('messageBox');
+  const passwordInput = document.getElementById('password');
+  const confirmPasswordInput = document.getElementById('confirmPassword');
 
   // Load offices from Firestore (officeTable)
   const officeSnapshot = await db.collection("officeTable").get();
@@ -106,6 +108,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     messageBox.textContent = '';
   }
 
+  // ✅ Password validation function
+  const isPasswordValid = (password) => {
+    const regex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+    return regex.test(password);
+  };
+
   registrationForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     hideMessageBox();
@@ -114,12 +122,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const firstName = document.getElementById('firstName').value.trim();
     const lastName = document.getElementById('lastName').value.trim();
     const officeName = officeSelect.options[officeSelect.selectedIndex].textContent;
+    const officeID = officeSelect.value;
     const categoryName = categorySelect.value;
     const departmentCode = departmentSelect.value;
     const institutionalEmail = document.getElementById('institutionalEmail').value.trim();
-    const password = document.getElementById('password').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
+    const password = passwordInput.value;
+    const confirmPassword = confirmPasswordInput.value;
 
+    // --- Validations ---
     if (!userID || !officeSelect.value || !institutionalEmail || !password || !confirmPassword) {
       showMessage('Please fill in all required fields.');
       return;
@@ -135,13 +145,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    if (password.length < 6) {
-      showMessage('Password must be at least 6 characters long.');
+    if (password !== confirmPassword) {
+      showMessage('Passwords do not match.');
+      passwordInput.value = '';
+      confirmPasswordInput.value = '';
+      passwordInput.focus();
       return;
     }
 
-    if (password !== confirmPassword) {
-      showMessage('Passwords do not match.');
+    if (!isPasswordValid(password)) {
+      showMessage('Password must be at least 8 characters long, include one uppercase letter, one number, and one special character.');
+      passwordInput.value = '';
+      confirmPasswordInput.value = '';
+      passwordInput.focus();
       return;
     }
 
@@ -153,7 +169,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const officeID = officeSelect.value;
       let departmentID = "";
       if (departmentGroup.style.display === 'block') {
         const deptSnap = await db.collection("departmentTable")
@@ -196,7 +211,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         category: categoryID || '',
         department: departmentID || '',
         institutionalEmail,
-        password
+        password, // ⚠️ Store hashed in production (e.g., Firebase Auth)
+        status: null, // <-- Added status field with initial value null
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
 
       await db.collection("Designees").doc(userID).set(designeeData);

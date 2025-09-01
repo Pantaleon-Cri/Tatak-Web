@@ -142,39 +142,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Create table row HTML (flag/officer handled in flag.js)
   function createStudentRow(student) {
-    return `
-      <tr data-id="${student.schoolID}">
-        <td>${student.schoolID || ""}</td>
-        <td>${student.fullName || ""}</td>
-        <td>${student.departmentDisplay || ""}</td>
-        <td>${student.yearLevel || ""}</td>
-        <td>
-          <button class="status-button validate-button" data-studentid="${student.schoolID}">
-            VALIDATE
-          </button>
-        </td>
-        <td>
-          <button class="action-button view-button" data-studentid="${student.schoolID}">
-            VIEW
-          </button>
-        </td>
-      </tr>
-    `;
+  return `
+    <tr data-id="${student.schoolID}">
+      <td>${student.schoolID || ""}</td>
+      <td>${student.fullName || ""}</td>
+      <td>${student.departmentDisplay || ""}</td>
+      <td>${student.yearLevel || ""}</td>
+      <td class="prereq-cell" data-studentid="${student.schoolID}">Loading...</td>
+      <td>
+        <button class="status-button validate-button" data-studentid="${student.schoolID}">
+          VALIDATE
+        </button>
+      </td>
+      <td>
+        <button class="action-button view-button" data-studentid="${student.schoolID}">
+          VIEW
+        </button>
+      </td>
+    </tr>
+  `;
+}
+// Populate prerequisite column for each student
+async function populatePrerequisites(students) {
+  const cells = document.querySelectorAll(".prereq-cell");
+
+  for (const cell of cells) {
+    const studentID = cell.getAttribute("data-studentid");
+    const student = students.find(s => s.schoolID === studentID);
+    if (!student) continue;
+
+    try {
+      const prereqHTML = await getStudentPrereqs(student, {
+        office: designeeOffice,
+        department: designeeDepartment,
+        category: designeeCategory
+      });
+      cell.innerHTML = prereqHTML;
+    } catch (err) {
+      console.error("Error loading prerequisites for", studentID, err);
+      cell.textContent = "Error";
+    }
   }
+}
+
 
   // Render students
   function renderStudents(students, collectionName) {
-    if (!students || students.length === 0) {
-      studentsTableBody.innerHTML = "<tr><td colspan='6'>No students found.</td></tr>";
-      return;
-    }
-
-    studentsTableBody.innerHTML = students.map(createStudentRow).join("");
-
-    if (typeof window.attachFlagButtons === "function" && collectionName) {
-      window.attachFlagButtons(collectionName);
-    }
+  if (!students || students.length === 0) {
+    studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
+    return;
   }
+
+  // Render table rows first
+  studentsTableBody.innerHTML = students.map(createStudentRow).join("");
+
+  // Attach flag buttons if needed
+  if (typeof window.attachFlagButtons === "function" && collectionName) {
+    window.attachFlagButtons(collectionName);
+  }
+
+  // **Populate prerequisites asynchronously**
+  populatePrerequisites(students);
+}
 
   // Search handler
   function attachSearchHandler(students, collectionName) {
