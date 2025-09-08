@@ -439,6 +439,11 @@ nav ul ul.submenu > li:first-child {
   border: 1px solid var(--border-color);
   margin-top: -59px;
   margin-left: -130px;
+   width: 650px;       /* or any fixed width you want */
+  max-height: 170px;  /* optional: prevent too tall */
+   word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;      /* force wrapping */
 }
 
 .notes-section h4 {
@@ -452,6 +457,10 @@ nav ul ul.submenu > li:first-child {
   font-size: 0.9em;
   color: var(--medium-grey-text);
   line-height: 1.4;
+
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 /* =======================
