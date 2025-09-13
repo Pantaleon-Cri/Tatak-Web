@@ -142,68 +142,65 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Create table row HTML (flag/officer handled in flag.js)
   function createStudentRow(student) {
-  return `
-    <tr data-id="${student.schoolID}">
-      <td>${student.schoolID || ""}</td>
-      <td>${student.fullName || ""}</td>
-      <td>${student.departmentDisplay || ""}</td>
-      <td>${student.yearLevel || ""}</td>
-      <td class="prereq-cell" data-studentid="${student.schoolID}">Loading...</td>
-      <td>
-        <button class="status-button validate-button" data-studentid="${student.schoolID}">
-          VALIDATE
-        </button>
-      </td>
-      <td>
-        <button class="action-button view-button" data-studentid="${student.schoolID}">
-          VIEW
-        </button>
-      </td>
-    </tr>
-  `;
-}
-// Populate prerequisite column for each student
-async function populatePrerequisites(students) {
-  const cells = document.querySelectorAll(".prereq-cell");
+    return `
+      <tr data-id="${student.schoolID}">
+        <td>${student.schoolID || ""}</td>
+        <td>${student.fullName || ""}</td>
+        <td>${student.departmentDisplay || ""}</td>
+        <td>${student.yearLevel || ""}</td>
+        <td class="prereq-cell" data-studentid="${student.schoolID}">Loading...</td>
+        <td>
+          <button class="status-button validate-button" data-studentid="${student.schoolID}">
+            VALIDATE
+          </button>
+        </td>
+        <td>
+          <button class="action-button view-button" data-studentid="${student.schoolID}">
+            VIEW
+          </button>
+        </td>
+      </tr>
+    `;
+  }
 
-  for (const cell of cells) {
-    const studentID = cell.getAttribute("data-studentid");
-    const student = students.find(s => s.schoolID === studentID);
-    if (!student) continue;
+  // Populate prerequisite column for each student
+  async function populatePrerequisites(students) {
+    const cells = document.querySelectorAll(".prereq-cell");
 
-    try {
-      const prereqHTML = await getStudentPrereqs(student, {
-        office: designeeOffice,
-        department: designeeDepartment,
-        category: designeeCategory
-      });
-      cell.innerHTML = prereqHTML;
-    } catch (err) {
-      console.error("Error loading prerequisites for", studentID, err);
-      cell.textContent = "Error";
+    for (const cell of cells) {
+      const studentID = cell.getAttribute("data-studentid");
+      const student = students.find(s => s.schoolID === studentID);
+      if (!student) continue;
+
+      try {
+        const prereqHTML = await getStudentPrereqs(student, {
+          office: designeeOffice,
+          department: designeeDepartment,
+          category: designeeCategory
+        });
+        cell.innerHTML = prereqHTML;
+      } catch (err) {
+        console.error("Error loading prerequisites for", studentID, err);
+        cell.textContent = "Error";
+      }
     }
   }
-}
-
 
   // Render students
   function renderStudents(students, collectionName) {
-  if (!students || students.length === 0) {
-    studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
-    return;
+    if (!students || students.length === 0) {
+      studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
+      return;
+    }
+
+    studentsTableBody.innerHTML = students.map(createStudentRow).join("");
+
+    if (typeof window.attachFlagButtons === "function" && collectionName) {
+      window.attachFlagButtons(collectionName);
+    }
+
+    populatePrerequisites(students);
   }
-
-  // Render table rows first
-  studentsTableBody.innerHTML = students.map(createStudentRow).join("");
-
-  // Attach flag buttons if needed
-  if (typeof window.attachFlagButtons === "function" && collectionName) {
-    window.attachFlagButtons(collectionName);
-  }
-
-  // **Populate prerequisites asynchronously**
-  populatePrerequisites(students);
-}
 
   // Search handler
   function attachSearchHandler(students, collectionName) {
@@ -236,7 +233,7 @@ async function populatePrerequisites(students) {
       const currentSemesterId = semesterDoc.id;
       const currentSemesterName = semesterDoc.data().semester;
 
-      // --- Step 2: Get department & collection mappings ---
+      // --- Step 2: Department map ---
       const deptSnapshot = await db.collection("departmentTable").get();
       const departmentMap = {};
       deptSnapshot.forEach(doc => {
@@ -244,88 +241,102 @@ async function populatePrerequisites(students) {
         departmentMap[doc.id] = data.code || doc.id;
       });
 
-      const groupSnapshot = await db.collection("groupTable").get();
-      const labSnapshot = await db.collection("labTable").get();
-      const collectionMap = {};
-      groupSnapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.id && data.club) collectionMap[String(data.id)] = data.club;
-      });
-      labSnapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
-      });
-
-      // --- Step 3: Fetch students collection ---
-      let querySnapshot;
+      // --- Step 3: Apply rule logic ---
+      let allStudents = [];
       let collectionName = "Students";
-      const personalOffices = ["301","310","311","312","313","314"];
-      const excludeCategories = ["401","403"];
 
-      if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
-        const mapped = collectionMap[designeeCategory];
-        if (!mapped) {
-          studentsTableBody.innerHTML = "<tr><td colspan='8'>No matching collection found for this category.</td></tr>";
-          return;
-        }
-        collectionName = mapped;
-        querySnapshot = await db.collection(collectionName).get();
-      } else {
-        querySnapshot = await db.collection("Students").get();
-      }
-
-      if (querySnapshot.empty) {
-        studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
-        return;
-      }
-
-      // --- Step 4: Map student documents ---
-      const allStudents = [];
-      querySnapshot.forEach(doc => {
-        const data = doc.data();
-        const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
-        let deptDisplay = data.department || "";
-        if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
-
-        allStudents.push({
-          schoolID: doc.id,
-          fullName,
-          course: data.course || "",
-          department: data.department || "",
-          departmentDisplay: deptDisplay,
-          yearLevel: data.yearLevel || "",
-          email: data.institutionalEmail || data.gmail || "",
-          clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
-          semester: data.semester
-        });
-      });
-
-      // --- Step 5: Filter by current semester ---
-      let filteredBySemester;
-      if (collectionName === "Students") {
-        filteredBySemester = allStudents.filter(s => s.semester === currentSemesterId);
-      } else {
-        filteredBySemester = allStudents.filter(s => s.semester === currentSemesterName);
-      }
-
-      // --- Step 6: Filter by designee office/category/club ---
-      let filteredStudents = [];
-      const showAllCategories = ["401","403"];
-      const showAllOffices = ["302","303","304","305","306"];
+      const showAllCategories = ["401", "403"];
+      const showAllOffices = ["302", "303", "304", "305", "306"];
+      let useMembership = true;
 
       if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
-        filteredStudents = filteredBySemester;
+        // See all students
+        const querySnapshot = await db.collection("Students").get();
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
+          let deptDisplay = data.department || "";
+          if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
+          allStudents.push({ ...data, schoolID: doc.id, fullName, departmentDisplay: deptDisplay });
+        });
+        useMembership = false;
+
       } else if (designeeOffice === "307" || designeeOffice === "308") {
-        filteredStudents = filteredBySemester.filter(student => student.department === designeeDepartment);
+        // Same department
+        const querySnapshot = await db.collection("Students").where("department", "==", designeeDepartment).get();
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
+          let deptDisplay = data.department || "";
+          if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
+          allStudents.push({ ...data, schoolID: doc.id, fullName, departmentDisplay: deptDisplay });
+        });
+        useMembership = false;
+
       } else if (designeeOffice === "309") {
+        // Same clubs
         const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
-        filteredStudents = filteredBySemester.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
-      } else {
-        filteredStudents = filteredBySemester;
+        const querySnapshot = await db.collection("Students").get();
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          const clubs = Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [];
+          if (clubs.some(club => designeeClubs.includes(club))) {
+            const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
+            let deptDisplay = data.department || "";
+            if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
+            allStudents.push({ ...data, schoolID: doc.id, fullName, departmentDisplay: deptDisplay });
+          }
+        });
+        useMembership = false;
       }
 
-      renderStudents(filteredStudents, collectionName);
-      attachSearchHandler(filteredStudents, collectionName);
+      // --- Step 3b: Membership fallback ---
+      if (useMembership) {
+        const membersRef = db.collection("Membership").doc(designeeCategory).collection("Members");
+        const membersSnapshot = await membersRef.get();
+
+        for (const memberDoc of membersSnapshot.docs) {
+          const studentId = memberDoc.id;
+          const studentDoc = await db.collection("Students").doc(studentId).get();
+          if (!studentDoc.exists) continue;
+
+          const data = studentDoc.data();
+          const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
+          let deptDisplay = data.department || "";
+          if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
+
+          allStudents.push({
+            schoolID: studentDoc.id,
+            fullName,
+            course: data.course || "",
+            department: data.department || "",
+            departmentDisplay: deptDisplay,
+            yearLevel: data.yearLevel || "",
+            email: data.institutionalEmail || data.gmail || "",
+            clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
+            semester: data.semester
+          });
+        }
+
+        collectionName = `Membership/${designeeCategory}/Members`;
+
+        // ✅ filter by semester (both ID or Name)
+        const filteredBySemester = allStudents.filter(s =>
+          s.semester === currentSemesterId || s.semester === currentSemesterName
+        );
+
+        renderStudents(filteredBySemester, collectionName);
+        attachSearchHandler(filteredBySemester, collectionName);
+        return; // prevent double render
+      }
+
+      // --- Step 4: Filter by semester ---
+      const filteredBySemester = allStudents.filter(s =>
+        s.semester === currentSemesterId || s.semester === currentSemesterName
+      );
+
+      renderStudents(filteredBySemester, collectionName);
+      attachSearchHandler(filteredBySemester, collectionName);
 
     } catch (err) {
       console.error(err);
@@ -333,7 +344,7 @@ async function populatePrerequisites(students) {
     }
   }
 
-  // Event delegation for validate and view buttons
+  // Event delegation
   studentsTableBody.addEventListener("click", async (e) => {
     const validateBtn = e.target.closest(".validate-button");
     if (validateBtn) {

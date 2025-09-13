@@ -296,24 +296,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
     }
-    console.log("Collection used for fetching students:", collectionName);
-
-    // -------------------- FETCH STUDENTS FROM COLLECTION --------------------
-    const studentsSnapshot = await dbInstance.collection(collectionName).get();
-    const allStudents = [];
-    studentsSnapshot.forEach(doc => {
-      const data = doc.data();
-      allStudents.push({
-        schoolID: doc.id,
-        firstName: data.firstName || "",
-        middleName: data.middleName || "",
-        lastName: data.lastName || "",
-        department: data.department || data.sourceDepartment || "",
-        clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
-        semester: data.semester
-      });
-    });
-    console.log(`Fetched ${allStudents.length} students from collection "${collectionName}"`);
+    
 
     // -------------------- FILTER STUDENTS BY SEMESTER --------------------
     const filteredBySemester = allStudents.filter(s => s.semester === currentSemesterId || s.semester === currentSemesterName);

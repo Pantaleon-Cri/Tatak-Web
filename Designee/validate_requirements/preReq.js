@@ -13,11 +13,23 @@ async function getStudentPrereqs(studentData, currentDesignee) {
       const officeArray = data.offices[officeKey];
       if (!Array.isArray(officeArray) || officeArray.length === 0) return false;
 
-      const currentSemester = "2nd Semester 2025-2026"; // Can be dynamic
-      const filteredReqs = officeArray.filter(req => String(req.semester || "").trim() === currentSemester);
+      // ✅ Use student’s semester dynamically
+      const studentDoc = await db.collection("Students").doc(studentID).get();
+      const currentSemester = studentDoc.exists ? String(studentDoc.data().semester || "").trim() : null;
+
+      // First try filtering by current semester
+      let filteredReqs = currentSemester
+        ? officeArray.filter(req => String(req.semester || "").trim() === currentSemester)
+        : [];
+
+      // If no matches, fallback to ANY semester with status true
+      if (filteredReqs.length === 0) {
+        filteredReqs = officeArray.filter(req => req.status === true);
+      }
+
       if (filteredReqs.length === 0) return false;
 
-      // Only matters for color; status checked here
+      // ✅ Status check
       return filteredReqs.every(req => req.status === true);
     } catch (err) {
       console.error("Error checking office requirements:", err);
@@ -25,10 +37,10 @@ async function getStudentPrereqs(studentData, currentDesignee) {
     }
   }
 
-  // --- Helper: Get lab display names from labTables collection ---
+  // --- Helper: Get lab display names from labTable collection ---
   async function getLabName(labId) {
     try {
-      const doc = await db.collection("labTables").doc(labId).get();
+      const doc = await db.collection("labTable").doc(labId).get();
       if (doc.exists) return doc.data().lab || labId;
       return labId;
     } catch (err) {
@@ -40,7 +52,7 @@ async function getStudentPrereqs(studentData, currentDesignee) {
   // --- Helper: Get club display names from acadClubTable collection ---
   async function getClubName(clubId) {
     try {
-      const snap = await db.collection("acadClubTable").where("id","==",clubId).limit(1).get();
+      const snap = await db.collection("acadClubTable").where("id", "==", clubId).limit(1).get();
       if (!snap.empty) return snap.docs[0].data().codeName || clubId;
       return clubId;
     } catch (err) {
@@ -128,38 +140,44 @@ async function getStudentPrereqs(studentData, currentDesignee) {
       }
     }
 
-    // Labs
+    // --- Labs ---
     try {
-      const allowedCollectionsSnap = await db.collection("allowedCollections").get();
       const labCategories = [];
       const labStatusMap = {};
+      const labNamesMap = {};
 
-      for (const doc of allowedCollectionsSnap.docs) {
-        const colName = doc.data().name;
-        if (!colName) continue;
+      // ✅ Get all labs from labTable
+      const labTablesSnap = await db.collection("labTable").get();
+      const allLabs = {};
+      labTablesSnap.forEach(doc => {
+        const data = doc.data();
+        if (data && data.lab) {
+          allLabs[doc.id] = data.lab; // e.g. { "201": "Computer Lab" }
+        }
+      });
 
-        const studentInColSnap = await db.collection(colName)
-          .where("idNo", "==", Number(studentData.schoolID))
+      // ✅ Check Membership for this student
+      const membershipSnap = await db.collection("Membership").get();
+      for (const catDoc of membershipSnap.docs) {
+        const categoryId = catDoc.id;
+
+        const memberDoc = await db
+          .collection("Membership")
+          .doc(categoryId)
+          .collection("Members")
+          .doc(studentData.schoolID)
           .get();
 
-        if (!studentInColSnap.empty) {
-          studentInColSnap.forEach(d => {
-            const data = d.data();
-            if (data.sourceOffice === "314") {
-              const labId = data.sourceCategory;
-              if (!labCategories.includes(labId)) labCategories.push(labId);
-              labStatusMap[labId] = false;
-            }
-          });
+        if (memberDoc.exists) {
+          if (!labCategories.includes(categoryId)) {
+            labCategories.push(categoryId);
+            labNamesMap[categoryId] = allLabs[categoryId] || categoryId;
+            labStatusMap[categoryId] = false;
+          }
         }
       }
 
-      // Fetch readable lab names
-      const labNamesMap = {};
-      for (const labId of labCategories) {
-        labNamesMap[labId] = await getLabName(labId);
-      }
-
+      // ✅ Now check if cleared in ValidateRequirementsTable
       for (const labId of labCategories) {
         const labSnapshot = await db.collection("Designees")
           .where("category", "==", labId)
@@ -177,9 +195,12 @@ async function getStudentPrereqs(studentData, currentDesignee) {
 
       const allLabsCleared = Object.values(labStatusMap).every(val => val === true);
       prereqChecks.push({
-        name: labCategories.length > 0 ? labCategories.map(id => labNamesMap[id]).join(", ") : "No Lab",
+        name: labCategories.length > 0
+          ? labCategories.map(id => labNamesMap[id]).join(", ")
+          : "No Lab",
         cleared: allLabsCleared
       });
+
     } catch (err) {
       console.error("Error fetching labs for Dean:", err);
       prereqChecks.push({ name: "Lab", cleared: false });
@@ -213,7 +234,7 @@ async function getStudentPrereqs(studentData, currentDesignee) {
     const officeList = [];
     if (studentDept) officeList.push(`307${studentDept}`);
     if (studentDept) officeList.push(`308${studentDept}`);
-    officeList.push("305","306","304","303","302");
+    officeList.push("305", "306", "304", "303", "302");
 
     for (const officeKey of officeList) {
       try {
@@ -221,25 +242,25 @@ async function getStudentPrereqs(studentData, currentDesignee) {
         let userID = null;
 
         if (officeKey.startsWith("308") || officeKey.startsWith("307")) {
-          const officeNum = officeKey.slice(0,3);
+          const officeNum = officeKey.slice(0, 3);
           const deptCode = officeKey.slice(3);
           const desSnap = await db.collection("Designees")
-            .where("office","==",officeNum)
-            .where("department","==",deptCode)
+            .where("office", "==", officeNum)
+            .where("department", "==", deptCode)
             .limit(1)
             .get();
 
           if (!desSnap.empty) userID = desSnap.docs[0].data().userID?.trim();
         } else {
           const desSnap = await db.collection("Designees")
-            .where("office","==",officeKey)
+            .where("office", "==", officeKey)
             .limit(1)
             .get();
 
           if (!desSnap.empty) userID = desSnap.docs[0].data().userID?.trim();
         }
 
-        cleared = userID ? await isOfficeReqCleared(studentData.schoolID,userID) : false;
+        cleared = userID ? await isOfficeReqCleared(studentData.schoolID, userID) : false;
         prereqChecks.push({ name: officeKey, cleared });
       } catch (err) {
         console.error(`Error fetching prerequisite for office ${officeKey}:`, err);
@@ -249,7 +270,7 @@ async function getStudentPrereqs(studentData, currentDesignee) {
   }
 
   // --- 4️⃣ Council Category Club Prerequisites ---
-  const councilCategories = ["101","1011","1018","1028","1036"];
+  const councilCategories = ["101", "1011", "1018", "1028", "1036"];
   if (councilCategories.includes(currentDesignee.category)) {
     try {
       const studentDoc = await db.collection("Students").doc(studentData.schoolID).get();
@@ -260,14 +281,14 @@ async function getStudentPrereqs(studentData, currentDesignee) {
         try {
           let cleared = false;
           const desSnap = await db.collection("Designees")
-            .where("category","==",clubId)
+            .where("category", "==", clubId)
             .limit(1)
             .get();
 
           if (!desSnap.empty) {
             const desDoc = desSnap.docs[0];
             const userID = desDoc.data().userID?.trim();
-            cleared = userID ? await isOfficeReqCleared(studentData.schoolID,userID) : false;
+            cleared = userID ? await isOfficeReqCleared(studentData.schoolID, userID) : false;
           }
 
           const clubName = await getClubName(clubId);

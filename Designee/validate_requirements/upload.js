@@ -1,6 +1,5 @@
 // upload.js
 document.addEventListener("DOMContentLoaded", () => {
-    
     console.log("upload.js loaded");
 
     const uploadBtn = document.getElementById("uploadBtn");
@@ -36,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const office = userData.office || null;
-    const category = userData.category || null;
+    const category = userData.category || null; // 🔑 used as Membership doc ID
     const department = userData.department || null;
 
     // Hide upload button for restricted offices
@@ -52,7 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
         console.log(`Upload button visible for office ${officeFromStorage} and category ${categoryFromStorage}`);
     }
 
-    // Resolve collection name (office-specific collection)
+    // Resolve collection name (for display/logging)
     async function resolveCollectionName() {
         try {
             if (category) {
@@ -113,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
             const collectionName = await resolveCollectionName();
-            console.log("📂 Using collection:", collectionName);
+            console.log("📂 Using Membership collection for:", collectionName);
 
             const currentSemester = await getCurrentSemester();
             if (!currentSemester) {
@@ -131,42 +130,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 if (!rows || rows.length < 2) return;
 
-                const studentData = rows.slice(1).map(row => ({
-                    idNo: row[0] || "",
-                    firstName: row[1] || "",
-                    lastName: row[2] || "",
-                    fullName: `${row[1] || ""} ${row[2] || ""}`.trim(),
-                    department: row[3] || "",
-                    yearLevel: row[4] || "",
-                    sourceDepartment: row[3] || department || null,
-                    sourceCategory: category || null,
-                    sourceOffice: office || null,
-                    semester: currentSemester   // ✅ Add semester field
-                })).filter(s => s.idNo);
+                // ✅ Only extract studentId (first column)
+                const studentIds = rows.slice(1)
+                    .map(row => row[0] ? row[0].toString().trim() : null)
+                    .filter(id => id);
 
-                const collectionRef = db.collection(collectionName);
+                if (!category) {
+                    alert("No category found in user data. Cannot upload.");
+                    return;
+                }
 
-                // Register collection if not exists
-                const allowedRef = db.collection("allowedCollections").doc(collectionName);
-                const allowedDoc = await allowedRef.get();
-                if (!allowedDoc.exists) {
-                    await allowedRef.set({
-                        name: collectionName,
-                        createdBy: userData.id || "unknown",
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                // 🔑 Membership structure
+                const membershipDocRef = db.collection("Membership").doc(category);
+
+                // Ensure membership document exists (only a placeholder doc, no extra fields in students)
+               const membershipDoc = await membershipDocRef.get();
+if (!membershipDoc.exists) {
+    await membershipDocRef.set({
+        id: category   // ✅ store the category itself as the field
+    });
+    console.log(`✅ Created Membership document for category ID "${category}"`);
+}
+
+
+                // Upload students (only studentId field)
+                const subCollectionRef = membershipDocRef.collection("Members");
+                for (const studentId of studentIds) {
+                    await subCollectionRef.doc(studentId).set({
+                        studentId: studentId
                     });
-                    console.log(`✅ Registered collection "${collectionName}"`);
                 }
 
-                // Upload students
-                for (const student of studentData) {
-                    await collectionRef.doc(student.idNo.toString()).set(student, { merge: true });
-                }
-
-                console.log(`✅ Uploaded ${studentData.length} records to "${collectionName}" with semester "${currentSemester}"`);
-                alert(`Uploaded ${studentData.length} students successfully for ${currentSemester}!`);
+                console.log(`✅ Uploaded ${studentIds.length} student IDs under Membership/${category}/Members`);
+                alert(`Uploaded ${studentIds.length} students successfully for ${currentSemester}!`);
                 uploadInput.value = ""; // reset
-                 // refresh table
             };
             reader.readAsArrayBuffer(file);
         } catch (err) {
@@ -175,9 +172,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Load only students uploaded in that office’s collection
-    // (Your existing loadStudents function should go here if needed)
-
-    // Load immediately
-    // loadStudents();  <-- (uncomment if loadStudents is defined elsewhere)
+    // Load students should now read from:
+    // Membership/{category}/students
 });

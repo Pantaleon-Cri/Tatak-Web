@@ -36,41 +36,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!studentDoc.exists) throw new Error("Student not found");
     const student = studentDoc.data();
 
-    // Normalize and fetch readable student clubs
-    const studentClubsIds =
-      typeof student.clubs === "string"
-        ? student.clubs.split(",").map(c => c.trim())
-        : Array.isArray(student.clubs)
-        ? student.clubs.map(c => String(c).trim())
-        : [];
-
-    const studentClubs = [];
-    for (const cId of studentClubsIds) {
-      const cName = await getCategoryName(cId);
-      if (cName) studentClubs.push(cName);
-    }
-
     const studentDept = String(student.department || "").trim();
-
-    // ================= Fetch allowed collections =================
-    const allowedSnap = await db.collection("allowedCollections").get();
-    const allowedCollections = allowedSnap.docs.map(doc => doc.data().name).filter(Boolean);
-
-    const allowedMemberships = new Set();
-    for (const collName of allowedCollections) {
-      try {
-        const doc = await db.collection(collName).doc(studentId).get();
-        if (doc && doc.exists) {
-          const name = await getCategoryName(collName);
-          if (name) allowedMemberships.add(name);
-        }
-      } catch (err) {
-        console.error(`Error checking allowed collection ${collName}:`, err);
-      }
-    }
-
-    const studentCategory = String(student.sourceCategory || "").trim();
-    const studentOffice = String(student.sourceOffice || "").trim();
 
     // ================= Fetch all requirements =================
     const reqSnap = await db.collection("RequirementsTable").get();
@@ -104,46 +70,34 @@ document.addEventListener("DOMContentLoaded", async () => {
       else if (["401", "403"].includes(reqCategory)) {
         showRequirement = true;
       }
-      else if (reqOffice === "301") {
-        if (["401", "403"].includes(reqCategory)) {
-          showRequirement = true;
-        } else {
-          const reqCatName = await getCategoryName(reqCategory) || reqCategory;
-          if (allowedMemberships.has(reqCatName) || normalizeString(reqCatName) === normalizeString(studentCategory)) {
-            showRequirement = true;
+      else if (reqOffice === "301" || reqOffice === "309" || ["310", "311", "312", "313"].includes(reqOffice)) {
+        // For offices 301, 309, 310-313 → check Membership by category
+        if (reqCategory) {
+          try {
+            const membershipDoc = await db
+              .collection("Membership")
+              .doc(reqCategory)
+              .collection("Members")
+              .doc(studentId)
+              .get();
+            if (membershipDoc.exists) showRequirement = true;
+          } catch (err) {
+            console.error(`Error checking Membership for office ${reqOffice}:`, err);
           }
         }
       }
-      else if (reqOffice === "309") {
-        const reqCategoryName = await getCategoryName(reqCategory);
-        if (studentClubs.some(club => normalizeString(club) === normalizeString(reqCategoryName))) {
-          showRequirement = true;
-        }
-      }
-      else if (["310", "311", "312", "313"].includes(reqOffice)) {
+      else if (reqCategory) {
+        // Fallback: generic category-based membership
         try {
-          const groupSnap = await db.collection("groupTable").get();
-          for (const doc of groupSnap.docs) {
-            const collName = doc.data().club;
-            if (!collName) continue;
-            const studentInColl = await db.collection(collName).doc(studentId).get();
-            if (studentInColl.exists) { showRequirement = true; break; }
-          }
+          const memberDoc = await db
+            .collection("Membership")
+            .doc(reqCategory)
+            .collection("Members")
+            .doc(studentId)
+            .get();
+          if (memberDoc.exists) showRequirement = true;
         } catch (err) {
-          console.error(`Error checking groupTable for office ${reqOffice}:`, err);
-        }
-      }
-      else if (reqOffice === "314") {
-        try {
-          const labSnap = await db.collection("labTable").get();
-          for (const doc of labSnap.docs) {
-            const collName = doc.data().lab;
-            if (!collName) continue;
-            const studentInLab = await db.collection(collName).doc(studentId).get();
-            if (studentInLab.exists) { showRequirement = true; break; }
-          }
-        } catch (err) {
-          console.error("Error checking labTable for office 314:", err);
+          console.error(`Error checking Membership for category ${reqCategory}:`, err);
         }
       }
       else if (["307", "308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) {
@@ -159,7 +113,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const key = `${reqCategory}||${reqDept}||${reqOffice}||${reqLab}`;
       if (!groupedReqs[key]) {
-        groupedReqs[key] = { category: reqCategory, department: reqDept, office: reqOffice, lab: reqLab, requirements: [], addedByDesigneeId };
+        groupedReqs[key] = {
+          category: reqCategory,
+          department: reqDept,
+          office: reqOffice,
+          lab: reqLab,
+          requirements: [],
+          addedByDesigneeId
+        };
       }
       groupedReqs[key].requirements.push(req.requirement);
     }
@@ -224,16 +185,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const lastCheckedBy = lastValidation?.checkedBy || null;
       const checkedAt = lastValidation?.checkedAt
-  ? new Date(lastValidation.checkedAt).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: true // 12-hour format with AM/PM
-    })
-  : "Unknown";
-
+        ? new Date(lastValidation.checkedAt).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: true
+          })
+        : "Unknown";
 
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");

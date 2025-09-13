@@ -1,5 +1,3 @@
-
-
 const uploadBtn = document.getElementById("uploadBtn");
 const uploadInput = document.getElementById("uploadInput");
 const tableBody = document.querySelector("tbody");
@@ -34,13 +32,13 @@ async function handleFileUpload(e) {
       for (let i = 1; i < jsonData.length; i++) {
         const row = jsonData[i];
         const id = row[idIndex]?.toString().trim();
-        const codeName = row[typeIndex]?.trim();
+        const clubType = row[typeIndex]?.trim();
         const club = row[nameIndex]?.trim();
 
-        if (!id || !codeName || !club) continue;
+        if (!id || !clubType || !club) continue;
 
-        await db.collection("groupTable").doc(id).set({ id, codeName, club });
-        addRowToTable(id, codeName, club);
+        await db.collection("groupTable").doc(id).set({ id, clubType, club });
+        addRowToTable(id, clubType, club);
       }
 
       alert("Upload complete!");
@@ -77,17 +75,17 @@ const modalOverlay = document.getElementById("modalOverlay");
 
 saveBtn.addEventListener("click", async () => {
   const id = document.getElementById("newClubId").value.trim();
-  const codeName = document.getElementById("newClubType").value.trim();
+  const clubType = document.getElementById("newClubType").value.trim();
   const club = document.getElementById("newClubName").value.trim();
 
-  if (!id || !codeName || !club) {
+  if (!id || !clubType || !club) {
     alert("All fields are required.");
     return;
   }
 
   try {
-    await db.collection("groupTable").doc(id).set({ id, codeName, club });
-    addRowToTable(id, codeName, club);
+    await db.collection("groupTable").doc(id).set({ id, clubType, club });
+    addRowToTable(id, clubType, club);
     modalOverlay.style.display = "none";
     document.getElementById("newClubId").value = "";
     document.getElementById("newClubType").value = "";
@@ -175,17 +173,20 @@ deleteConfirmBtn.addEventListener("click", async () => {
     alert("Delete failed.");
   }
 });
+
+// ===== Load Clubs on Page Load
 async function loadClubsFromFirestore() {
   try {
     const snapshot = await db.collection("groupTable").orderBy("id").get();
     snapshot.forEach(doc => {
       const data = doc.data();
-      addRowToTable(data.id, data.codeName, data.club);
+      addRowToTable(data.id, data.clubType, data.club);
     });
   } catch (error) {
     console.error("Error loading clubs from Firestore:", error);
   }
 }
+
 window.addEventListener("DOMContentLoaded", function () {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
@@ -195,7 +196,7 @@ window.addEventListener("DOMContentLoaded", function () {
   } else {
     usernameDisplay.textContent = "Unknown"; // fallback
   }
-  loadClubsFromFirestore(); // Your original load function
+  loadClubsFromFirestore(); // Load clubs when page opens
 
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
