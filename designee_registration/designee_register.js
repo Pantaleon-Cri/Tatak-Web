@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const groupSnapshot = await db.collection("groupTable").get();
       const selectedOfficeName = officeSelect.options[officeSelect.selectedIndex].textContent;
       const filteredClubs = groupSnapshot.docs
-        .filter(doc => doc.data().codeName === selectedOfficeName)
+        .filter(doc => doc.data().clubType === selectedOfficeName)
         .map(doc => doc.data().club);
       categorySelect.innerHTML += filteredClubs
         .map(club => `<option value="${club}">${club}</option>`)
