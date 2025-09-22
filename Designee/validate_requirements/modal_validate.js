@@ -339,43 +339,68 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // -------------------- Modal Actions --------------------
 
-window.openRequirementsModal = async function(studentID, designeeUserID, db) {
+window.openRequirementsModal = async function (studentID, designeeUserID, db, options = {}) {
+  const { autoRun = false } = options; // ✅ detect auto-run mode
+
   currentStudentID = studentID;
   dbInstance = db;
 
   if (!modalBody || !checklistModal) return;
 
-  modalBody.innerHTML = "<p>Loading requirements...</p>";
-  checklistModal.classList.add("active");
+  if (!autoRun) {
+    // Normal manual open
+    modalBody.innerHTML = "<p>Loading requirements...</p>";
+    checklistModal.classList.add("active");
+  }
 
   try {
     const currentUser = JSON.parse(localStorage.getItem("userData"));
     if (!currentUser || !currentUser.id) throw new Error("User not logged in");
 
-    let linkedDesigneeId = currentUser.role === "staff"
-      ? (currentUser.createdByDesigneeID && currentUser.createdByDesigneeID !== "undefined" ? currentUser.createdByDesigneeID : null)
-      : currentUser.role === "designee" ? currentUser.id : designeeUserID;
+    let linkedDesigneeId =
+      currentUser.role === "staff"
+        ? currentUser.createdByDesigneeID &&
+          currentUser.createdByDesigneeID !== "undefined"
+          ? currentUser.createdByDesigneeID
+          : null
+        : currentUser.role === "designee"
+        ? currentUser.id
+        : designeeUserID;
 
     if (!linkedDesigneeId) {
-      modalBody.innerHTML = "<p>No requirements assigned to you.</p>";
+      if (!autoRun) {
+        modalBody.innerHTML = "<p>No requirements assigned to you.</p>";
+      }
       return;
     }
 
     currentDesigneeUserID = linkedDesigneeId;
 
+    // ✅ Always validate silently
     await autoValidateRequirements(currentDesigneeUserID, studentID);
 
+    // Fetch validation document
     const valDocRef = dbInstance.collection("ValidateRequirementsTable").doc(studentID);
     const valDoc = await valDocRef.get();
+
     const data = valDoc.data();
     const requirements = data?.offices?.[currentDesigneeUserID] || [];
-    renderRequirementsChecklist(requirements);
 
+    // Render checklist (disable if autoRun mode)
+    if (!autoRun) {
+      renderRequirementsChecklist(requirements, { autoRun: false });
+    } else {
+      renderRequirementsChecklist(requirements, { autoRun: true });
+      console.log(`✅ Auto-validated student ${studentID}`);
+    }
   } catch (error) {
     console.error("Error loading validation requirements:", error);
-    modalBody.innerHTML = "<p>Failed to load requirements.</p>";
+    if (!autoRun) {
+      modalBody.innerHTML = "<p>Failed to load requirements.</p>";
+    }
   }
 };
+
 
 // -------------------- Render & Save --------------------
 

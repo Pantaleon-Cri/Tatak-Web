@@ -54,6 +54,63 @@ async function getDepartmentName(db, id) {
   }
 }
 
+// Resolve designee/office name and image
+async function resolveOfficeNameWithImage(db, designeeId) {
+  try {
+    const snap = await db.collection("Designees")
+      .where("userID", "==", String(designeeId))
+      .limit(1)
+      .get();
+
+    if (snap.empty) return { officeName: designeeId, imageId: "default" };
+
+    const designee = snap.docs[0].data();
+    let officeName = null;
+    let imageId = designee.category || designee.office || "default";
+
+    // ------------------ Try category via multiple tables ------------------
+    if (designee.category) {
+      const tables = ["acadClubTable", "labTable", "groupTable"];
+      for (const table of tables) {
+        const catDoc = await db.collection(table).doc(designee.category).get();
+        if (catDoc.exists) {
+          const data = catDoc.data();
+          officeName = data.club || data.clubName || data.lab || data.name || data.title;
+          if (officeName) break; // stop at first found name
+        }
+      }
+    }
+
+    // ------------------ If no name from category, try office ------------------
+    if (!officeName && designee.office) {
+      const officeDoc = await db.collection("officeTable").doc(designee.office).get();
+      if (officeDoc.exists) officeName = officeDoc.data().office || officeDoc.data().name;
+    }
+
+    // ------------------ If still no name, fallback to department ------------------
+    if (!officeName && designee.department) {
+      const depDoc = await db.collection("departmentTable").doc(designee.department).get();
+      const depName = depDoc.exists ? depDoc.data().department || depDoc.data().name : null;
+      if (depName && designee.office) {
+        const officeDoc = await db.collection("officeTable").doc(designee.office).get();
+        const offName = officeDoc.exists ? officeDoc.data().office : null;
+        officeName = offName ? `${depName} - ${offName}` : depName;
+      } else {
+        officeName = department || designee.firstName || designee.lastName || designeeId;
+      }
+    }
+
+    // ------------------ Final fallback ------------------
+    if (!officeName) officeName = designee.firstName || designee.lastName || designeeId;
+
+    return { officeName, imageId };
+  } catch (err) {
+    console.error("Error resolving office name:", err);
+    return { officeName: designeeId, imageId: "default" };
+  }
+}
+
+
 // -------------------- Modal Handling --------------------
 document.addEventListener("DOMContentLoaded", () => {
   const modal = document.getElementById("clearanceModal");
@@ -102,107 +159,6 @@ window.openViewClearanceCard = async function(studentID, db) {
       [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" ");
     document.getElementById("semesterText").textContent = currentSemesterName;
 
-    // Normalize and fetch readable student clubs
-    const studentClubsIds =
-      typeof student.clubs === "string"
-        ? student.clubs.split(",").map(c => c.trim())
-        : Array.isArray(student.clubs)
-        ? student.clubs.map(c => String(c).trim())
-        : [];
-
-    const studentClubs = [];
-    for (const cId of studentClubsIds) {
-      const cName = await getCategoryName(db, cId);
-      if (cName) studentClubs.push(cName);
-    }
-
-    const studentDept = String(student.department || "").trim();
-    const studentCategory = String(student.sourceCategory || "").trim();
-    const studentOffice = String(student.sourceOffice || "").trim();
-
-    // ================= Fetch allowed collections =================
-    const allowedSnap = await db.collection("allowedCollections").get();
-    const allowedCollections = allowedSnap.docs.map(doc => doc.data().name).filter(Boolean);
-
-    const allowedMemberships = new Set();
-    for (const collName of allowedCollections) {
-      try {
-        const doc = await db.collection(collName).doc(studentID).get();
-        if (doc && doc.exists) {
-          const name = await getCategoryName(db, collName);
-          if (name) allowedMemberships.add(name);
-        }
-      } catch (err) { console.error(err); }
-    }
-
-    // ================= Fetch requirements =================
-    const reqSnap = await db.collection("RequirementsTable").get();
-    const groupedReqs = {};
-    let anyRequirementsFound = false;
-
-    for (const reqDoc of reqSnap.docs) {
-      const req = reqDoc.data();
-
-      // ------------------ Filter by current semester ------------------
-      if (req.semester) {
-        const reqSemester = String(req.semester || "");
-        if (reqSemester !== currentSemesterId && reqSemester !== currentSemesterName) continue;
-      }
-
-      const reqDept = String(req.department || "").trim();
-      const reqCategory = String(req.category || "").trim();
-      const reqOffice = String(req.office || "").trim();
-      const reqLab = String(req.lab || "").trim();
-      const addedByDesigneeId = String(req.addedByDesigneeId || "").trim();
-
-      const isDeptGlobal = normalizeString(reqDept) === "n/a" || reqDept === "";
-      const isCategoryGlobal = normalizeString(reqCategory) === "n/a" || reqCategory === "";
-
-      let showRequirement = false;
-
-      // ================= RULES =================
-      if (["302","303","304","305","306","315"].includes(reqOffice)) {
-        showRequirement = true;
-      } else if (["401","403"].includes(reqCategory)) {
-        showRequirement = true;
-      } else if (reqOffice === "301") {
-        if (["401","403"].includes(reqCategory)) {
-          showRequirement = true;
-        } else {
-          const categoryName = await getCategoryName(db, reqCategory);
-          if (allowedMemberships.has(categoryName) || normalizeString(categoryName) === normalizeString(studentCategory)) showRequirement = true;
-        }
-      } else if (reqOffice === "309") {
-        const categoryName = await getCategoryName(db, reqCategory);
-        if (studentClubs.some(club => normalizeString(club) === normalizeString(categoryName))) showRequirement = true;
-      } else if (reqCategory) {
-        // 🔥 Unified membership check for 310–314 and all category-driven requirements
-        try {
-          const memberDoc = await db
-            .collection("Membership")
-            .doc(reqCategory)
-            .collection("Members")
-            .doc(studentID)
-            .get();
-          if (memberDoc.exists) showRequirement = true;
-        } catch (err) {
-          console.error(`Error checking Membership for category ${reqCategory}:`, err);
-        }
-      } else if (["307","308"].includes(reqOffice) && !isDeptGlobal && normalizeString(reqDept) === normalizeString(studentDept)) {
-        showRequirement = true;
-      } else if (isDeptGlobal && isCategoryGlobal) {
-        showRequirement = true;
-      }
-      // ================= END RULES =================
-
-      if (!showRequirement) continue;
-      anyRequirementsFound = true;
-
-      const key = `${reqCategory}||${reqDept}||${reqOffice}||${reqLab}`;
-      if (!groupedReqs[key]) groupedReqs[key] = { category: reqCategory, department: reqDept, office: reqOffice, lab: reqLab, requirements: [], addedByDesigneeId };
-      groupedReqs[key].requirements.push(req.requirement);
-    }
-
     // ================= Fetch validation data =================
     const valDoc = await db.collection("ValidateRequirementsTable").doc(studentID).get();
     const officesData = valDoc?.exists ? valDoc.data().offices || {} : {};
@@ -215,50 +171,22 @@ window.openViewClearanceCard = async function(studentID, db) {
       });
     }
 
-    // ================= Render =================
+    // ================= Render office cards =================
     let overallCleared = true;
 
-    for (const groupKey in groupedReqs) {
-      const group = groupedReqs[groupKey];
-      const isDeptGlobal = normalizeString(group.department) === "n/a" || group.department === "";
-      const isCategoryGlobal = normalizeString(group.category) === "n/a" || group.category === "";
-
-      let headerTitle = "";
-
-      if (group.office === "314" && !isCategoryGlobal) {
-        headerTitle = (await getLabName(db, group.category)) || group.category;
-      } else if (!isCategoryGlobal) {
-        headerTitle = (await getCategoryName(db, group.category)) || group.category;
-      } else if (isCategoryGlobal && isDeptGlobal) {
-        headerTitle = (await getOfficeName(db, group.office)) || group.office;
-      } else if (isCategoryGlobal && !isDeptGlobal) {
-        const officeName = (await getOfficeName(db, group.office)) || group.office;
-        const deptName = (await getDepartmentName(db, group.department)) || group.department;
-        headerTitle = `${officeName} - ${deptName}`;
-      }
-
-      if (group.lab) {
-        const labName = await getLabName(db, group.lab);
-        if (labName) headerTitle += ` - ${labName}`;
-      }
-
-      const sectionGroupDiv = document.createElement("div");
-      sectionGroupDiv.classList.add("section-group");
-
-      const headerLabel = document.createElement("label");
-      headerLabel.classList.add("section-header");
-      headerLabel.textContent = headerTitle;
-      sectionGroupDiv.appendChild(headerLabel);
-
-      const validatedArray = officesData[group.addedByDesigneeId] || [];
-      const allChecked = validatedArray.length > 0 && validatedArray.every(item => item.status === true);
+    for (const designeeId in officesData) {
+      const validations = officesData[designeeId];
+      const allChecked = validations.length > 0 && validations.every(v => v.status === true);
       if (!allChecked) overallCleared = false;
 
-      // Get last approver and last checkedAt
-      const lastCheckedItem = validatedArray.filter(item => item.status === true).pop() || {};
-      const lastCheckedBy = lastCheckedItem.checkedBy || "Unknown";
-      const lastCheckedAt = lastCheckedItem.checkedAt
-        ? new Date(lastCheckedItem.checkedAt).toLocaleString('en-US', {
+      // Most recent approval
+      const lastValidation = validations
+        .filter(v => v.status === true && v.checkedBy)
+        .sort((a, b) => b.checkedAt - a.checkedAt)[0] || {};
+
+      const lastCheckedBy = lastValidation.checkedBy || "Unknown";
+      const checkedAt = lastValidation.checkedAt
+        ? new Date(lastValidation.checkedAt).toLocaleString('en-US', {
             month: 'short',
             day: 'numeric',
             year: 'numeric',
@@ -268,33 +196,47 @@ window.openViewClearanceCard = async function(studentID, db) {
           })
         : "N/A";
 
+      // Resolve office/designee name and image
+      const { officeName, imageId } = await resolveOfficeNameWithImage(db, designeeId);
+
+      // Build UI card
+      const sectionGroupDiv = document.createElement("div");
+      sectionGroupDiv.classList.add("section-group");
+
+      const headerLabel = document.createElement("label");
+      headerLabel.classList.add("section-header");
+      headerLabel.textContent = officeName || designeeId;
+      sectionGroupDiv.appendChild(headerLabel);
+
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");
+
       approvalDiv.innerHTML = allChecked
-        ? `<img src="../../Tatak.png" alt="Approved Icon" /><br />
-           <label><i>Approved By: ${lastCheckedBy}<br />Checked At: ${lastCheckedAt}</i><hr /></label>`
+        ? `<img src="../../logo/${imageId || "default"}.png" 
+                 alt="Approved Icon" 
+                 style="width:50px; height:50px;" 
+                 onerror="this.onerror=null;this.src='../../Tatak.png';" /><br />
+           <label><i>Approved By: ${lastCheckedBy}<br />Checked At: ${checkedAt}</i><hr /></label>`
         : `<label><i>Not Cleared</i><hr /></label>`;
 
       sectionGroupDiv.appendChild(approvalDiv);
       containerEl.appendChild(sectionGroupDiv);
     }
 
-    if (overallCleared) {
-      statusEl.innerHTML = `<span style="color:green">Completed</span>`;
-      container.style.border = "5px solid #a6d96a"; // green border
-    } else {
-      statusEl.innerHTML = `<span style="color:red">Pending</span>`;
-      container.style.border = "5px solid red"; // red border
-    }
+    // ================= Status Display =================
+    statusEl.innerHTML = overallCleared
+      ? `<span style="color:green">Completed</span>`
+      : `<span style="color:red">Pending</span>`;
+    container.style.border = overallCleared ? "5px solid #a6d96a" : "5px solid red";
 
-    if (!anyRequirementsFound) {
-      containerEl.innerHTML = `<div class="section-item"><label class="section-header">No Requirements Found</label><p>You currently have no active requirements.</p></div>`;
+    if (Object.keys(officesData).length === 0) {
+      containerEl.innerHTML = `<div class="section-item"><label class="section-header">No Offices Found</label><p>You currently have no offices in validation.</p></div>`;
       statusEl.innerHTML = `<span style="color:red">Pending</span>`;
     }
 
   } catch (err) {
     console.error("Error loading clearance:", err);
-    containerEl.innerHTML = "<p>Failed to load clearance. Student is not yet Resgistered</p>";
+    containerEl.innerHTML = "<p>Failed to load clearance. Student is not yet registered</p>";
     statusEl.innerHTML = `<span style="color:red">Pending</span>`;
   }
 };

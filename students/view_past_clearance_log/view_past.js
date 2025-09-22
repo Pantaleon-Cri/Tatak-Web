@@ -118,7 +118,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const semestersData = historyData.semesters || {};
 
   const semesters = Object.keys(semestersData);
-  semesters.sort(); // optional
+  semesters.sort();
 
   // Populate dropdown
   semesters.forEach((sem) => {
@@ -128,42 +128,60 @@ document.addEventListener("DOMContentLoaded", async () => {
     semesterSelect.appendChild(option);
   });
 
-  // ---------------- Helper: Get readable office/club name ----------------
-  async function getReadableName(designeeId) {
-    const designeeDoc = await db.collection("Designees").doc(designeeId).get();
-    if (!designeeDoc.exists) return designeeId;
+  // ---------------- Helper: Get readable office/club name with image ----------------
+  async function getReadableNameWithImage(designeeId) {
+    try {
+      const designeeDoc = await db.collection("Designees").doc(designeeId).get();
+      if (!designeeDoc.exists) return { officeName: designeeId, imageId: null };
 
-    const designee = designeeDoc.data();
-    const { category, department, office } = designee;
+      const designee = designeeDoc.data();
+      let officeName = null;
+      let imageId = designee.category || null;
 
-    // If category exists → check in club/lab/group tables
-    if (category) {
-      let nameDoc =
-        (await db.collection("acadClubTable").doc(category).get()).data() ||
-        (await db.collection("groupTable").doc(category).get()).data() ||
-        (await db.collection("labTable").doc(category).get()).data();
-
-      if (nameDoc) {
-        return nameDoc.club || nameDoc.lab || category;
+      // Category tables first
+      if (imageId) {
+        const catTables = ["acadClubTable", "groupTable", "labTable"];
+        for (const table of catTables) {
+          const doc = await db.collection(table).doc(imageId).get();
+          if (doc.exists) {
+            const data = doc.data();
+            officeName = data.club || data.lab || officeName;
+            if (officeName) break;
+          }
+        }
       }
-    }
 
-    // If department exists → combine office + department
-    if (department) {
-      const officeNameDoc = await db.collection("officeTable").doc(office).get();
-      const departmentNameDoc = await db.collection("departmentTable").doc(department).get();
-      const officeName = officeNameDoc.exists ? officeNameDoc.data().office : office;
-      const deptName = departmentNameDoc.exists ? departmentNameDoc.data().department : department;
-      return `${officeName} - ${deptName}`;
-    }
+      // Fallback to office ID if no category image
+      if (!officeName && designee.office) {
+        const officeDoc = await db.collection("officeTable").doc(designee.office).get();
+        if (officeDoc.exists) officeName = officeDoc.data().office;
+        imageId = imageId || designee.office;
+      }
 
-    // If only office exists
-    if (office) {
-      const officeNameDoc = await db.collection("officeTable").doc(office).get();
-      return officeNameDoc.exists ? officeNameDoc.data().office : office;
-    }
+      // Fallback to department + office
+      if (!officeName && designee.department) {
+        const depDoc = await db.collection("departmentTable").doc(designee.department).get();
+        const depName = depDoc.exists ? depDoc.data().department : "";
+        if (designee.office) {
+          const offDoc = await db.collection("officeTable").doc(designee.office).get();
+          const offName = offDoc.exists ? offDoc.data().office : "";
+          officeName = depName && offName ? `${depName} - ${offName}` : depName || offName;
+          imageId = imageId || designee.office;
+        } else {
+          officeName = depName;
+        }
+      }
 
-    return designeeId;
+      // Fallback to full name
+      if (!officeName && (designee.firstName || designee.lastName)) {
+        officeName = `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
+      }
+
+      return { officeName, imageId };
+    } catch (err) {
+      console.error("Error fetching readable name:", err);
+      return { officeName: designeeId, imageId: null };
+    }
   }
 
   // 🔹 Step 2: Render clearance logs by semester
@@ -184,15 +202,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const overallStatus = semesterInfo.overallStatus || "Pending";
 
     statusSpan.textContent = overallStatus;
-
-    
-if (overallStatus === "Pending") {
-  statusSpan.style.color = "red";
-} else if (overallStatus === "Cleared") {
-  statusSpan.style.color = "green";
-} else {
-  statusSpan.style.color = "black"; // fallback/default
-}
+    statusSpan.style.color = overallStatus === "Pending" ? "red" :
+                            overallStatus === "Cleared" ? "green" : "black";
 
     for (const [officeId, requirementsArray] of Object.entries(offices)) {
       if (!Array.isArray(requirementsArray)) continue;
@@ -203,7 +214,6 @@ if (overallStatus === "Pending") {
       // Get the latest approver (last checkedBy)
       let lastCheckedBy = "N/A";
       let lastCheckedAt = null;
-
       requirementsArray.forEach((req) => {
         if (req.checkedAt) {
           const time = new Date(req.checkedAt);
@@ -214,43 +224,47 @@ if (overallStatus === "Pending") {
         }
       });
 
-      // Get readable name
-      const readableName = await getReadableName(officeId);
+      // Get readable name and image
+      const { officeName, imageId } = await getReadableNameWithImage(officeId);
 
       // Build office section
       const officeDiv = document.createElement("div");
       officeDiv.classList.add("office-section");
 
       const officeHeader = document.createElement("h3");
-      officeHeader.textContent = readableName;
+      officeHeader.textContent = officeName || officeId;
       officeDiv.appendChild(officeHeader);
 
       const contentDiv = document.createElement("div");
       contentDiv.classList.add("office-status");
 
-      
-if (allOfficeCleared) {
- const checkedDateStr = lastCheckedAt
-  ? new Date(lastCheckedAt).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: true // 12-hour format
-    })
-  : "N/A";
+      if (allOfficeCleared) {
+        const checkedDateStr = lastCheckedAt
+          ? new Date(lastCheckedAt).toLocaleString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: 'numeric',
+              minute: 'numeric',
+              hour12: true
+            })
+          : "N/A";
 
-  contentDiv.innerHTML = `
-    <img src="../../Tatak.png" alt="Cleared" class="tatak-img" style="width:50px; height:50px;" /><br />
-    <i>Approved By: ${lastCheckedBy}<br />
-    ${checkedDateStr}<hr /></i>
-  `;
-} else {
-  contentDiv.innerHTML = `
-    <p>Not Cleared <hr /></p>
-  `;
-}
+        const imgSrc = `../../logo/${imageId || officeId || "default"}.png`;
+
+        contentDiv.innerHTML = `
+          <img src="${imgSrc}" 
+               alt="Cleared" 
+               style="width:50px; height:50px;" 
+               onerror="this.onerror=null;this.src='../../Tatak.png';" /><br />
+          <i>Approved By: ${lastCheckedBy}<br />
+          ${checkedDateStr}<hr /></i>
+        `;
+      } else {
+        contentDiv.innerHTML = `
+          <p>Not Cleared <hr /></p>
+        `;
+      }
 
       officeDiv.appendChild(contentDiv);
       officesContainer.appendChild(officeDiv);

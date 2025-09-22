@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   loadUserRoleDisplay();
 
-  // Create table row HTML (flag/officer handled in flag.js)
+  // Create table row HTML
   function createStudentRow(student) {
     return `
       <tr data-id="${student.schoolID}">
@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   }
 
-  // Populate prerequisite column for each student
+  // Populate prerequisite column
   async function populatePrerequisites(students) {
     const cells = document.querySelectorAll(".prereq-cell");
 
@@ -200,6 +200,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     populatePrerequisites(students);
+
+    // ✅ Auto-run validation for ALL students (without opening modal)
+    if (typeof openRequirementsModal === "function") {
+      students.forEach(stu => {
+        openRequirementsModal(stu.schoolID, designeeUserID, db, { autoRun: true });
+      });
+    }
   }
 
   // Search handler
@@ -213,12 +220,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Load students from Firestore
+  // Load students
   async function loadStudents() {
     studentsTableBody.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
 
     try {
-      // --- Step 1: Fetch current semester ---
       const semesterSnapshot = await db.collection("semesterTable")
         .where("currentSemester", "==", true)
         .limit(1)
@@ -233,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const currentSemesterId = semesterDoc.id;
       const currentSemesterName = semesterDoc.data().semester;
 
-      // --- Step 2: Department map ---
       const deptSnapshot = await db.collection("departmentTable").get();
       const departmentMap = {};
       deptSnapshot.forEach(doc => {
@@ -241,7 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
         departmentMap[doc.id] = data.code || doc.id;
       });
 
-      // --- Step 3: Apply rule logic ---
       let allStudents = [];
       let collectionName = "Students";
 
@@ -250,7 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
       let useMembership = true;
 
       if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
-        // See all students
         const querySnapshot = await db.collection("Students").get();
         querySnapshot.forEach(doc => {
           const data = doc.data();
@@ -262,7 +265,6 @@ document.addEventListener('DOMContentLoaded', () => {
         useMembership = false;
 
       } else if (designeeOffice === "307" || designeeOffice === "308") {
-        // Same department
         const querySnapshot = await db.collection("Students").where("department", "==", designeeDepartment).get();
         querySnapshot.forEach(doc => {
           const data = doc.data();
@@ -274,7 +276,6 @@ document.addEventListener('DOMContentLoaded', () => {
         useMembership = false;
 
       } else if (designeeOffice === "309") {
-        // Same clubs
         const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
         const querySnapshot = await db.collection("Students").get();
         querySnapshot.forEach(doc => {
@@ -290,7 +291,6 @@ document.addEventListener('DOMContentLoaded', () => {
         useMembership = false;
       }
 
-      // --- Step 3b: Membership fallback ---
       if (useMembership) {
         const membersRef = db.collection("Membership").doc(designeeCategory).collection("Members");
         const membersSnapshot = await membersRef.get();
@@ -320,17 +320,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         collectionName = `Membership/${designeeCategory}/Members`;
 
-        // ✅ filter by semester (both ID or Name)
         const filteredBySemester = allStudents.filter(s =>
           s.semester === currentSemesterId || s.semester === currentSemesterName
         );
 
         renderStudents(filteredBySemester, collectionName);
         attachSearchHandler(filteredBySemester, collectionName);
-        return; // prevent double render
+        return;
       }
 
-      // --- Step 4: Filter by semester ---
       const filteredBySemester = allStudents.filter(s =>
         s.semester === currentSemesterId || s.semester === currentSemesterName
       );
@@ -344,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Event delegation
+  // Event delegation (manual clicks still open modal)
   studentsTableBody.addEventListener("click", async (e) => {
     const validateBtn = e.target.closest(".validate-button");
     if (validateBtn) {

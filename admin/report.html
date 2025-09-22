@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard</title>
+
+  <!-- Font Awesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <!-- Custom Stylesheets -->
+  <link rel="stylesheet" href="admin.css" />
+  
+  <style>
+    /* -----------------------------------------
+      Container for the table section
+    ------------------------------------------ */
+    .report-page {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      flex-grow: 1;
+    }
+
+    /* -----------------------------------------
+      Page Title
+    ------------------------------------------ */
+    .report-page h2 {
+      margin-top: 0;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+      font-size: 1.5em;
+      color: #333;
+    }
+
+    /* -----------------------------------------
+      Students Table Styling
+    ------------------------------------------ */
+    .styled-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      border-radius: 8px;
+      overflow: hidden; /* ensures rounded corners stay visible */
+    }
+
+    .styled-table th,
+    .styled-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .styled-table th {
+      background-color: #f0f0f0;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      font-size: 0.9em;
+    }
+
+    .styled-table tbody tr:nth-child(even) {
+      background-color: #f9f9f9; /* zebra striping */
+    }
+
+    .styled-table tbody tr:hover {
+      background-color: #f1f1f1; /* hover highlight */
+    }
+
+    .styled-table td {
+      color: #333;
+      font-size: 0.95em;
+    }
+
+    /* -----------------------------------------
+      Optional: status column styling
+    ------------------------------------------ */
+    .styled-table td:last-child {
+      font-weight: 600;
+    }
+
+    .styled-table td:last-child.pending {
+      color: #e67e22; /* orange */
+    }
+
+    .styled-table td:last-child.approved {
+      color: #27ae60; /* green */
+    }
+
+    .styled-table td:last-child.rejected {
+      color: #c0392b; /* red */
+    }
+    /* Container for title + button */
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+/* Download button styling */
+.download-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s;
+}
+
+.download-btn:hover {
+  background-color: #7dd391;
+}
+
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <img src="../logo.png" alt="Logo" class="logo" />
+      <div class="title">
+        <span class="system-name">TATAK</span>
+        <span class="divider">|</span>
+        <span class="dashboard-title">Administrator - Dashboard</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="user-dropdown" id="userDropdownToggle">
+        <div class="user-info">
+          <div class="username" id="usernameDisplay"></div>
+          <div class="email">Administrator</div>
+        </div>
+        <i class="fas fa-angle-down dropdown-arrow"></i>
+      </div>
+
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="settings/settings.html">Settings</a>
+        <a href="#" id="logoutBtn">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT WRAPPER -->
+  <div class="content-wrapper scrollable-horizontal">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header"></div>
+      <nav>
+        <ul>
+          <li>
+            <a href="admin.html">
+              <i class="fas fa-tachometer-alt"></i> Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="data_table/table.html">
+              <i class="fas fa-table"></i> Manage Data Table
+            </a>
+          </li>
+          <li class="has-submenu">
+            <a href="#" class="dropdown-toggle">
+              <i class="fas fa-users-cog"></i> Manage Accounts
+              <i class="fas fa-chevron-down arrow"></i>
+            </a>
+            <ul class="submenu">
+              <li>
+                <a href="student/student.html"><i class="fas fa-user-graduate"></i> Students</a>
+              </li>
+              <li class="has-submenu">
+                <a href="#" class="dropdown-toggle">
+                  <i class="fas fa-user-tie"></i> Personnel
+                  <i class="fas fa-chevron-down arrow"></i>
+                </a>
+                <ul class="submenu">
+                  <li><a href="designees/designees.html"><i class="fas fa-users"></i> Designees</a></li>
+                  <li><a href="staff/staff.html"><i class="fas fa-building"></i> Staff</a></li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+          <li>
+            <a href="#" class="active">
+              <i class="fas fa-file-invoice"></i> Reports
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main">
+  <div class="report-page">
+    <div class="report-header">
+      <h2>Reports</h2>
+      <button id="downloadBtn" class="download-btn">
+        <i class="fas fa-file-download"></i> Download Sheet
+      </button>
+    </div>
+
+    <table id="studentsTable" class="styled-table">
+      <thead>
+        <tr>
+          <th>School ID</th>
+          <th>First Name</th>
+          <th>Last Name</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="studentsTableBody">
+        <!-- Data will load here -->
+      </tbody>
+    </table>
+  </div>
+</main>
+
+  </div>
+
+  <!-- Firebase v8 SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="report.js"></script>
+  <!-- Your custom scripts -->
+
+</body>
+</html>
