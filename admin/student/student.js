@@ -1,3 +1,4 @@
+
 // Initialize Firebase v8 (if not already initialized)
 if (!firebase.apps.length) {
   firebase.initializeApp({
@@ -12,13 +13,58 @@ if (!firebase.apps.length) {
 }
 const db = firebase.firestore();
 
+// --- Helper: Sync a student's course/club/department ---
+async function syncStudentCourseInfo(studentDocId, studentData, coursesMap, clubsMap, departmentsMap) {
+  const updates = {};
+
+  // Match course (could be string or already ID)
+  let courseDoc = null;
+  if (studentData.course) {
+    if (coursesMap[studentData.course]) {
+      // Already an ID
+      courseDoc = coursesMap[studentData.course];
+    } else {
+      // Match by course name
+      courseDoc = Object.values(coursesMap).find(c => c.course === studentData.course);
+    }
+  }
+
+  if (courseDoc) {
+    updates.course = courseDoc.id;
+
+    // Clubs via courseDoc.clubCodeName
+    if (courseDoc.clubCodeName) {
+      const clubCodes = courseDoc.clubCodeName.split(",").map(c => c.trim());
+      updates.clubs = Object.values(clubsMap)
+        .filter(club => clubCodes.includes(club.codeName))
+        .map(club => club.id);
+    } else {
+      updates.clubs = [];
+    }
+
+    // Department via courseDoc.deptCodeName (match by "code")
+    if (courseDoc.deptCodeName) {
+      const deptDoc = Object.values(departmentsMap)
+        .find(d => d.code === courseDoc.deptCodeName);
+      if (deptDoc) {
+        updates.department = deptDoc.id;
+      }
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await db.collection("Students").doc(studentDocId).update(updates);
+    console.log(`Synced student ${studentData.schoolId || studentDocId}`, updates);
+  }
+}
+
 // Wait for DOM to load
 document.addEventListener("DOMContentLoaded", async () => {
+  // --- Logout ---
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", function (e) {
       e.preventDefault();
-
       const keysToRemove = [
         "userData",
         "studentName",
@@ -31,89 +77,70 @@ document.addEventListener("DOMContentLoaded", async () => {
         "department",
         "adminID"
       ];
-
       keysToRemove.forEach(key => localStorage.removeItem(key));
-
       window.location.href = "../../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
   }
+
+  // --- User display ---
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
+  usernameDisplay.textContent = storedAdminID || "Unknown";
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
-
+  // --- Dropdown menu ---
   const dropdownToggle = document.getElementById("userDropdownToggle");
   const dropdownMenu = document.getElementById("dropdownMenu");
-
-  // Toggle dropdown on click
   dropdownToggle.addEventListener("click", () => {
     dropdownMenu.style.display =
       dropdownMenu.style.display === "block" ? "none" : "block";
   });
-
-  // Hide dropdown if clicked outside
   document.addEventListener("click", (event) => {
     if (!dropdownToggle.contains(event.target) && !dropdownMenu.contains(event.target)) {
       dropdownMenu.style.display = "none";
     }
   });
 
+  // --- Student Table ---
   const tbody = document.querySelector(".log-table tbody");
   if (!tbody) return console.error("Table body not found");
 
   try {
-    // Fetch all students
-    const studentsSnap = await db.collection("Students").get();
-    const students = studentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    // Fetch lookup tables
-    const [clubsSnap, coursesSnap, departmentsSnap, yearLevelsSnap] = await Promise.all([
+    // --- Fetch lookup tables ---
+    const [clubsSnap, coursesSnap, departmentsSnap, yearLevelsSnap, studentsSnap] = await Promise.all([
       db.collection("acadClubTable").get(),
       db.collection("courseTable").get(),
       db.collection("departmentTable").get(),
-      db.collection("yearLevelTable").get()
+      db.collection("yearLevelTable").get(),
+      db.collection("Students").get()
     ]);
 
-    const clubsMap = {};
-    clubsSnap.forEach(doc => {
-      const data = doc.data();
-      clubsMap[doc.id] = data.codeName || "";
-    });
+    // Build lookup maps
+    const clubsMap = {}, coursesMap = {}, departmentsMap = {}, yearLevelsMap = {};
+    clubsSnap.forEach(doc => clubsMap[doc.id] = { id: doc.id, ...doc.data() });
+    coursesSnap.forEach(doc => coursesMap[doc.id] = { id: doc.id, ...doc.data() });
+    departmentsSnap.forEach(doc => departmentsMap[doc.id] = { id: doc.id, ...doc.data() });
+    yearLevelsSnap.forEach(doc => yearLevelsMap[doc.id] = { id: doc.id, ...doc.data() });
 
-    const coursesMap = {};
-    coursesSnap.forEach(doc => {
-      const data = doc.data();
-      coursesMap[doc.id] = data.course || "";
-    });
+    const students = studentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    const departmentsMap = {};
-    departmentsSnap.forEach(doc => {
-      const data = doc.data();
-      departmentsMap[doc.id] = data.department || "";
-    });
-
-    const yearLevelsMap = {};
-    yearLevelsSnap.forEach(doc => {
-      const data = doc.data();
-      yearLevelsMap[doc.id] = data.yearLevel || "";
-    });
-
-    // Render students
-    tbody.innerHTML = ""; // clear existing rows
+    // --- Render students ---
+    tbody.innerHTML = "";
     students.forEach(student => {
-      const clubsNames = Array.isArray(student.clubs)
-        ? student.clubs.map(id => clubsMap[id] || id).join(", ")
-        : "";
+      const courseName = student.course && coursesMap[student.course]
+        ? coursesMap[student.course].course
+        : student.course || "";
 
-      const courseName = coursesMap[student.course] || student.course || "";
-      const deptName = departmentsMap[student.department] || student.department || "";
-      const yearLevelName = yearLevelsMap[student.yearLevel] || student.yearLevel || "";
+      const deptName = student.department && departmentsMap[student.department]
+        ? departmentsMap[student.department].department // shows full name
+        : student.department || "";
+
+      const yearLevelName = student.yearLevel && yearLevelsMap[student.yearLevel]
+        ? yearLevelsMap[student.yearLevel].yearLevel
+        : student.yearLevel || "";
+
+      const clubsNames = Array.isArray(student.clubs)
+        ? student.clubs.map(id => clubsMap[id]?.codeName || id).join(", ")
+        : "";
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -136,19 +163,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     // --- Modal Elements ---
     const editModal = document.getElementById("editModalOverlay");
     const deleteModal = document.getElementById("deleteModalOverlay");
-
     const editStudentId = document.getElementById("editStudentId");
     const editStudentName = document.getElementById("editStudentName");
     const editCancelBtn = document.getElementById("editCancelBtn");
     const editSaveBtn = document.getElementById("editSaveBtn");
-
     const deleteCancelBtn = document.getElementById("deleteCancelBtn");
     const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
+    let currentEditId = null, currentDeleteId = null;
 
-    let currentEditId = null;
-    let currentDeleteId = null;
-
-    // --- Edit Handlers ---
+    // --- Edit ---
     tbody.addEventListener("click", (e) => {
       if (e.target.closest(".edit")) {
         const id = e.target.closest(".edit").dataset.id;
@@ -158,15 +181,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentEditId = id;
         editStudentId.value = student.schoolId || "";
         editStudentName.value = student.firstName + " " + student.lastName;
-
         editModal.style.display = "flex";
       }
     });
-
-    editCancelBtn.addEventListener("click", () => {
-      editModal.style.display = "none";
-    });
-
+    editCancelBtn.addEventListener("click", () => { editModal.style.display = "none"; });
     editSaveBtn.addEventListener("click", async () => {
       if (!currentEditId) return;
       const [firstName, ...rest] = editStudentName.value.trim().split(" ");
@@ -177,26 +195,21 @@ document.addEventListener("DOMContentLoaded", async () => {
           lastName: lastName || ""
         });
         alert("Student updated successfully!");
-        window.location.reload(); // refresh list
+        window.location.reload();
       } catch (err) {
         console.error("Error updating student:", err);
         alert("Failed to update student");
       }
     });
 
-    // --- Delete Handlers ---
+    // --- Delete ---
     tbody.addEventListener("click", (e) => {
       if (e.target.closest(".delete")) {
-        const id = e.target.closest(".delete").dataset.id;
-        currentDeleteId = id;
+        currentDeleteId = e.target.closest(".delete").dataset.id;
         deleteModal.style.display = "flex";
       }
     });
-
-    deleteCancelBtn.addEventListener("click", () => {
-      deleteModal.style.display = "none";
-    });
-
+    deleteCancelBtn.addEventListener("click", () => { deleteModal.style.display = "none"; });
     deleteConfirmBtn.addEventListener("click", async () => {
       if (!currentDeleteId) return;
       try {
@@ -209,9 +222,75 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
+    // --- Excel Upload Integration ---
+    const updateBtn = document.getElementById("updateStudentInfoBtn");
+    if (updateBtn) {
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept = ".xlsx,.xls";
+      fileInput.style.display = "none";
+      document.body.appendChild(fileInput);
+
+      updateBtn.addEventListener("click", () => fileInput.click());
+
+      fileInput.addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+          const data = await file.arrayBuffer();
+          const workbook = XLSX.read(data, { type: "array" });
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(worksheet);
+
+          for (const row of rows) {
+            const schoolId = row["Student ID"]?.toString().trim();
+            if (!schoolId) continue;
+
+            const updates = {};
+
+            // --- Course only as text first ---
+            if (row["Course"]) {
+              updates.course = row["Course"].toString().trim();
+            }
+
+            // --- Year Level ---
+            if (row["Year Level"]) {
+              updates.yearLevel = row["Year Level"].toString().trim();
+            }
+
+            // --- Apply updates ---
+            const snap = await db.collection("Students")
+              .where("schoolId", "==", schoolId)
+              .limit(1)
+              .get();
+            if (!snap.empty) {
+              const studentDoc = snap.docs[0];
+              await db.collection("Students").doc(studentDoc.id).update(updates);
+
+              // --- Normalize course, clubs, department ---
+              await syncStudentCourseInfo(
+                studentDoc.id,
+                { ...studentDoc.data(), ...updates },
+                coursesMap,
+                clubsMap,
+                departmentsMap
+              );
+            }
+          }
+
+          alert("Student info updated and synced successfully from Excel!");
+          window.location.reload();
+        } catch (error) {
+          console.error("Error processing Excel:", error);
+          alert("Failed to process Excel file.");
+        }
+      });
+    }
   } catch (error) {
     console.error("Error loading students:", error);
   }
+
+  initSidebarDropdowns();
 });
 
 // Sidebar dropdowns
@@ -232,4 +311,4 @@ function initSidebarDropdowns() {
     });
   });
 }
-document.addEventListener('DOMContentLoaded', initSidebarDropdowns);
+

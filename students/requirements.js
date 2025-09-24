@@ -1,4 +1,25 @@
+async function loadCurrentSemester(db) {
+  try {
+    const snapshot = await db.collection("semesterTable")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      const semesterData = snapshot.docs[0].data();
+      const semesterName = semesterData.semester || "No Semester Found"; // adjust field name if different
+      document.getElementById("semesterDisplay").textContent = semesterName;
+    } else {
+      document.getElementById("semesterDisplay").textContent = "No Active Semester";
+    }
+  } catch (error) {
+    console.error("Error fetching semester:", error);
+    document.getElementById("semesterDisplay").textContent = "Error Loading Semester";
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
+    await loadCurrentSemester(db);
   const studentId = localStorage.getItem("schoolID");
   if (!studentId) {
     alert("Session expired. Please log in again.");

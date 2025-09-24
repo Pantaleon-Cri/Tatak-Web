@@ -10,7 +10,24 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+<style>
+  .update-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.update-btn:hover {
+  background-color: #218838;
+}
+</style>
 </head>
 <body>
   <!-- HEADER -->
@@ -84,7 +101,13 @@
         <div class="activity-log">
           <div class="log-header">
             <h3>Student Management</h3>
-           
+            <!-- Hidden file input -->
+<input type="file" id="excelFileInput" accept=".xlsx, .xls" style="display:none;">
+<!-- Visible button -->
+<button class="update-btn" id="updateStudentInfoBtn">
+  <i class="fas fa-user-edit"></i> Update Student Info Sheet
+</button>
+
           </div>
 
           <table class="log-table">

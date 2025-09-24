@@ -400,7 +400,7 @@ nav ul ul.submenu > li:first-child {
 .section-header {
   grid-column: 1 / -1;
   font-size: 1.1em;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--dark-grey-text);
   margin-bottom: 10px;
 }
@@ -432,14 +432,16 @@ nav ul ul.submenu > li:first-child {
   opacity: 1;
 }
 
+
+
 .notes-section {
   background-color: var(--light-grey-bg);
   border-radius: 5px;
   padding: 10px;
   border: 1px solid var(--border-color);
   margin-top: -59px;
-  margin-left: -130px;
-   width: 650px;       /* or any fixed width you want */
+  margin-left: -10px;
+   width: 590px;       /* or any fixed width you want */
   max-height: 170px;  /* optional: prevent too tall */
    word-wrap: break-word;
   overflow-wrap: break-word;

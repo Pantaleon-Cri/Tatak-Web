@@ -121,7 +121,7 @@ async function getStudentPrereqs(studentData, currentDesignee) {
       const labCategories = [];
       const labStatusMap = {};
       const labNamesMap = {};
-      const validLabIds = ["201", "202", "203", "204"]; // Only these labs
+      const validLabIds = ["201", "202", "203", "204", "205"]; // Only these labs
 
       const labTablesSnap = await db.collection("labTable").get();
       const allLabs = {};

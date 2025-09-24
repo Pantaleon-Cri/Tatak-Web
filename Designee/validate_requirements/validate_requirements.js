@@ -165,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Populate prerequisite column
   async function populatePrerequisites(students) {
+
     const cells = document.querySelectorAll(".prereq-cell");
 
     for (const cell of cells) {
