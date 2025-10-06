@@ -344,55 +344,7 @@ if (office === "12") {
     // ============================================================
     // 🔹 OFFICE 8 — Lab membership
     // ============================================================
-    if (office === "8") {
-      const labSnapshot = await db
-        .collection("DataTable")
-        .doc("Lab")
-        .collection("LabDocs")
-        .get();
-
-      const labMap = {};
-      labSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        labMap[doc.id] = data.lab || doc.id;
-      });
-
-      const results = [];
-      for (const categoryID of Object.keys(labMap)) {
-        const memberDoc = await db
-          .collection("Membership")
-          .doc(categoryID)
-          .collection("Members")
-          .doc(student.schoolID)
-          .get();
-
-        let cleared = false;
-        let isMember = false;
-
-        if (memberDoc.exists) {
-          isMember = true;
-
-          const validationDoc = await db
-            .collection("Validation")
-            .doc(`8-${categoryID}`)
-            .collection(student.schoolID)
-            .doc(semesterID)
-            .get();
-
-          if (validationDoc.exists) {
-            const data = validationDoc.data();
-            const requirements = data.requirements || [];
-            cleared = requirements.length > 0 && requirements.every(r => r.status === true);
-          }
-        }
-
-        const displayName = isMember ? labMap[categoryID] : "No Lab";
-        results.push(`<span style="color:${isMember ? (cleared ? "green" : "red") : "green"}">${displayName}</span>`);
-      }
-
-      const unique = [...new Set(results)];
-      return unique.join(", ") || "<span style='color:gray;'>No prereqs</span>";
-    }
+    
 
     // 🔹 Default
     return "N/A";

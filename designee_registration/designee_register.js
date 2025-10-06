@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const departmentRef = db.collection("DataTable").doc("Department").collection("DepartmentDocs");
   const clubRef = db.collection("DataTable").doc("Clubs").collection("ClubsDocs");
   const pendingDesigneeRef = db.collection("User").doc("PendingDesignees").collection("PendingDocs");
+  const approvedDesigneeRef = db.collection("User").doc("Designees").collection("DesigneeDocs"); // optional: check approved users
 
   // --- Load Offices ---
   const officeSnapshot = await officeRef.get();
@@ -111,8 +112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             categorySelect.innerHTML = '<option value="">Error loading labs</option>';
         }
     }
-});
-
+  });
 
   // --- Helper: Show Message ---
   function showMessage(message, type = 'error') {
@@ -188,6 +188,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
+      // --- Check if userID already exists in PendingDesignees ---
+      const existingPendingSnap = await pendingDesigneeRef.where("userID", "==", userID).limit(1).get();
+      if (!existingPendingSnap.empty) {
+        showMessage("This User ID is already registered. Please use a different one.");
+        return;
+      }
+
+      // --- Optional: Check approved designees too ---
+      const existingApprovedSnap = await approvedDesigneeRef.where("userID", "==", userID).limit(1).get();
+      if (!existingApprovedSnap.empty) {
+        showMessage("This User ID is already registered and approved. Please use a different one.");
+        return;
+      }
+
       // --- Find Department ID ---
       let departmentID = "";
       if (departmentCode) {

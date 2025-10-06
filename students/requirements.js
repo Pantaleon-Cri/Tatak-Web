@@ -158,6 +158,7 @@ try {
     notesHTML = "";
     notesSnap.forEach(doc => {
       const noteData = doc.data();
+      
       console.log(`Note found for ${designeeID}:`, noteData);
 
       // Only show notes for this designee and current semester
@@ -181,6 +182,7 @@ try {
         ${reqHTML}
         <div class="notes-section">
           <h4>Notes</h4>
+          
           ${notesHTML}
         </div>
       `;

@@ -7,8 +7,7 @@ const semesterIdInput = document.getElementById("semesterId");
 const semesterNameInput = document.getElementById("semesterName");
 const tableBody = document.querySelector("tbody");
 
-// Firestore path (UPDATED STRUCTURE)
-// ✅ Correct path: DataTable > Semester > SemesterDocs > (1, 2, 3, 4)
+// Firestore path
 const semesterRootRef = db.collection("DataTable").doc("Semester").collection("SemesterDocs");
 
 // Open modal
@@ -50,7 +49,7 @@ saveBtn.addEventListener("click", async () => {
     await docRef.set({
       id,
       semester: semesterName,
-      currentSemester: false, // only one field now
+      currentSemester: false
     });
 
     addRowToTable(id, semesterName, false);
@@ -127,12 +126,13 @@ async function handleCurrentSemester(e) {
   const isChecked = e.target.checked;
   if (!isChecked) return;
 
-  if (!confirm("Changing the current semester will delete all staff. Continue?")) {
+  if (!confirm("Changing the current semester will delete all staff and reset officers/violations. Continue?")) {
     e.target.checked = false;
     return;
   }
 
   try {
+    // 1. Update currentSemester field for all semesters
     const snapshot = await semesterRootRef.get();
     const batch = db.batch();
 
@@ -143,19 +143,31 @@ async function handleCurrentSemester(e) {
     });
 
     await batch.commit();
+
+    // 2. Delete all staff
     await deleteAllStaff();
 
-    const studentsSnap = await db.collection("Students").get();
+    // 3. Update students: set new semester and clear officers/violations arrays
+    const studentsSnap = await db.collection("User").doc("Students").collection("StudentsDocs").get();
     const batchStudents = db.batch();
+
     studentsSnap.forEach(studentDoc => {
-      const studentRef = db.collection("Students").doc(studentDoc.id);
-      batchStudents.update(studentRef, { semester: newCurrentId });
+      const studentRef = studentDoc.ref;
+      batchStudents.update(studentRef, {
+        semester: newCurrentId,    // update semester
+        officers: [],               // clear officers array
+        violations: []              // clear violations array
+      });
     });
+
     await batchStudents.commit();
 
+    // 4. Update table toggles visually
     document.querySelectorAll(".current-sem-toggle").forEach(toggle => {
       toggle.checked = toggle.dataset.id === newCurrentId;
     });
+
+    alert("Current semester updated successfully.");
 
   } catch (error) {
     console.error("Error updating current semester:", error);

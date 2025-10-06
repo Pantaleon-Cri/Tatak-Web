@@ -12,8 +12,31 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-  <style>
-    
+  <style>/* Inline filters in table headers */
+
+
+/* Style for select inputs in table headers */
+th.filter-header select {
+
+    font-size: 13px;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    background-color: var(--card-bg);
+    color: var(--dark-grey-text);
+    cursor: pointer;
+    min-width: 90px;
+    transition: all 0.2s ease;
+}
+
+th.filter-header select:hover {
+    border-color: var(--primary-green);
+}
+
+th.filter-header select:focus {
+    outline: none;
+    border-color: var(--primary-green);
+    box-shadow: 0 0 3px rgba(76, 175, 80, 0.4);
+}
   </style>
 </head>
 <body>
@@ -70,6 +93,7 @@
       <input type="text" placeholder="Search by ID or Name" class="search-input" id="searchInput" />
       <button class="search-button"><i class="fas fa-search"></i></button>
     </div>
+ 
 </section>
 
 
@@ -81,8 +105,20 @@
               <th>Officer</th>
               <th>ID No.</th>
               <th>Full Name</th>
-              <th>Dept</th>
-              <th>Year Level</th>
+  <th class="filter-header">
+      <span>Dept</span>
+      <select id="filterDepartment">
+        <option value="">All</option>
+        <!-- Dynamic options will populate here -->
+      </select>
+    </th>
+    <th class="filter-header">
+      <span>Year Level</span>
+      <select id="filterYear">
+        <option value="">All</option>
+        <!-- Dynamic options will populate here -->
+      </select>
+    </th>
               <th>Pre Requisite</th>
               <th>Status</th>
               <th>Action</th>

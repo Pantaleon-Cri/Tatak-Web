@@ -15,12 +15,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  window.db = db; // make db globally accessible
+  window.db = db;
 
   // -------------------- DOM Elements --------------------
   const logoutBtn = document.getElementById("logoutBtn");
   const studentsTableBody = document.getElementById("studentsTableBody");
   const searchInput = document.getElementById("searchInput");
+  const filterDepartment = document.getElementById("filterDepartment");
+  const filterYear = document.getElementById("filterYear");
   const toggle = document.getElementById('userDropdownToggle');
   const menu = document.getElementById('dropdownMenu');
 
@@ -90,6 +92,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // -------------------- Populate Header Filters --------------------
+  function populateHeaderFilters(students) {
+    if (!filterDepartment || !filterYear) return;
+
+    filterDepartment.innerHTML = '<option value="">All</option>';
+    filterYear.innerHTML = '<option value="">All</option>';
+
+    for (const [id, name] of Object.entries(departmentMap)) {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = name;
+      filterDepartment.appendChild(option);
+    }
+
+    for (const [id, name] of Object.entries(yearLevelMap)) {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = name;
+      filterYear.appendChild(option);
+    }
+
+    attachFilterHandlers(students);
+  }
+
+  // -------------------- Filter & Search Handler --------------------
+  function attachFilterHandlers(students) {
+    if (!filterDepartment || !filterYear || !students) return;
+
+    const applyFilters = () => {
+      const deptVal = filterDepartment.value;
+      const yearVal = filterYear.value;
+      const searchTerm = searchInput?.value?.toLowerCase() || "";
+
+      const filtered = students.filter(s => {
+        return (!deptVal || s.originalDepartmentId === deptVal) &&
+               (!yearVal || s.yearLevelId === yearVal) &&
+               (s.schoolID.toLowerCase().includes(searchTerm) || s.fullName.toLowerCase().includes(searchTerm));
+      });
+
+      renderStudents(filtered);
+    };
+
+    filterDepartment.addEventListener("change", applyFilters);
+    filterYear.addEventListener("change", applyFilters);
+
+    if (searchInput) {
+      searchInput.addEventListener("input", applyFilters);
+    }
+  }
+
   // -------------------- Create Student Row --------------------
   function createStudentRow(student) {
     const isViolationChecked = Array.isArray(student.violations) && student.violations.includes(designeeID);
@@ -118,136 +170,90 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     studentsTableBody.innerHTML = students.map(createStudentRow).join("");
 
-    // Call external prereq.js function to populate prerequisites
     if (typeof populatePrerequisites === "function") {
       populatePrerequisites(students, userDataObj);
     }
 
-    // Auto-validate Firestore for each student
     if (typeof openRequirementsModal === "function") {
       students.forEach(stu => openRequirementsModal(stu.schoolID, designeeID, db, { autoRun: true }));
     }
   }
 
-  // -------------------- Search Handler --------------------
-  function attachSearchHandler(students) {
-    if (!searchInput) return;
-    searchInput.addEventListener("input", () => {
-      const searchTerm = searchInput.value.toLowerCase();
-      const filtered = students.filter(s =>
-        s.schoolID.toLowerCase().includes(searchTerm) || s.fullName.toLowerCase().includes(searchTerm)
-      );
-      renderStudents(filtered);
-    });
-  }
-
   // -------------------- Load Students --------------------
   async function loadStudents() {
-  studentsTableBody.innerHTML = "<tr><td colspan='9'>Loading...</td></tr>";
+    studentsTableBody.innerHTML = "<tr><td colspan='9'>Loading...</td></tr>";
 
-  try {
-    // 🔹 Get current semester
-    const semesterSnapshot = await db
-      .collection("DataTable")
-      .doc("Semester")
-      .collection("SemesterDocs")
-      .where("currentSemester", "==", true)
-      .limit(1)
-      .get();
+    try {
+      const semesterSnapshot = await db.collection("DataTable").doc("Semester").collection("SemesterDocs")
+        .where("currentSemester", "==", true).limit(1).get();
 
-    if (semesterSnapshot.empty) {
-      studentsTableBody.innerHTML = "<tr><td colspan='9'>No current semester found.</td></tr>";
-      return;
-    }
-
-    const currentSemesterId = semesterSnapshot.docs[0].id;
-    const snapshot = await db
-      .collection("User")
-      .doc("Students")
-      .collection("StudentsDocs")
-      .get();
-
-    let office, currentCategory, currentDepartment;
-    if (userDataObj) {
-      office = userDataObj.office;
-      currentCategory = userDataObj.category?.toLowerCase();
-      currentDepartment = userDataObj.department;
-    }
-
-    let students = snapshot.docs.map((doc) => {
-      const data = doc.data();
-      const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
-      return {
-        schoolID: doc.id,
-        fullName,
-        department: departmentMap[data.department] || data.department || "",
-        yearLevel: yearLevelMap[data.yearLevel] || data.yearLevel || "",
-        email: data.institutionalEmail || data.gmail || "",
-        clubs: Array.isArray(data.clubs) ? data.clubs.map((c) => String(c).toLowerCase()) : [],
-        semester: data.semester,
-        originalDepartmentId: data.department,
-        violations: Array.isArray(data.violations) ? data.violations : [],
-        officers: Array.isArray(data.officers) ? data.officers : []
-      };
-    });
-
-    // ---------------- Filtering Logic ----------------
-    if (currentCategory === "39" || currentCategory === "41") {
-      students = students.filter((student) => student.semester === currentSemesterId);
-    } 
-    else if (["2", "3", "5", "6", "9", "10", "12"].includes(office)) {
-      students = students.filter((student) => student.semester === currentSemesterId);
-    } 
-    else if (["4", "7", "11"].includes(office)) {
-      students = students.filter(
-        (student) =>
-          currentDepartment &&
-          student.originalDepartmentId === currentDepartment &&
-          student.semester === currentSemesterId
-      );
-    } 
-    else if (["16", "15", "14", "13", "8"].includes(office)) {
-      if (!currentCategory) students = [];
-      else {
-        const membershipRef = db
-          .collection("Membership")
-          .doc(currentCategory)
-          .collection("Members");
-        const membershipSnapshot = await membershipRef.where("semester", "==", currentSemesterId).get();
-        const allowedIDs = membershipSnapshot.docs.map((doc) => doc.id);
-        students = students.filter((student) => allowedIDs.includes(student.schoolID));
+      if (semesterSnapshot.empty) {
+        studentsTableBody.innerHTML = "<tr><td colspan='9'>No current semester found.</td></tr>";
+        return;
       }
-    } 
-    // 🔹 NEW: Generic Category Filter (1–38)
-    else if (!isNaN(currentCategory) && Number(currentCategory) >= 1 && Number(currentCategory) <= 38) {
-      students = students.filter(
-        (student) =>
-          Array.isArray(student.clubs) &&
-          student.clubs.includes(currentCategory) &&
-          student.semester === currentSemesterId
-      );
-    } 
-    else {
-      students = [];
-    }
 
-    // ---------------- Auto Validate ----------------
-    if (designeeID && typeof autoValidateRequirements === "function") {
-      for (const student of students) {
-        await autoValidateRequirements(designeeID, student.schoolID);
+      const currentSemesterId = semesterSnapshot.docs[0].id;
+      const snapshot = await db.collection("User").doc("Students").collection("StudentsDocs").get();
+
+      let office, currentCategory, currentDepartment;
+      if (userDataObj) {
+        office = userDataObj.office;
+        currentCategory = userDataObj.category?.toLowerCase();
+        currentDepartment = userDataObj.department;
       }
-    }
 
-    // ---------------- Render ----------------
-    renderStudents(students);
-    attachSearchHandler(students);
-  } catch (err) {
-    console.error(err);
-    studentsTableBody.innerHTML = "<tr><td colspan='9'>Failed to load students.</td></tr>";
+      let students = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
+        return {
+          schoolID: doc.id,
+          fullName,
+          department: departmentMap[data.department] || data.department || "",
+          originalDepartmentId: data.department,
+          yearLevel: yearLevelMap[data.yearLevel] || data.yearLevel || "",
+          yearLevelId: data.yearLevel || doc.id, // for filtering
+          email: data.institutionalEmail || data.gmail || "",
+          clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
+          semester: data.semester,
+          violations: Array.isArray(data.violations) ? data.violations : [],
+          officers: Array.isArray(data.officers) ? data.officers : []
+        };
+      });
+
+      // ---------------- Example Filtering per Office/Category ----------------
+      if (currentCategory === "39" || currentCategory === "41") {
+        students = students.filter(s => s.semester === currentSemesterId);
+      } else if (["2","3","5","6","9","10","12"].includes(office)) {
+        students = students.filter(s => s.semester === currentSemesterId);
+      } else if (["4","7","11"].includes(office)) {
+        students = students.filter(s => currentDepartment && s.originalDepartmentId === currentDepartment && s.semester === currentSemesterId);
+      } else if (["16","15","14","13","8"].includes(office)) {
+        if (!currentCategory) students = [];
+        else {
+          const membershipRef = db.collection("Membership").doc(currentCategory).collection("Members");
+          const membershipSnapshot = await membershipRef.where("semester","==",currentSemesterId).get();
+          const allowedIDs = membershipSnapshot.docs.map(doc => doc.id);
+          students = students.filter(s => allowedIDs.includes(s.schoolID));
+        }
+      } else if (!isNaN(currentCategory) && Number(currentCategory) >= 1 && Number(currentCategory) <= 38) {
+        students = students.filter(s => Array.isArray(s.clubs) && s.clubs.includes(currentCategory) && s.semester === currentSemesterId);
+      } else {
+        students = [];
+      }
+
+      // Auto-validate
+      if (designeeID && typeof autoValidateRequirements === "function") {
+        for (const student of students) await autoValidateRequirements(designeeID, student.schoolID);
+      }
+
+      // ---------------- Render + Filters ----------------
+      renderStudents(students);
+      populateHeaderFilters(students); // Department + Year filters + attach handlers
+    } catch (err) {
+      console.error(err);
+      studentsTableBody.innerHTML = "<tr><td colspan='9'>Failed to load students.</td></tr>";
+    }
   }
-}
-
-
 
   // -------------------- Update Student Role --------------------
   async function updateStudentRole(studentID, role, checked) {
