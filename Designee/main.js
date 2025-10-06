@@ -1,6 +1,8 @@
 // ✅ Entry point
-
 document.addEventListener("DOMContentLoaded", async () => {
+
+  // -----------------------
+  // Display designee info
   async function loadUserRoleDisplay() {
   const userData = JSON.parse(localStorage.getItem("userData"));
   if (!userData) return;
@@ -9,42 +11,52 @@ document.addEventListener("DOMContentLoaded", async () => {
   const emailDiv = document.getElementById("userRoleDisplay");
 
   try {
-    const userDoc = await db.collection("Designees").doc(userId).get();
+    // Get the user document
+    const userDoc = await db.collection("User").doc("Designees")
+      .collection("DesigneesDocs").doc(userId).get();
+
     if (!userDoc.exists) return;
 
     const data = userDoc.data();
-    let category = data.category || null;
-    let department = data.department || null;
-    let office = data.office || null;
+    let category = data.category || "";
+    let department = data.department || "";
+    let office = data.office || "";
 
-    // Convert category to readable name
+    // 1️⃣ Convert category code to readable club name
     if (category) {
-      let catDoc = await db.collection("acadClubTable").doc(category).get();
-      if (!catDoc.exists) catDoc = await db.collection("groupTable").doc(category).get();
-      if (!catDoc.exists) catDoc = await db.collection("labTable").doc(category).get();
-      category = catDoc.exists ? (catDoc.data().club || catDoc.data().group || catDoc.data().lab) : category;
+      const catDoc = await db.collection("DataTable").doc("Clubs")
+        .collection("ClubsDocs").doc(category).get();
+      if (catDoc.exists) {
+        category = catDoc.data().club || category;
+      }
     }
 
-    // Convert department to readable
+    // 2️⃣ Convert department code to readable name
     if (department) {
-      const deptDoc = await db.collection("departmentTable").doc(department).get();
-      department = deptDoc.exists ? deptDoc.data().department : department;
+      const deptDoc = await db.collection("DataTable").doc("Department")
+        .collection("DepartmentDocs").doc(department).get();
+      if (deptDoc.exists) {
+        department = deptDoc.data().code || department;
+      }
     }
 
-    // Convert office to readable
+    // 3️⃣ Convert office code to readable name
     if (office) {
-      const officeDoc = await db.collection("officeTable").doc(office).get();
-      office = officeDoc.exists ? officeDoc.data().office : office;
+      const officeDoc = await db.collection("DataTable").doc("Office")
+        .collection("OfficeDocs").doc(office).get();
+      if (officeDoc.exists) {
+        office = officeDoc.data().office || office;
+      }
     }
 
-    // Build display string
+    // Build the display string
     let displayText = "";
     if (category) {
       displayText = category;
     } else if (department) {
-      displayText = `${department} - ${office || ""}`;
+      displayText = `${department} - ${office}`;
     } else {
-      displayText = office || "";
+      displayText = office;
     }
 
     emailDiv.textContent = displayText;
@@ -55,11 +67,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 }
 
-// Call the function after page loads
 
-  loadUserRoleDisplay();
+  // Call display function
+  await loadUserRoleDisplay();
 
-
+  // -----------------------
   setupLogoutButton();
   setupDropdownToggle();
 
@@ -73,11 +85,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
+  // Setup add staff modal and load staff
   setupAddStaffModal();
   await getDesigneeInfoAndLoadStaff(userData.id);
   
 });
-// ---------- Modal Controls ----------
+
+// -----------------------
+// Modal Controls
 function setupAddStaffModal() {
   const openBtn = document.getElementById("openModalBtn");
   const modalOverlay = document.getElementById("modalOverlay");
@@ -88,7 +103,7 @@ function setupAddStaffModal() {
   // Open modal
   if (openBtn) {
     openBtn.addEventListener("click", () => {
-      modalOverlay.style.display = "flex"; // flex centers it
+      modalOverlay.style.display = "flex";
     });
   }
 
@@ -103,18 +118,19 @@ function setupAddStaffModal() {
   // Generate password
   if (generateBtn) {
     generateBtn.addEventListener("click", () => {
-      const pass = Math.random().toString(36).slice(-8); // random 8-char password
+      const pass = Math.random().toString(36).slice(-8);
       document.getElementById("generatedPassword").value = pass;
     });
   }
 
   // Save staff
   if (saveBtn) {
-    saveBtn.addEventListener("click", saveNewStaff); // 👈 your function from staff.js
+    saveBtn.addEventListener("click", window.saveNewStaff);
   }
 }
 
-// Reset inputs when closing
+// -----------------------
+// Reset modal inputs
 function clearModalInputs() {
   document.getElementById("staffId").value = "";
   document.getElementById("firstName").value = "";
@@ -123,9 +139,10 @@ function clearModalInputs() {
   document.getElementById("generatedPassword").value = "";
 }
 
+// -----------------------
+// Display designee full name
 const usernameDisplay = document.getElementById("usernameDisplay");
-
-let designeeFullName = ""; // initialize
+let designeeFullName = "";
 
 const userDataString = localStorage.getItem("userData");
 if (userDataString) {
@@ -133,8 +150,6 @@ if (userDataString) {
     const userDataObj = JSON.parse(userDataString);
     const firstName = userDataObj.firstName || "";
     const lastName = userDataObj.lastName || "";
-    
-    // Combine first and last name with a space
     designeeFullName = `${firstName} ${lastName}`.trim();
   } catch (err) {
     console.error(err);
@@ -142,3 +157,19 @@ if (userDataString) {
 }
 
 usernameDisplay.textContent = designeeFullName;
+
+// -----------------------
+// Get designee info & load staff
+async function getDesigneeInfoAndLoadStaff(userId) {
+  const doc = await db.collection("User").doc("Designees")
+    .collection("DesigneesDocs").doc(userId).get();
+  
+  if (!doc.exists) return;
+
+  const d = doc.data();
+  window.userOffice = d.office || "";
+  window.userCategory = d.category || "";
+  window.userDepartment = d.department || "";
+
+  await loadAllStaff(); // load staff under StaffDocs
+}

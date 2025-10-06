@@ -28,8 +28,13 @@ document.getElementById('registrationForm').addEventListener('submit', async (e)
   messageBox.textContent = 'Logging in...';
 
   try {
-    // Get student document from Firestore
-    const doc = await db.collection('Students').doc(schoolID).get();
+    // ✅ Refer to correct Firestore path
+    const doc = await db
+      .collection('User')
+      .doc('Students')
+      .collection('StudentsDocs')
+      .doc(schoolID)
+      .get();
 
     if (!doc.exists) {
       messageBox.style.color = 'red';
@@ -40,7 +45,7 @@ document.getElementById('registrationForm').addEventListener('submit', async (e)
     const studentData = doc.data();
 
     if (studentData.password === password) {
-      // ✅ Save student ID to localStorage instead of sessionStorage
+      // ✅ Save student ID and name to localStorage
       localStorage.setItem('schoolID', schoolID);
       localStorage.setItem('studentName', `${studentData.firstName} ${studentData.lastName}`);
 

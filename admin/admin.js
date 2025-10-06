@@ -12,16 +12,16 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-
 document.addEventListener('DOMContentLoaded', () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
 
   if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
+    usernameDisplay.textContent = storedAdminID; // show saved ID
   } else {
     usernameDisplay.textContent = "Unknown"; // fallback
   }
+
   // ✅ Logout button
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
@@ -42,20 +42,20 @@ document.addEventListener('DOMContentLoaded', () => {
       ];
 
       keysToRemove.forEach(key => localStorage.removeItem(key));
-
       window.location.href = "../../logout.html";
     });
   }
-// ✅ Toggle submenu
-function toggleSubMenu(id) {
-  const submenu = document.getElementById(id);
-  submenu.style.display = submenu.style.display === 'block' ? 'none' : 'block';
 
-  const chevron = document.getElementById('accountsChevron');
-  if (chevron) {
-    chevron.classList.toggle('rotated');
+  // ✅ Toggle submenu
+  function toggleSubMenu(id) {
+    const submenu = document.getElementById(id);
+    submenu.style.display = submenu.style.display === 'block' ? 'none' : 'block';
+
+    const chevron = document.getElementById('accountsChevron');
+    if (chevron) {
+      chevron.classList.toggle('rotated');
+    }
   }
-}
 
   // ✅ User dropdown toggle
   const toggle = document.getElementById('userDropdownToggle');
@@ -91,10 +91,12 @@ document.querySelectorAll('.dropdown-toggle').forEach(toggle => {
 // ✅ Get counts and update dashboard
 async function updateDashboardCounts() {
   try {
-    const studentsSnap = await db.collection("Students").get();
-    const designeeSnap = await db.collection("Designees").get();
-    const staffSnap = await db.collection("staffTable").get();
+    // 🔹 Updated Firestore paths
+    const studentsSnap = await db.collection("/User/Students/StudentsDocs").get();
+    const designeeSnap = await db.collection("/User/Designees/DesigneesDocs").get();
+    const staffSnap = await db.collection("/User/Designees/StaffDocs").get();
 
+    // 🔹 Update DOM counts
     const studentCount = document.getElementById("studentCount");
     const designeeCount = document.getElementById("designeeCount");
     const staffCount = document.getElementById("staffCount");

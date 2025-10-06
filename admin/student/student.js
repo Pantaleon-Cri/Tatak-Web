@@ -1,4 +1,3 @@
-
 // Initialize Firebase v8 (if not already initialized)
 if (!firebase.apps.length) {
   firebase.initializeApp({
@@ -21,10 +20,8 @@ async function syncStudentCourseInfo(studentDocId, studentData, coursesMap, club
   let courseDoc = null;
   if (studentData.course) {
     if (coursesMap[studentData.course]) {
-      // Already an ID
       courseDoc = coursesMap[studentData.course];
     } else {
-      // Match by course name
       courseDoc = Object.values(coursesMap).find(c => c.course === studentData.course);
     }
   }
@@ -53,7 +50,7 @@ async function syncStudentCourseInfo(studentDocId, studentData, coursesMap, club
   }
 
   if (Object.keys(updates).length > 0) {
-    await db.collection("Students").doc(studentDocId).update(updates);
+    await db.collection("/User/Students/StudentsDocs").doc(studentDocId).update(updates);
     console.log(`Synced student ${studentData.schoolId || studentDocId}`, updates);
   }
 }
@@ -107,11 +104,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   try {
     // --- Fetch lookup tables ---
     const [clubsSnap, coursesSnap, departmentsSnap, yearLevelsSnap, studentsSnap] = await Promise.all([
-      db.collection("acadClubTable").get(),
-      db.collection("courseTable").get(),
-      db.collection("departmentTable").get(),
-      db.collection("yearLevelTable").get(),
-      db.collection("Students").get()
+      db.collection("/DataTable/Clubs/ClubsDocs").get(),
+      db.collection("/DataTable/Course/CourseDocs").get(),
+      db.collection("/DataTable/Department/DepartmentDocs").get(),
+      db.collection("/DataTable/YearLevel/YearLevelDocs").get(),
+      db.collection("/User/Students/StudentsDocs").get()
     ]);
 
     // Build lookup maps
@@ -131,15 +128,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         : student.course || "";
 
       const deptName = student.department && departmentsMap[student.department]
-        ? departmentsMap[student.department].department // shows full name
+        ? departmentsMap[student.department].department
         : student.department || "";
 
       const yearLevelName = student.yearLevel && yearLevelsMap[student.yearLevel]
         ? yearLevelsMap[student.yearLevel].yearLevel
         : student.yearLevel || "";
 
+      // Convert club IDs to readable codes
       const clubsNames = Array.isArray(student.clubs)
-        ? student.clubs.map(id => clubsMap[id]?.codeName || id).join(", ")
+        ? student.clubs.map(id => clubsMap[id]?.code || id).join(", ")
         : "";
 
       const tr = document.createElement("tr");
@@ -190,7 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const [firstName, ...rest] = editStudentName.value.trim().split(" ");
       const lastName = rest.join(" ");
       try {
-        await db.collection("Students").doc(currentEditId).update({
+        await db.collection("/User/Students/StudentsDocs").doc(currentEditId).update({
           firstName: firstName || "",
           lastName: lastName || ""
         });
@@ -213,7 +211,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     deleteConfirmBtn.addEventListener("click", async () => {
       if (!currentDeleteId) return;
       try {
-        await db.collection("Students").doc(currentDeleteId).delete();
+        await db.collection("/User/Students/StudentsDocs").doc(currentDeleteId).delete();
         alert("Student deleted successfully!");
         window.location.reload();
       } catch (err) {
@@ -247,25 +245,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!schoolId) continue;
 
             const updates = {};
+            if (row["Course"]) updates.course = row["Course"].toString().trim();
+            if (row["Year Level"]) updates.yearLevel = row["Year Level"].toString().trim();
 
-            // --- Course only as text first ---
-            if (row["Course"]) {
-              updates.course = row["Course"].toString().trim();
-            }
-
-            // --- Year Level ---
-            if (row["Year Level"]) {
-              updates.yearLevel = row["Year Level"].toString().trim();
-            }
-
-            // --- Apply updates ---
-            const snap = await db.collection("Students")
+            const snap = await db.collection("/User/Students/StudentsDocs")
               .where("schoolId", "==", schoolId)
               .limit(1)
               .get();
+
             if (!snap.empty) {
               const studentDoc = snap.docs[0];
-              await db.collection("Students").doc(studentDoc.id).update(updates);
+              await db.collection("/User/Students/StudentsDocs").doc(studentDoc.id).update(updates);
 
               // --- Normalize course, clubs, department ---
               await syncStudentCourseInfo(
@@ -311,4 +301,3 @@ function initSidebarDropdowns() {
     });
   });
 }
-

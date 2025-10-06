@@ -1,18 +1,22 @@
-
-
 // DOM Elements
 const openBtn = document.getElementById("openModalBtn");
 const modal = document.getElementById("modalOverlay");
 const cancelBtn = document.getElementById("cancelBtn");
 const saveBtn = document.querySelector(".save-btn");
-const labIdInput = document.getElementById("labId");         // <-- ID field
+const labIdInput = document.getElementById("labId");
 const labInput = document.getElementById("labName");
 const tableBody = document.querySelector("tbody");
+
+// Firestore collection reference (UPDATED)
+const labCollection = db
+  .collection("DataTable")
+  .doc("Lab")
+  .collection("LabDocs");
 
 // Open modal
 openBtn.addEventListener("click", () => {
   labIdInput.value = "";
-  labIdInput.disabled = false;                              // Enable input when adding
+  labIdInput.disabled = false;
   labInput.value = "";
   modal.style.display = "flex";
 });
@@ -22,7 +26,7 @@ cancelBtn.addEventListener("click", () => {
   modal.style.display = "none";
 });
 
-// Close modal on outside click
+// Close modal when clicking outside
 modal.addEventListener("click", (e) => {
   if (e.target === modal) {
     modal.style.display = "none";
@@ -33,15 +37,23 @@ modal.addEventListener("click", (e) => {
 saveBtn.addEventListener("click", async () => {
   const id = labIdInput.value.trim();
   const labName = labInput.value.trim();
+
   if (!id || !labName) {
     alert("Please enter both ID no. and lab name.");
     return;
   }
 
   try {
-    await db.collection("labTable").doc(id).set({
+    const docRef = labCollection.doc(id);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+      alert("Lab ID already exists!");
+      return;
+    }
+
+    await docRef.set({
       id: id,
-      lab: labName
+      lab: labName,
     });
 
     addRowToTable(id, labName);
@@ -52,21 +64,16 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
-// Load labs on page load
+// Load lab on page load
 window.addEventListener("DOMContentLoaded", async () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
+  usernameDisplay.textContent = storedAdminID || "Unknown";
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
-    logoutBtn.addEventListener("click", function (e) {
+    logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
-
       const keysToRemove = [
         "userData",
         "studentName",
@@ -76,28 +83,27 @@ window.addEventListener("DOMContentLoaded", async () => {
         "designeeID",
         "category",
         "office",
-        "department"
+        "department",
       ];
-
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
       window.location.href = "../../../logout.html";
     });
   } else {
     console.warn("logoutBtn not found");
   }
+
   try {
-    const snapshot = await db.collection("labTable").get();
+    const snapshot = await labCollection.get();
     const docs = snapshot.docs
-      .filter(doc => !isNaN(parseInt(doc.id)))
+      .filter((doc) => !isNaN(parseInt(doc.id)))
       .sort((a, b) => parseInt(a.id) - parseInt(b.id));
 
-    docs.forEach(doc => {
+    docs.forEach((doc) => {
       const data = doc.data();
       addRowToTable(doc.id, data.lab);
     });
   } catch (error) {
-    console.error("Error loading labs:", error);
+    console.error("Error loading lab:", error);
   }
 });
 
@@ -118,32 +124,27 @@ function addRowToTable(id, name) {
   row.querySelector(".delete").addEventListener("click", handleDelete);
 }
 
-// Reference modals
+// ===== EDIT LAB =====
 const editModal = document.getElementById("editModalOverlay");
 const editlabInput = document.getElementById("editlabName");
 const editCancelBtn = document.getElementById("editCancelBtn");
 const editSaveBtn = document.getElementById("editSaveBtn");
 
-const deleteModal = document.getElementById("deleteModalOverlay");
-const deleteCancelBtn = document.getElementById("deleteCancelBtn");
-const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
-
 let currentEditId = null;
-let currentDeleteId = null;
-let currentDeleteRow = null;
 
-// Handle Edit Icon Click
 async function handleEdit(e) {
   const id = e.currentTarget.dataset.id;
-  const row = e.currentTarget.closest("tr");
-  const nameCell = row.querySelector("td:nth-child(2)");
   currentEditId = id;
 
-  editlabInput.value = nameCell.textContent.trim();
+  const docSnap = await labCollection.doc(id).get();
+  if (!docSnap.exists) return;
+
+  const data = docSnap.data();
+  editlabInput.value = data.lab || "";
+
   editModal.style.display = "flex";
 }
 
-// Save Edit from Modal
 editSaveBtn.addEventListener("click", async () => {
   const newName = editlabInput.value.trim();
   if (!newName) {
@@ -152,9 +153,13 @@ editSaveBtn.addEventListener("click", async () => {
   }
 
   try {
-    await db.collection("labTable").doc(currentEditId).update({ lab: newName });
-    const row = document.querySelector(`.edit[data-id="${currentEditId}"]`).closest("tr");
+    await labCollection.doc(currentEditId).update({ lab: newName });
+
+    const row = document
+      .querySelector(`.edit[data-id="${currentEditId}"]`)
+      .closest("tr");
     row.querySelector("td:nth-child(2)").textContent = newName;
+
     editModal.style.display = "none";
     currentEditId = null;
   } catch (error) {
@@ -168,7 +173,14 @@ editCancelBtn.addEventListener("click", () => {
   currentEditId = null;
 });
 
-// Handle Delete Icon Click
+// ===== DELETE LAB =====
+const deleteModal = document.getElementById("deleteModalOverlay");
+const deleteCancelBtn = document.getElementById("deleteCancelBtn");
+const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
+
+let currentDeleteId = null;
+let currentDeleteRow = null;
+
 function handleDelete(e) {
   currentDeleteId = e.currentTarget.dataset.id;
   currentDeleteRow = e.currentTarget.closest("tr");
@@ -182,7 +194,7 @@ deleteCancelBtn.addEventListener("click", () => {
 
 deleteConfirmBtn.addEventListener("click", async () => {
   try {
-    await db.collection("labTable").doc(currentDeleteId).delete();
+    await labCollection.doc(currentDeleteId).delete();
     currentDeleteRow.remove();
     deleteModal.style.display = "none";
     currentDeleteId = null;
@@ -192,12 +204,11 @@ deleteConfirmBtn.addEventListener("click", async () => {
   }
 });
 
-// Upload
+// ===== UPLOAD lab FROM EXCEL =====
 const uploadBtn = document.getElementById("uploadBtn");
 const uploadInput = document.getElementById("uploadInput");
 
 uploadBtn.addEventListener("click", () => uploadInput.click());
-
 uploadInput.addEventListener("change", handleFileUpload);
 
 async function handleFileUpload(e) {
@@ -208,8 +219,7 @@ async function handleFileUpload(e) {
   reader.onload = async function (event) {
     const data = new Uint8Array(event.target.result);
     const workbook = XLSX.read(data, { type: "array" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const jsonData = XLSX.utils.sheet_to_json(sheet);
 
     for (const row of jsonData) {
@@ -218,11 +228,11 @@ async function handleFileUpload(e) {
       if (!id || !labName) continue;
 
       try {
-        await db.collection("labTable").doc(id).set({
-          id: id,
-          lab: labName
-        });
+        const docRef = labCollection.doc(id);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) continue;
 
+        await docRef.set({ id, lab: labName });
         addRowToTable(id, labName);
       } catch (error) {
         console.error(`Failed to upload ${labName} (ID: ${id}):`, error);

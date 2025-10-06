@@ -1,5 +1,3 @@
-
-
 // DOM Elements
 const openBtn = document.getElementById("openModalBtn");
 const modal = document.getElementById("modalOverlay");
@@ -8,6 +6,13 @@ const saveBtn = document.querySelector(".save-btn");
 const idInput = document.getElementById("yearLevelId");
 const yearInput = document.getElementById("yearLevelName");
 const tableBody = document.querySelector("tbody");
+
+// Firestore reference — "YearLevel" is a *collection* under DataTable
+const yearLevelRef = db.collection("DataTable").doc("YearLevel").collection("List"); // We'll correct this below
+
+// ❌ Remove the old line above — we don’t want “List”
+// ✅ Replace with direct collection:
+const yearLevelsRef = db.collection("DataTable").doc("YearLevel").collection;
 
 // Open modal
 openBtn.addEventListener("click", () => {
@@ -28,7 +33,7 @@ modal.addEventListener("click", (e) => {
   }
 });
 
-// Save new year level
+// Save new year level manually
 saveBtn.addEventListener("click", async () => {
   const yearLevelId = idInput.value.trim();
   const yearLevelName = yearInput.value.trim();
@@ -39,8 +44,9 @@ saveBtn.addEventListener("click", async () => {
   }
 
   try {
-    const docRef = db.collection("yearLevelTable").doc(yearLevelId);
+    const docRef = db.collection("DataTable").doc("YearLevel").collection("YearLevelDocs").doc(yearLevelId);
     const docSnap = await docRef.get();
+
     if (docSnap.exists) {
       alert("ID already exists. Please use a unique ID.");
       return;
@@ -65,10 +71,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   const storedAdminID = localStorage.getItem("adminID");
 
   if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
+    usernameDisplay.textContent = storedAdminID;
   } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
+    usernameDisplay.textContent = "Unknown";
   }
+
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", function (e) {
@@ -87,21 +94,24 @@ window.addEventListener("DOMContentLoaded", async () => {
       ];
 
       keysToRemove.forEach(key => localStorage.removeItem(key));
-
       window.location.href = "../../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
   }
-  try {
-    const snapshot = await db.collection("yearLevelTable").get();
-    const docs = snapshot.docs
-      .filter(doc => !isNaN(parseInt(doc.id)))
-      .sort((a, b) => parseInt(a.id) - parseInt(b.id));
 
-    docs.forEach(doc => {
+  try {
+    // Get all documents directly inside DataTable > YearLevel
+    const yearLevelsSnapshot = await db.collection("DataTable").doc("YearLevel").collection("YearLevelDocs").get();
+
+    if (yearLevelsSnapshot.empty) {
+      console.warn("No YearLevel documents found.");
+      return;
+    }
+
+    const sortedDocs = yearLevelsSnapshot.docs.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+
+    sortedDocs.forEach((doc) => {
       const data = doc.data();
-      addRowToTable(doc.id, data.yearLevel);
+      addRowToTable(data.id, data.yearLevel);
     });
   } catch (error) {
     console.error("Error loading year levels:", error);
@@ -160,7 +170,10 @@ editSaveBtn.addEventListener("click", async () => {
   }
 
   try {
-    await db.collection("yearLevelTable").doc(currentEditId).update({ yearLevel: newName });
+    await db.collection("DataTable").doc("YearLevel").collection("YearLevelDocs").doc(currentEditId).update({
+      yearLevel: newName
+    });
+
     const row = document.querySelector(`.edit[data-id="${currentEditId}"]`).closest("tr");
     row.querySelector("td:nth-child(2)").textContent = newName;
     editModal.style.display = "none";
@@ -190,7 +203,7 @@ deleteCancelBtn.addEventListener("click", () => {
 
 deleteConfirmBtn.addEventListener("click", async () => {
   try {
-    await db.collection("yearLevelTable").doc(currentDeleteId).delete();
+    await db.collection("DataTable").doc("YearLevel").collection("YearLevelDocs").doc(currentDeleteId).delete();
     currentDeleteRow.remove();
     deleteModal.style.display = "none";
     currentDeleteId = null;
@@ -220,12 +233,16 @@ async function handleFileUpload(e) {
 
     for (const row of jsonData) {
       const id = row["ID no."]?.toString().trim();
-      const yearLevelName = row["Year Level"]?.trim();
+      const yearLevelName =
+        row["Year"]?.trim() ||
+        row["Year Level"]?.trim() ||
+        row["year"]?.trim() ||
+        row["yearLevel"]?.trim();
 
       if (!id || !yearLevelName) continue;
 
       try {
-        const docRef = db.collection("yearLevelTable").doc(id);
+        const docRef = db.collection("DataTable").doc("YearLevel").collection("YearLevelDocs").doc(id);
         const docSnap = await docRef.get();
         if (docSnap.exists) continue;
 

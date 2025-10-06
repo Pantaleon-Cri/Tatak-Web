@@ -1,5 +1,4 @@
-
-// DOM Elements
+// ======================= DOM ELEMENTS =======================
 const openBtn = document.getElementById("openModalBtn");
 const modal = document.getElementById("modalOverlay");
 const cancelBtn = document.getElementById("cancelBtn");
@@ -10,7 +9,7 @@ const departmentCodeInput = document.getElementById("departmentCode");
 const departmentNameInput = document.getElementById("departmentName");
 const tableBody = document.querySelector("tbody");
 
-// Open modal
+// ======================= OPEN / CLOSE MODAL =======================
 openBtn.addEventListener("click", () => {
   departmentIdInput.value = "";
   departmentCodeInput.value = "";
@@ -18,19 +17,15 @@ openBtn.addEventListener("click", () => {
   modal.style.display = "flex";
 });
 
-// Cancel modal
 cancelBtn.addEventListener("click", () => {
   modal.style.display = "none";
 });
 
-// Close modal on outside click
 modal.addEventListener("click", (e) => {
-  if (e.target === modal) {
-    modal.style.display = "none";
-  }
+  if (e.target === modal) modal.style.display = "none";
 });
 
-// Save new department
+// ======================= SAVE NEW DEPARTMENT =======================
 saveBtn.addEventListener("click", async () => {
   const id = departmentIdInput.value.trim();
   const code = departmentCodeInput.value.trim();
@@ -42,7 +37,12 @@ saveBtn.addEventListener("click", async () => {
   }
 
   try {
-    const docRef = db.collection("departmentTable").doc(id);
+    const docRef = db
+      .collection("DataTable")
+      .doc("Department")
+      .collection("DepartmentDocs")
+      .doc(id);
+
     const docSnapshot = await docRef.get();
 
     if (docSnapshot.exists) {
@@ -59,22 +59,17 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
-// Load departments on page load
+// ======================= LOAD DATA ON PAGE LOAD =======================
 window.addEventListener("DOMContentLoaded", async () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
-  const logoutBtn = document.getElementById("logoutBtn");
+  usernameDisplay.textContent = storedAdminID || "Unknown";
 
+  const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", function (e) {
       e.preventDefault();
-
       const keysToRemove = [
         "userData",
         "studentName",
@@ -86,17 +81,17 @@ window.addEventListener("DOMContentLoaded", async () => {
         "office",
         "department"
       ];
-
       keysToRemove.forEach(key => localStorage.removeItem(key));
-
       window.location.href = "../../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
   }
+
   try {
-    tableBody.innerHTML = ""; // Clear previous
-    const snapshot = await db.collection("departmentTable")
+    tableBody.innerHTML = "";
+    const snapshot = await db
+      .collection("DataTable")
+      .doc("Department")
+      .collection("DepartmentDocs")
       .orderBy(firebase.firestore.FieldPath.documentId())
       .get();
 
@@ -110,7 +105,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
-// Add row to table
+// ======================= ADD ROW FUNCTION =======================
 function addRowToTable(id, code, name) {
   const row = document.createElement("tr");
   row.innerHTML = `
@@ -128,7 +123,7 @@ function addRowToTable(id, code, name) {
   row.querySelector(".delete").addEventListener("click", handleDelete);
 }
 
-// Edit Modal
+// ======================= EDIT MODAL =======================
 const editModal = document.getElementById("editModalOverlay");
 const editDepartmentId = document.getElementById("editDepartmentId");
 const editDepartmentCode = document.getElementById("editDepartmentCode");
@@ -138,7 +133,6 @@ const editSaveBtn = document.getElementById("editSaveBtn");
 
 let currentEditId = null;
 
-// Handle Edit
 function handleEdit(e) {
   const id = e.currentTarget.dataset.id;
   const row = e.currentTarget.closest("tr");
@@ -147,14 +141,13 @@ function handleEdit(e) {
 
   currentEditId = id;
   editDepartmentId.value = id;
-  editDepartmentId.disabled = true; // Prevent changing ID
+  editDepartmentId.disabled = true;
   editDepartmentCode.value = code;
   editDepartmentName.value = name;
 
   editModal.style.display = "flex";
 }
 
-// Save edit
 editSaveBtn.addEventListener("click", async () => {
   const newCode = editDepartmentCode.value.trim();
   const newName = editDepartmentName.value.trim();
@@ -165,10 +158,15 @@ editSaveBtn.addEventListener("click", async () => {
   }
 
   try {
-    await db.collection("departmentTable").doc(currentEditId).update({
-      code: newCode,
-      department: newName
-    });
+    await db
+      .collection("DataTable")
+      .doc("Department")
+      .collection("DepartmentDocs")
+      .doc(currentEditId)
+      .update({
+        code: newCode,
+        department: newName
+      });
 
     const row = document.querySelector(`.edit[data-id="${currentEditId}"]`).closest("tr");
     row.querySelector("td:nth-child(2)").textContent = newCode;
@@ -187,7 +185,7 @@ editCancelBtn.addEventListener("click", () => {
   currentEditId = null;
 });
 
-// Delete modal
+// ======================= DELETE MODAL =======================
 const deleteModal = document.getElementById("deleteModalOverlay");
 const deleteCancelBtn = document.getElementById("deleteCancelBtn");
 const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
@@ -195,7 +193,6 @@ const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
 let currentDeleteId = null;
 let currentDeleteRow = null;
 
-// Handle delete
 function handleDelete(e) {
   currentDeleteId = e.currentTarget.dataset.id;
   currentDeleteRow = e.currentTarget.closest("tr");
@@ -209,7 +206,13 @@ deleteCancelBtn.addEventListener("click", () => {
 
 deleteConfirmBtn.addEventListener("click", async () => {
   try {
-    await db.collection("departmentTable").doc(currentDeleteId).delete();
+    await db
+      .collection("DataTable")
+      .doc("Department")
+      .collection("DepartmentDocs")
+      .doc(currentDeleteId)
+      .delete();
+
     currentDeleteRow.remove();
     deleteModal.style.display = "none";
     currentDeleteId = null;
@@ -219,7 +222,7 @@ deleteConfirmBtn.addEventListener("click", async () => {
   }
 });
 
-// Upload File
+// ======================= UPLOAD EXCEL FILE =======================
 const uploadBtn = document.getElementById("uploadBtn");
 const uploadInput = document.getElementById("uploadInput");
 
@@ -244,7 +247,12 @@ async function handleFileUpload(e) {
       if (!id || !code || !name) continue;
 
       try {
-        const docRef = db.collection("departmentTable").doc(id);
+        const docRef = db
+          .collection("DataTable")
+          .doc("Department")
+          .collection("DepartmentDocs")
+          .doc(id);
+
         const docSnap = await docRef.get();
         if (docSnap.exists) continue;
 
@@ -258,5 +266,6 @@ async function handleFileUpload(e) {
     alert("Upload complete!");
     uploadInput.value = "";
   };
+
   reader.readAsArrayBuffer(file);
 }

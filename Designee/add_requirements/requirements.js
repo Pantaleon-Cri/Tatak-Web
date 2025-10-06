@@ -1,19 +1,21 @@
 let currentEditingId = null;
 let currentEditingInput = null;
-let yearLevelOptions = []; // store year level options globally
+let yearLevelOptions = []; // store year level options globally as { id, name }
 const roleOptions = ["None", "Violation", "Officer"]; // dropdown for role
 
 function showModal(modal) { modal.style.display = "flex"; }
 function closeModal(modal) { modal.style.display = "none"; }
 
-// 🔹 Fetch yearLevel options once from Firestore
+// 🔹 Fetch yearLevel options once from Firestore (store as objects with id & name)
 async function loadYearLevelOptions() {
   try {
-    const snapshot = await db.collection("yearLevelTable").get();
-    yearLevelOptions = snapshot.docs.map(doc => doc.data().yearLevel).filter(Boolean);
+    const snapshot = await db.collection("DataTable").doc("YearLevel").collection("YearLevelDocs").get();
+    yearLevelOptions = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().yearLevel })).filter(Boolean);
 
-    // Always include "All" as the first option
-    if (!yearLevelOptions.includes("All")) yearLevelOptions.unshift("All");
+    // Add "All" option with a special ID of "all"
+    if (!yearLevelOptions.some(opt => opt.name === "All")) {
+      yearLevelOptions.unshift({ id: "all", name: "All" });
+    }
 
     console.log("Loaded year levels:", yearLevelOptions);
   } catch (err) {
@@ -21,22 +23,37 @@ async function loadYearLevelOptions() {
   }
 }
 
-function addRequirementToUI(requirementText, docId, semester, yearLevel, roleField) {
+// 🔹 Get current semester document (id + name)
+async function getCurrentSemester() {
+  try {
+    const snapshot = await db.collection("DataTable").doc("Semester").collection("SemesterDocs")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
+    if (snapshot.empty) return null;
+    const semDoc = snapshot.docs[0];
+    return { id: semDoc.id, semester: semDoc.data().semester };
+  } catch (err) {
+    console.error("Failed to get current semester:", err);
+    return null;
+  }
+}
+
+// 🔹 Add requirement to UI
+function addRequirementToUI(requirementText, docId, semesterId, yearLevelId, roleField, userData) {
   const list = document.getElementById("requirementsList");
-  if (list.querySelector(`[data-id="${docId}"]`)) return; // prevent duplicates
+  if (list.querySelector(`[data-id="${docId}"]`)) return;
 
   const row = document.createElement("div");
   row.classList.add("item-row");
   if (docId) row.setAttribute("data-id", docId);
 
-  // YearLevel dropdown
   const yearLevelDropdownHtml = `
     <select class="yearlevel-dropdown">
-      ${yearLevelOptions.map(opt => `<option value="${opt}" ${opt === (yearLevel || "All") ? "selected" : ""}>${opt}</option>`).join("")}
+      ${yearLevelOptions.map(opt => `<option value="${opt.id}" ${opt.id === (yearLevelId || "all") ? "selected" : ""}>${opt.name}</option>`).join("")}
     </select>
   `;
 
-  // Role dropdown
   const roleDropdownHtml = `
     <select class="role-dropdown">
       ${roleOptions.map(opt => {
@@ -65,38 +82,42 @@ function addRequirementToUI(requirementText, docId, semester, yearLevel, roleFie
 
   // 🔹 YearLevel change
   yearDropdown.addEventListener("change", async (e) => {
-    const newYearLevel = e.target.value;
+    const newYearLevelId = e.target.value;
     try {
-      await db.collection("RequirementsTable").doc(docId).update({ yearLevel: newYearLevel });
-      console.log(`Year level updated for ${docId}: ${newYearLevel}`);
+      const designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
+      await db.collection("RequirementsAndNotes")
+        .doc("RequirementsList")
+        .collection(designeeId)
+        .doc(docId)
+        .update({ yearLevel: newYearLevelId });
+      console.log(`Year level updated for ${docId}: ${newYearLevelId}`);
     } catch (err) {
       console.error("Failed to update year level:", err);
       alert("Failed to update year level.");
     }
   });
 
-  // 🔹 Role change (updated for array logic)
+  // 🔹 Role change
   roleDropdown.addEventListener("change", async (e) => {
     const selectedRole = e.target.value;
     try {
-      const userData = JSON.parse(localStorage.getItem("userData")) || {};
-      const violationId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID || null;
-      const officerId = userData.id || null;
-
+      const designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
       let updateData = {};
-
       if (selectedRole === "Violation") {
-        updateData.violation = violationId ? [violationId] : [];
-        updateData.officer = firebase.firestore.FieldValue.delete();
+        updateData.violation = true;
+        updateData.officer = false;
       } else if (selectedRole === "Officer") {
-        updateData.officer = officerId ? [officerId] : [];
-        updateData.violation = firebase.firestore.FieldValue.delete();
+        updateData.officer = true;
+        updateData.violation = false;
       } else {
-        updateData.officer = firebase.firestore.FieldValue.delete();
-        updateData.violation = firebase.firestore.FieldValue.delete();
+        updateData.officer = false;
+        updateData.violation = false;
       }
-
-      await db.collection("RequirementsTable").doc(docId).update(updateData);
+      await db.collection("RequirementsAndNotes")
+        .doc("RequirementsList")
+        .collection(designeeId)
+        .doc(docId)
+        .update(updateData);
       console.log(`Requirement role updated for ${docId}:`, updateData);
     } catch (err) {
       console.error("Failed to update requirement role:", err);
@@ -127,24 +148,25 @@ async function loadRequirements() {
 
     document.getElementById("requirementsList").innerHTML = "";
 
-    // Fetch current semester
-    const semSnap = await db.collection("semesterTable").where("currentSemester", "==", true).get();
-    let currentSemester = "N/A";
-    if (!semSnap.empty) currentSemester = semSnap.docs[0].data().semester || "N/A";
+    const currentSemesterData = await getCurrentSemester();
+    if (!currentSemesterData) return;
+    const { id: semesterId } = currentSemesterData;
 
-    let query = db.collection("RequirementsTable");
-    if (userData.role === "designee") query = query.where("addedByDesigneeId", "==", userData.id);
-    else if (userData.role === "staff") query = query.where("addedByDesigneeId", "==", userData.createdByDesigneeID);
-    else return;
+    const designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
 
-    const snapshot = await query.orderBy("createdAt", "desc").get();
+    const snapshot = await db.collection("RequirementsAndNotes")
+      .doc("RequirementsList")
+      .collection(designeeId)
+      .orderBy("createdAt", "asc")
+      .get();
+
     snapshot.forEach(doc => {
       const data = doc.data();
-      if (data.semester === currentSemester) {
-        addRequirementToUI(data.requirement, doc.id, data.semester, data.yearLevel || "All", {
-          violation: Array.isArray(data.violation) && data.violation.length > 0,
-          officer: Array.isArray(data.officer) && data.officer.length > 0
-        });
+      if (data.semester === semesterId) {
+        addRequirementToUI(data.requirement, doc.id, semesterId, data.yearLevel || "all", {
+          violation: !!data.violation,
+          officer: !!data.officer
+        }, userData);
       }
     });
   } catch (err) {
@@ -153,32 +175,53 @@ async function loadRequirements() {
   }
 }
 
+// 🔹 Get next numeric ID based on designee collection
+async function getNextRequirementId(designeeId) {
+  const snapshot = await db.collection("RequirementsAndNotes")
+    .doc("RequirementsList")
+    .collection(designeeId)
+    .orderBy("createdAt", "desc")
+    .limit(1)
+    .get();
+  if (snapshot.empty) return "1";
+  return (parseInt(snapshot.docs[0].id, 10) + 1).toString();
+}
+
 // 🔹 Add new requirement
 async function addRequirement(requirementText) {
   try {
     const userData = JSON.parse(localStorage.getItem("userData"));
-    if (!userData) throw new Error("User data not found.");
+    const designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
 
-    const semSnap = await db.collection("semesterTable").where("currentSemester", "==", true).get();
-    let currentSemester = "N/A";
-    if (!semSnap.empty) currentSemester = semSnap.docs[0].data().semester || "N/A";
+    const currentSemesterData = await getCurrentSemester();
+    if (!currentSemesterData) return;
+    const { id: semesterId } = currentSemesterData;
 
-    const defaultYearLevel = "All";
+    const defaultYearLevel = "all"; // store as ID
+    const newId = await getNextRequirementId(designeeId);
 
-    const docRef = await db.collection("RequirementsTable").add({
+    const addData = {
       requirement: requirementText,
       addedBy: userData.id,
       addedByRole: userData.role,
-      addedByDesigneeId: userData.role === "designee" ? userData.id : userData.createdByDesigneeID,
+      addedByDesigneeId: designeeId,
       office: userData.office || "N/A",
       category: userData.category || "N/A",
       department: userData.department || "N/A",
-      semester: currentSemester,
+      semester: semesterId, // store as semester ID
       yearLevel: defaultYearLevel,
+      violation: false,
+      officer: false,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    };
 
-    addRequirementToUI(requirementText, docRef.id, currentSemester, defaultYearLevel, null);
+    await db.collection("RequirementsAndNotes")
+      .doc("RequirementsList")
+      .collection(designeeId)
+      .doc(newId)
+      .set(addData);
+
+    addRequirementToUI(requirementText, newId, semesterId, defaultYearLevel, null, userData);
   } catch (err) {
     console.error("Failed to add requirement:", err);
     alert("Failed to add requirement.");
@@ -188,7 +231,15 @@ async function addRequirement(requirementText) {
 // 🔹 Save edited requirement
 async function saveEditedRequirement(newText) {
   try {
-    await db.collection("RequirementsTable").doc(currentEditingId).update({ requirement: newText });
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
+
+    await db.collection("RequirementsAndNotes")
+      .doc("RequirementsList")
+      .collection(designeeId)
+      .doc(currentEditingId)
+      .update({ requirement: newText });
+
     currentEditingInput.value = newText;
     closeModal(document.getElementById("editModal"));
     alert("Requirement updated.");
@@ -201,7 +252,15 @@ async function saveEditedRequirement(newText) {
 // 🔹 Delete requirement
 async function deleteRequirement() {
   try {
-    await db.collection("RequirementsTable").doc(currentEditingId).delete();
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
+
+    await db.collection("RequirementsAndNotes")
+      .doc("RequirementsList")
+      .collection(designeeId)
+      .doc(currentEditingId)
+      .delete();
+
     document.querySelector(`[data-id="${currentEditingId}"]`)?.remove();
     closeModal(document.getElementById("deleteModal"));
     alert("Requirement deleted.");

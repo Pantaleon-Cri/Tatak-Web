@@ -1,55 +1,74 @@
-
-// DOM Elements
+// ===== DOM ELEMENTS =====
 const openBtn = document.getElementById("openModalBtn");
 const modal = document.getElementById("modalOverlay");
 const cancelBtn = document.getElementById("cancelBtn");
 const saveBtn = document.querySelector(".save-btn");
 const tableBody = document.querySelector("tbody");
 
-// Open modal
+// ===== FIRESTORE COLLECTIONS =====
+const clubCollection = db
+  .collection("DataTable")
+  .doc("Clubs")
+  .collection("ClubsDocs");
+
+const officeCollection = db
+  .collection("DataTable")
+  .doc("Office")
+  .collection("OfficeDocs");
+
+// ===== MODAL OPEN / CLOSE =====
 openBtn.addEventListener("click", () => {
   document.getElementById("clubId").value = "";
   document.getElementById("clubCode").value = "";
   document.getElementById("clubName").value = "";
-  document.getElementById("deptCode").value = "";
+  document.getElementById("officeType").value = "";
   modal.style.display = "flex";
 });
 
-// Cancel modal
-cancelBtn.addEventListener("click", () => {
-  modal.style.display = "none";
-});
+cancelBtn.addEventListener("click", () => (modal.style.display = "none"));
 
-// Close modal on outside click
 modal.addEventListener("click", (e) => {
-  if (e.target === modal) {
-    modal.style.display = "none";
-  }
+  if (e.target === modal) modal.style.display = "none";
 });
 
-// Save new club
+// ===== FETCH READABLE OFFICE NAME =====
+async function getOfficeNameById(id) {
+  if (!id) return "—";
+  try {
+    const docSnap = await officeCollection.doc(id).get();
+    if (!docSnap.exists) return id;
+    return docSnap.data().office || id;
+  } catch (err) {
+    console.error("Error fetching office name:", err);
+    return id;
+  }
+}
+
+// ===== SAVE NEW CLUB =====
 saveBtn.addEventListener("click", async () => {
   const id = document.getElementById("clubId").value.trim();
-  const codeName = document.getElementById("clubCode").value.trim();
+  const code = document.getElementById("clubCode").value.trim();
   const clubName = document.getElementById("clubName").value.trim();
-  const deptCode = document.getElementById("deptCode").value.trim();
+  const officeType = document.getElementById("officeType").value.trim();
 
-  if (!id || !codeName || !clubName || !deptCode) {
+  if (!id || !code || !clubName || !officeType) {
     alert("Please fill in all fields.");
     return;
   }
 
   try {
-    const docRef = db.collection("acadClubTable").doc(id);
+    const docRef = clubCollection.doc(id);
     const docSnap = await docRef.get();
     if (docSnap.exists) {
       alert("Club ID already exists!");
       return;
     }
 
-    const payload = { id, codeName, club: clubName, deptCode };
+    const payload = { id, code, club: clubName, officeType };
     await docRef.set(payload);
-    addRowToTable(id, codeName, clubName, deptCode);
+
+    const officeReadable = await getOfficeNameById(officeType);
+    addRowToTable(id, code, clubName, officeReadable);
     modal.style.display = "none";
   } catch (error) {
     console.error("Error saving club:", error);
@@ -57,23 +76,17 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
-// Load clubs on page load
+// ===== LOAD CLUBS ON PAGE LOAD =====
 window.addEventListener("DOMContentLoaded", async () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
+  usernameDisplay.textContent = storedAdminID || "Unknown";
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
   const logoutBtn = document.getElementById("logoutBtn");
-
   if (logoutBtn) {
-    logoutBtn.addEventListener("click", function (e) {
+    logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
-
-      const keysToRemove = [
+      [
         "userData",
         "studentName",
         "schoolID",
@@ -82,100 +95,112 @@ window.addEventListener("DOMContentLoaded", async () => {
         "designeeID",
         "category",
         "office",
-        "department"
-      ];
-
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-
+        "department",
+      ].forEach((key) => localStorage.removeItem(key));
       window.location.href = "../../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
   }
+
   try {
-    const snapshot = await db.collection("acadClubTable").get();
+    const snapshot = await clubCollection.get();
     const docs = snapshot.docs
-      .filter(doc => !isNaN(parseInt(doc.id)))
+      .filter((doc) => !isNaN(parseInt(doc.id)))
       .sort((a, b) => parseInt(a.id) - parseInt(b.id));
 
-    docs.forEach(doc => {
+    for (const doc of docs) {
       const data = doc.data();
-      addRowToTable(doc.id, data.codeName, data.club, data.deptCode);
-    });
+      const officeReadable = await getOfficeNameById(data.officeType);
+      addRowToTable(doc.id, data.code || "", data.club, officeReadable);
+    }
   } catch (error) {
     console.error("Error loading clubs:", error);
   }
 });
 
-// Add a row to the table
-function addRowToTable(id, codeName, clubName, deptCode) {
+// ===== ADD ROW TO TABLE =====
+function addRowToTable(id, code, clubName, officeTypeName) {
   const row = document.createElement("tr");
   row.innerHTML = `
     <td>${id}</td>
-    <td>${codeName}</td>
+    <td>${code}</td>
     <td class="club-name">${clubName}</td>
-    <td>${deptCode}</td>
+    <td>${officeTypeName}</td>
     <td>
-      <button class="action-btn edit" data-id="${id}"><i class="fas fa-edit"></i></button>
-      <button class="action-btn delete" data-id="${id}"><i class="fas fa-trash-alt"></i></button>
+      <button class="action-btn edit" data-id="${id}">
+        <i class="fas fa-edit"></i>
+      </button>
+      <button class="action-btn delete" data-id="${id}">
+        <i class="fas fa-trash-alt"></i>
+      </button>
     </td>
   `;
   tableBody.appendChild(row);
+
   row.querySelector(".edit").addEventListener("click", handleEdit);
   row.querySelector(".delete").addEventListener("click", handleDelete);
 }
 
-// Reference modals
+// ===== EDIT CLUB =====
 const editModal = document.getElementById("editModalOverlay");
 const editCancelBtn = document.getElementById("editCancelBtn");
 const editSaveBtn = document.getElementById("editSaveBtn");
 
 let currentEditId = null;
-let currentDeleteId = null;
-let currentDeleteRow = null;
 
 async function handleEdit(e) {
   const id = e.currentTarget.dataset.id;
   currentEditId = id;
-  const docSnap = await db.collection("acadClubTable").doc(id).get();
+
+  const docSnap = await clubCollection.doc(id).get();
   if (!docSnap.exists) return;
 
   const data = docSnap.data();
   document.getElementById("editClubId").value = data.id || id;
-  document.getElementById("editClubCode").value = data.codeName || "";
+  document.getElementById("editClubCode").value = data.code || "";
   document.getElementById("editClubName").value = data.club || "";
-  document.getElementById("editDeptCode").value = data.deptCode || "";
+  document.getElementById("editOfficeType").value = data.officeType || "";
+
   editModal.style.display = "flex";
 }
 
 editSaveBtn.addEventListener("click", async () => {
-  const codeName = document.getElementById("editClubCode").value.trim();
+  const code = document.getElementById("editClubCode").value.trim();
   const clubName = document.getElementById("editClubName").value.trim();
-  const deptCode = document.getElementById("editDeptCode").value.trim();
+  const officeType = document.getElementById("editOfficeType").value.trim();
 
-  if (!codeName || !clubName || !deptCode) {
+  if (!code || !clubName || !officeType) {
     alert("Please fill out all fields.");
     return;
   }
 
   try {
-    await db.collection("acadClubTable").doc(currentEditId).update({
-      codeName,
+    await clubCollection.doc(currentEditId).update({
+      code,
       club: clubName,
-      deptCode
+      officeType,
     });
 
-    const row = document.querySelector(`.edit[data-id="${currentEditId}"]`).closest("tr");
+    const officeReadable = await getOfficeNameById(officeType);
+
+    const row = document
+      .querySelector(`.edit[data-id="${currentEditId}"]`)
+      .closest("tr");
+
     row.innerHTML = `
       <td>${currentEditId}</td>
-      <td>${codeName}</td>
+      <td>${code}</td>
       <td class="club-name">${clubName}</td>
-      <td>${deptCode}</td>
+      <td>${officeReadable}</td>
       <td>
-        <button class="action-btn edit" data-id="${currentEditId}"><i class="fas fa-edit"></i></button>
-        <button class="action-btn delete" data-id="${currentEditId}"><i class="fas fa-trash-alt"></i></button>
+        <button class="action-btn edit" data-id="${currentEditId}">
+          <i class="fas fa-edit"></i>
+        </button>
+        <button class="action-btn delete" data-id="${currentEditId}">
+          <i class="fas fa-trash-alt"></i>
+        </button>
       </td>
     `;
+
     row.querySelector(".edit").addEventListener("click", handleEdit);
     row.querySelector(".delete").addEventListener("click", handleDelete);
 
@@ -192,9 +217,13 @@ editCancelBtn.addEventListener("click", () => {
   currentEditId = null;
 });
 
+// ===== DELETE CLUB =====
 const deleteModal = document.getElementById("deleteModalOverlay");
 const deleteCancelBtn = document.getElementById("deleteCancelBtn");
 const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
+
+let currentDeleteId = null;
+let currentDeleteRow = null;
 
 function handleDelete(e) {
   currentDeleteId = e.currentTarget.dataset.id;
@@ -209,7 +238,7 @@ deleteCancelBtn.addEventListener("click", () => {
 
 deleteConfirmBtn.addEventListener("click", async () => {
   try {
-    await db.collection("acadClubTable").doc(currentDeleteId).delete();
+    await clubCollection.doc(currentDeleteId).delete();
     currentDeleteRow.remove();
     deleteModal.style.display = "none";
     currentDeleteId = null;
@@ -219,11 +248,11 @@ deleteConfirmBtn.addEventListener("click", async () => {
   }
 });
 
+// ===== UPLOAD FILE =====
 const uploadBtn = document.getElementById("uploadBtn");
 const uploadInput = document.getElementById("uploadInput");
 
 uploadBtn.addEventListener("click", () => uploadInput.click());
-
 uploadInput.addEventListener("change", handleFileUpload);
 
 async function handleFileUpload(e) {
@@ -234,26 +263,27 @@ async function handleFileUpload(e) {
   reader.onload = async function (event) {
     const data = new Uint8Array(event.target.result);
     const workbook = XLSX.read(data, { type: "array" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const jsonData = XLSX.utils.sheet_to_json(sheet);
 
     for (const row of jsonData) {
-      const id = row["ID no."].toString().trim();
-      const codeName = row["Club Code Name"]?.trim();
+      const id = row["ID no."]?.toString().trim();
+      const code = row["Club Code Name"]?.trim();
       const clubName = row["Club Name"]?.trim();
-      const deptCode = row["Dept Code Name"]?.trim();
+      const officeType = row["Office Type"]?.toString().trim();
 
-      if (!id || !codeName || !clubName || !deptCode) continue;
+      if (!id || !code || !clubName || !officeType) continue;
 
       try {
-        const docRef = db.collection("acadClubTable").doc(id);
+        const docRef = clubCollection.doc(id);
         const docSnap = await docRef.get();
         if (docSnap.exists) continue;
 
-        const payload = { id, codeName, club: clubName, deptCode };
+        const payload = { id, code, club: clubName, officeType };
         await docRef.set(payload);
-        addRowToTable(id, codeName, clubName, deptCode);
+
+        const officeReadable = await getOfficeNameById(officeType);
+        addRowToTable(id, code, clubName, officeReadable);
       } catch (error) {
         console.error(`Failed to upload club ${clubName} (ID: ${id}):`, error);
       }
@@ -263,5 +293,4 @@ async function handleFileUpload(e) {
     uploadInput.value = "";
   };
   reader.readAsArrayBuffer(file);
-  
 }

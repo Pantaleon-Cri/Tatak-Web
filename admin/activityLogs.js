@@ -3,6 +3,7 @@
 // ----------------------
 // Firestore Initialization
 // ----------------------
+// (Assumes firebase and db are already initialized globally in another file)
 
 
 // ----------------------
@@ -11,16 +12,15 @@
 const nameCache = {
   office: {},
   department: {},
-  acadClub: {},
-  group: {}
+  acadClub: {}
 };
 
 // ----------------------
 // Preload reference names
 // ----------------------
 async function preloadNames() {
-  // officeTable
-  const officeSnap = await db.collection("officeTable").get();
+  // 🔹 Office Table
+  const officeSnap = await db.collection("/DataTable/Office/OfficeDocs").get();
   officeSnap.forEach(doc => {
     const data = doc.data();
     if (doc.id && data.office) {
@@ -28,8 +28,8 @@ async function preloadNames() {
     }
   });
 
-  // departmentTable
-  const deptSnap = await db.collection("departmentTable").get();
+  // 🔹 Department Table
+  const deptSnap = await db.collection("/DataTable/Department/DepartmentDocs").get();
   deptSnap.forEach(doc => {
     const data = doc.data();
     if (doc.id && data.department) {
@@ -37,34 +37,24 @@ async function preloadNames() {
     }
   });
 
-  // acadClubTable → key = codeName
-  const acadSnap = await db.collection("acadClubTable").get();
+  // 🔹 Clubs Table (Acad Clubs + Groups merged)
+  const acadSnap = await db.collection("/DataTable/Clubs/ClubsDocs").get();
   acadSnap.forEach(doc => {
     const data = doc.data();
     if (data.codeName) {
       nameCache.acadClub[data.codeName] = data.codeName;
-    }
-  });
-
-  // groupTable → key = doc.id, value = club
-  const groupSnap = await db.collection("groupTable").get();
-  groupSnap.forEach(doc => {
-    const data = doc.data();
-    if (doc.id && data.club) {
-      nameCache.group[doc.id] = data.club;
+    } else if (data.club) {
+      nameCache.acadClub[doc.id] = data.club;
     }
   });
 }
 
 // ----------------------
-// Helper: resolve readable name
+// Helper: Resolve readable name
 // ----------------------
 function getReadableName({ office, department, category }) {
   if (category && nameCache.acadClub[category]) {
     return nameCache.acadClub[category];
-  }
-  if (category && nameCache.group[category]) {
-    return nameCache.group[category];
   }
   if (office && nameCache.office[office]) {
     if (department && nameCache.department[department]) {
@@ -73,6 +63,23 @@ function getReadableName({ office, department, category }) {
     return nameCache.office[office];
   }
   return office || department || category || "Unknown";
+}
+
+// ----------------------
+// Helper: Format timestamp
+// ----------------------
+function formatTimestamp(timestamp) {
+  if (!timestamp) return "-";
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  return date.toLocaleString("en-US", {
+    month: "long",   // e.g. October
+    day: "numeric",  // e.g. 6
+    year: "numeric", // e.g. 2025
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true     // 12-hour format (AM/PM)
+  });
 }
 
 // ----------------------
@@ -87,7 +94,9 @@ async function loadStaffCreationLogs() {
   try {
     await preloadNames();
 
-    const staffSnapshot = await db.collection("staffTable")
+    // 🔹 Updated StaffDocs path
+    const staffSnapshot = await db
+      .collection("/User/Designees/StaffDocs")
       .orderBy("createdAt", "desc")
       .limit(10)
       .get();
@@ -96,7 +105,13 @@ async function loadStaffCreationLogs() {
 
     for (const staffDoc of staffSnapshot.docs) {
       const staff = staffDoc.data();
-      const designeeDoc = await db.collection("Designees").doc(staff.createdByDesigneeID).get();
+
+      // 🔹 Fetch Designee info
+      const designeeDoc = await db
+        .collection("/User/Designees/DesigneesDocs")
+        .doc(staff.createdByDesigneeID)
+        .get();
+
       if (!designeeDoc.exists) continue;
 
       const designee = designeeDoc.data();
@@ -107,9 +122,10 @@ async function loadStaffCreationLogs() {
         department: staff.department,
         category: staff.category
       });
+      const formattedDate = formatTimestamp(staff.createdAt);
 
       const li = document.createElement("li");
-      li.textContent = `${designeeName} created account for ${staffName} as Staff for ${staffFor}`;
+      li.textContent = `${designeeName} created account for ${staffName} as Staff for ${staffFor} — ${formattedDate}`;
       logsContainer.appendChild(li);
     }
   } catch (err) {
@@ -130,11 +146,18 @@ async function loadFullActivityLogs() {
   try {
     await preloadNames();
 
-    // Get current semester
-    const semSnap = await db.collection("semesterTable").where("currentSemester", "==", true).limit(1).get();
-    const currentSemester = semSnap.empty ? "UnknownSemester" : semSnap.docs[0].data().semester;
+    // 🔹 Get current semester
+    const semSnap = await db
+      .collection("/DataTable/Semester/SemesterDocs")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
 
-    // Assign export button
+    const currentSemester = semSnap.empty
+      ? "UnknownSemester"
+      : semSnap.docs[0].data().semester;
+
+    // 🔹 Assign export button
     const exportBtn = document.getElementById("exportSheetBtn");
     if (exportBtn) {
       exportBtn.addEventListener("click", () => {
@@ -145,7 +168,9 @@ async function loadFullActivityLogs() {
       });
     }
 
-    const staffSnapshot = await db.collection("staffTable")
+    // 🔹 Updated StaffDocs path
+    const staffSnapshot = await db
+      .collection("/User/Designees/StaffDocs")
       .orderBy("createdAt", "desc")
       .get();
 
@@ -153,7 +178,13 @@ async function loadFullActivityLogs() {
 
     for (const staffDoc of staffSnapshot.docs) {
       const staff = staffDoc.data();
-      const designeeDoc = await db.collection("Designees").doc(staff.createdByDesigneeID).get();
+
+      // 🔹 Fetch Designee info
+      const designeeDoc = await db
+        .collection("/User/Designees/DesigneesDocs")
+        .doc(staff.createdByDesigneeID)
+        .get();
+
       if (!designeeDoc.exists) continue;
 
       const designee = designeeDoc.data();
@@ -164,6 +195,7 @@ async function loadFullActivityLogs() {
         department: staff.department,
         category: staff.category
       });
+      const formattedDate = formatTimestamp(staff.createdAt);
 
       const row = document.createElement("tr");
       row.innerHTML = `
@@ -171,7 +203,7 @@ async function loadFullActivityLogs() {
         <td>Created Staff Account</td>
         <td>${staffName}</td>
         <td>${staffFor}</td>
-        <td>${staff.createdAt ? new Date(staff.createdAt.toDate()).toLocaleString() : "-"}</td>
+        <td>${formattedDate}</td>
       `;
       tbody.appendChild(row);
     }
@@ -189,10 +221,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const storedAdminID = localStorage.getItem("adminID");
 
   if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
+    usernameDisplay.textContent = storedAdminID; // show saved ID
   } else {
     usernameDisplay.textContent = "Unknown"; // fallback
   }
+
+  // Run log loaders
   loadStaffCreationLogs(); // dashboard preview
   loadFullActivityLogs();  // full activity log page
 });

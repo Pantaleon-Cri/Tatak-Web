@@ -18,49 +18,27 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (logoutBtn) {
     logoutBtn.addEventListener("click", function (e) {
       e.preventDefault();
-
       const keysToRemove = [
-        "userData",
-        "studentName",
-        "schoolID",
-        "studentID",
-        "staffID",
-        "designeeID",
-        "category",
-        "office",
-        "department",
-        "adminID"
+        "userData", "studentName", "schoolID", "studentID",
+        "staffID", "designeeID", "category", "office",
+        "department", "adminID"
       ];
-
       keysToRemove.forEach(key => localStorage.removeItem(key));
-
       window.location.href = "../../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
   }
 
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
+  usernameDisplay.textContent = storedAdminID || "Unknown";
 
-  // 🔁 Show logged in admin ID
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;
-  } else {
-    usernameDisplay.textContent = "Unknown";
-  }
-
-  // 🔁 Dropdown toggle
   const dropdownToggle = document.getElementById("userDropdownToggle");
   const dropdownMenu = document.getElementById("dropdownMenu");
-
   if (dropdownToggle && dropdownMenu) {
     dropdownToggle.addEventListener("click", () => {
       dropdownMenu.style.display =
         dropdownMenu.style.display === "block" ? "none" : "block";
     });
-
-    // Close dropdown when clicking outside
     document.addEventListener("click", (event) => {
       if (!dropdownToggle.contains(event.target) && !dropdownMenu.contains(event.target)) {
         dropdownMenu.style.display = "none";
@@ -68,7 +46,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // ✅ Table body reference
   const tbody = document.querySelector(".log-table tbody");
   if (!tbody) {
     console.error("❌ Table body not found!");
@@ -76,19 +53,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   try {
-    // 🔁 Fetch all staff
-    const staffSnap = await db.collection("staffTable").get();
+    // 🔁 Fetch all staff from new path
+    const staffSnap = await db.collection("/User/Designees/StaffDocs").get();
     const staffList = staffSnap.docs.map(doc => ({
-      docId: doc.id,   // Firestore doc ID
+      docId: doc.id,
       ...doc.data()
     }));
 
-    // 🔁 Fetch lookup tables (parallel)
+    // 🔁 Fetch lookup tables (parallel) with new paths
     const [clubsSnap, groupsSnap, departmentsSnap, officesSnap] = await Promise.all([
-      db.collection("acadClubTable").get(),
-      db.collection("groupTable").get(),
-      db.collection("departmentTable").get(),
-      db.collection("officeTable").get()
+      db.collection("/DataTable/Clubs/ClubsDocs").get(),        // for both clubs & groups
+      db.collection("/DataTable/Clubs/ClubsDocs").get(),        // group mapping
+      db.collection("/DataTable/Department/DepartmentDocs").get(),
+      db.collection("/DataTable/Office/OfficeDocs").get()
     ]);
 
     // 🔁 Create lookup maps
@@ -117,7 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // 🔁 Render staff list
-    tbody.innerHTML = ""; // clear old rows
+    tbody.innerHTML = "";
     staffList.forEach(staff => {
       let categoryName = "";
       if (staff.category) {
@@ -132,7 +109,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${staff.id || ""}</td> <!-- manual staff ID -->
+        <td>${staff.id || ""}</td>
         <td>${staff.firstName || ""}</td>
         <td>${staff.lastName || ""}</td>
         <td>${officeName}</td>
@@ -152,32 +129,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     const deleteModal = document.getElementById("deleteModalOverlay");
     const deleteCancelBtn = document.getElementById("deleteCancelBtn");
     const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
-
     let currentDeleteDocId = null;
 
-    // 🔁 Attach delete button click events
     document.querySelectorAll(".action-btn.delete").forEach((btn) => {
       btn.addEventListener("click", () => {
-        currentDeleteDocId = btn.dataset.docid; // ✅ use Firestore doc ID
+        currentDeleteDocId = btn.dataset.docid;
         deleteModal.style.display = "flex";
       });
     });
 
-    // 🔁 Cancel delete
     deleteCancelBtn.addEventListener("click", () => {
       deleteModal.style.display = "none";
       currentDeleteDocId = null;
     });
 
-    // 🔁 Confirm delete
     deleteConfirmBtn.addEventListener("click", async () => {
       if (!currentDeleteDocId) return;
-
       try {
-        await db.collection("staffTable").doc(currentDeleteDocId).delete();
+        await db.collection("/User/Designees/StaffDocs").doc(currentDeleteDocId).delete();
         alert("✅ Staff deleted successfully!");
         deleteModal.style.display = "none";
-        location.reload(); // refresh to update table
+        location.reload();
       } catch (error) {
         console.error("❌ Error deleting staff:", error);
         alert("Error deleting staff.");
@@ -197,7 +169,6 @@ function initSidebarDropdowns() {
       e.preventDefault();
       const parentLi = this.parentElement;
       const submenu = parentLi.querySelector(".submenu");
-
       if (submenu.style.display === "block") {
         submenu.style.display = "none";
         this.querySelector(".arrow")?.classList.remove("rotated");
@@ -208,5 +179,4 @@ function initSidebarDropdowns() {
     });
   });
 }
-
 document.addEventListener("DOMContentLoaded", initSidebarDropdowns);

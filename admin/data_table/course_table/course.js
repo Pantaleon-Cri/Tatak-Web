@@ -1,5 +1,3 @@
-
-
 // DOM Elements
 const openBtn = document.getElementById("openModalBtn");
 const modal = document.getElementById("modalOverlay");
@@ -7,6 +5,52 @@ const cancelBtn = document.getElementById("cancelBtn");
 const saveBtn = document.querySelector(".save-btn");
 const courseInput = document.getElementById("courseName");
 const tableBody = document.querySelector("tbody");
+
+// Firestore references
+const courseCollection = db
+  .collection("DataTable")
+  .doc("Course")
+  .collection("CourseDocs");
+
+const deptCollection = db
+  .collection("DataTable")
+  .doc("Department")
+  .collection("DepartmentDocs");
+
+const clubCollection = db
+  .collection("DataTable")
+  .doc("Clubs")
+  .collection("ClubsDocs");
+
+// --- Cached Maps ---
+let departmentMap = {};
+let clubMap = {};
+
+// --- Load Department Codes (CED, CBM, etc.) ---
+async function loadDepartments() {
+  const snapshot = await deptCollection.get();
+  snapshot.forEach((doc) => {
+    const data = doc.data();
+    departmentMap[data.id] = data.code || "Unknown";
+  });
+  console.log("Department map:", departmentMap);
+}
+
+// --- Load Club Codes (e.g., MTH, SCI) ---
+async function loadClubs() {
+  const snapshot = await clubCollection.get();
+  snapshot.forEach((doc) => {
+    const data = doc.data();
+    clubMap[data.id] = data.code || "Unknown";
+  });
+  console.log("Club map:", clubMap);
+}
+
+// --- Convert ID(s) → Readable Code ---
+function getCodesFromIDs(ids, map) {
+  if (!Array.isArray(ids)) ids = [ids];
+  return ids.map((id) => map[id] || id);
+}
 
 // Open modal
 openBtn.addEventListener("click", () => {
@@ -21,16 +65,19 @@ cancelBtn.addEventListener("click", () => {
 
 // Close modal on outside click
 modal.addEventListener("click", (e) => {
-  if (e.target === modal) {
-    modal.style.display = "none";
-  }
+  if (e.target === modal) modal.style.display = "none";
 });
 
-// Save new course (auto ID and course only)
+// Save new course
 saveBtn.addEventListener("click", async () => {
   const courseName = courseInput.value.trim();
   const deptCodeName = document.getElementById("deptCodeName").value.trim();
-  const clubCodeName = document.getElementById("clubCodeName").value.trim();
+  const clubCodeName = document
+    .getElementById("clubCodeName")
+    .value.trim()
+    .split(",")
+    .map((v) => v.trim())
+    .filter((v) => v !== "");
 
   if (!courseName) {
     alert("Please enter a course name.");
@@ -38,19 +85,19 @@ saveBtn.addEventListener("click", async () => {
   }
 
   try {
-    const snapshot = await db.collection("courseTable").get();
-    const ids = snapshot.docs.map(doc => parseInt(doc.id)).filter(id => !isNaN(id));
+    const snapshot = await courseCollection.get();
+    const ids = snapshot.docs.map((doc) => parseInt(doc.id)).filter((id) => !isNaN(id));
     const nextIdNum = ids.length ? Math.max(...ids) + 1 : 1;
-    const nextId = nextIdNum.toString().padStart(3, '0');
+    const nextId = nextIdNum.toString();
 
     const data = {
       id: nextId,
       course: courseName,
-      deptCodeName,
-      clubCodeName,s
+      deptCodeName, // store department IDs
+      clubCodeName, // store club IDs
     };
 
-    await db.collection("courseTable").doc(nextId).set(data);
+    await courseCollection.doc(nextId).set(data);
     addRowToTable(nextId, data);
     modal.style.display = "none";
   } catch (error) {
@@ -59,23 +106,16 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
-
-// Load courses on page load
+// Load on startup
 window.addEventListener("DOMContentLoaded", async () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
+  usernameDisplay.textContent = storedAdminID || "Unknown";
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
   const logoutBtn = document.getElementById("logoutBtn");
-
   if (logoutBtn) {
-    logoutBtn.addEventListener("click", function (e) {
+    logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
-
       const keysToRemove = [
         "userData",
         "studentName",
@@ -85,39 +125,47 @@ window.addEventListener("DOMContentLoaded", async () => {
         "designeeID",
         "category",
         "office",
-        "department"
+        "department",
       ];
-
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
       window.location.href = "../../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
   }
+
   try {
-    const snapshot = await db.collection("courseTable").get();
+    // Load both mappings before loading courses
+    await Promise.all([loadDepartments(), loadClubs()]);
+
+    const snapshot = await courseCollection.get();
     const docs = snapshot.docs
-      .filter(doc => !isNaN(parseInt(doc.id)))
+      .filter((doc) => !isNaN(parseInt(doc.id)))
       .sort((a, b) => parseInt(a.id) - parseInt(b.id));
 
-    docs.forEach(doc => {
-      const data = doc.data();
-      addRowToTable(doc.id, data);
-    });
+    docs.forEach((doc) => addRowToTable(doc.id, doc.data()));
   } catch (error) {
     console.error("Error loading courses:", error);
   }
 });
 
-// Add a row to the table
+// Add row to table
 function addRowToTable(id, data) {
   const row = document.createElement("tr");
+
+  // Department readable code
+  const deptReadable = Array.isArray(data.deptCodeName)
+    ? getCodesFromIDs(data.deptCodeName, departmentMap).join(", ")
+    : getCodesFromIDs([data.deptCodeName], departmentMap).join(", ");
+
+  // Club readable code(s)
+  const clubReadable = Array.isArray(data.clubCodeName)
+    ? getCodesFromIDs(data.clubCodeName, clubMap).join(", ")
+    : getCodesFromIDs([data.clubCodeName], clubMap).join(", ");
+
   row.innerHTML = `
     <td>${id}</td>
     <td class="course-name">${data.course || ""}</td>
-    <td>${data.deptCodeName || ""}</td>
-    <td>${data.clubCodeName || ""}</td>
+    <td>${deptReadable || ""}</td>
+    <td>${clubReadable || ""}</td>
     <td>
       <button class="action-btn edit" data-id="${id}"><i class="fas fa-edit"></i></button>
       <button class="action-btn delete" data-id="${id}"><i class="fas fa-trash-alt"></i></button>
@@ -129,9 +177,8 @@ function addRowToTable(id, data) {
   row.querySelector(".delete").addEventListener("click", handleDelete);
 }
 
-// Reference modals
+// --- Edit Modal Logic ---
 const editModal = document.getElementById("editModalOverlay");
-const editCourseInput = document.getElementById("editCourseName");
 const editCancelBtn = document.getElementById("editCancelBtn");
 const editSaveBtn = document.getElementById("editSaveBtn");
 
@@ -143,7 +190,6 @@ let currentEditId = null;
 let currentDeleteId = null;
 let currentDeleteRow = null;
 
-// Handle Edit
 async function handleEdit(e) {
   const id = e.currentTarget.dataset.id;
   const row = e.currentTarget.closest("tr");
@@ -153,7 +199,6 @@ async function handleEdit(e) {
   const clubCodeName = row.querySelector("td:nth-child(4)").textContent.trim();
 
   currentEditId = id;
-
   document.getElementById("editCourseId").value = id;
   document.getElementById("editCourseName").value = courseName;
   document.getElementById("editDeptCodeName").value = deptCodeName;
@@ -162,12 +207,15 @@ async function handleEdit(e) {
   editModal.style.display = "flex";
 }
 
-
-// Save Edit
 editSaveBtn.addEventListener("click", async () => {
   const newCourse = document.getElementById("editCourseName").value.trim();
   const newDept = document.getElementById("editDeptCodeName").value.trim();
-  const newClub = document.getElementById("editClubCodeName").value.trim();
+  const newClub = document
+    .getElementById("editClubCodeName")
+    .value.trim()
+    .split(",")
+    .map((v) => v.trim())
+    .filter((v) => v !== "");
 
   if (!newCourse) {
     alert("Course name cannot be empty.");
@@ -175,16 +223,16 @@ editSaveBtn.addEventListener("click", async () => {
   }
 
   try {
-    await db.collection("courseTable").doc(currentEditId).update({
+    await courseCollection.doc(currentEditId).update({
       course: newCourse,
       deptCodeName: newDept,
-      clubCodeName: newClub
+      clubCodeName: newClub,
     });
 
     const row = document.querySelector(`.edit[data-id="${currentEditId}"]`).closest("tr");
     row.querySelector("td:nth-child(2)").textContent = newCourse;
     row.querySelector("td:nth-child(3)").textContent = newDept;
-    row.querySelector("td:nth-child(4)").textContent = newClub;
+    row.querySelector("td:nth-child(4)").textContent = newClub.join(", ");
 
     editModal.style.display = "none";
     currentEditId = null;
@@ -194,13 +242,12 @@ editSaveBtn.addEventListener("click", async () => {
   }
 });
 
-
 editCancelBtn.addEventListener("click", () => {
   editModal.style.display = "none";
   currentEditId = null;
 });
 
-// Delete
+// --- Delete Logic ---
 function handleDelete(e) {
   currentDeleteId = e.currentTarget.dataset.id;
   currentDeleteRow = e.currentTarget.closest("tr");
@@ -214,7 +261,7 @@ deleteCancelBtn.addEventListener("click", () => {
 
 deleteConfirmBtn.addEventListener("click", async () => {
   try {
-    await db.collection("courseTable").doc(currentDeleteId).delete();
+    await courseCollection.doc(currentDeleteId).delete();
     currentDeleteRow.remove();
     deleteModal.style.display = "none";
     currentDeleteId = null;
@@ -224,7 +271,7 @@ deleteConfirmBtn.addEventListener("click", async () => {
   }
 });
 
-// Upload via Excel
+// --- Excel Upload ---
 const uploadBtn = document.getElementById("uploadBtn");
 const uploadInput = document.getElementById("uploadInput");
 
@@ -245,13 +292,14 @@ async function handleFileUpload(e) {
     for (const row of jsonData) {
       const id = row["ID no."]?.toString().trim();
       const course = row["Course"]?.trim();
-      const dept = row["Dept Code Name"]?.trim() || "";
-      const club = row["Club Code Name"]?.trim() || "";
+      const dept = row["Dept Code ID"]?.toString().trim() || "";
+      const clubRaw = row["Club Code ID"]?.toString().trim() || "";
+      const club = clubRaw.split(",").map((v) => v.trim()).filter((v) => v !== "");
 
       if (!id || !course) continue;
 
       try {
-        const docRef = db.collection("courseTable").doc(id);
+        const docRef = courseCollection.doc(id);
         const docSnap = await docRef.get();
         if (docSnap.exists) continue;
 

@@ -7,6 +7,10 @@ const semesterIdInput = document.getElementById("semesterId");
 const semesterNameInput = document.getElementById("semesterName");
 const tableBody = document.querySelector("tbody");
 
+// Firestore path (UPDATED STRUCTURE)
+// ✅ Correct path: DataTable > Semester > SemesterDocs > (1, 2, 3, 4)
+const semesterRootRef = db.collection("DataTable").doc("Semester").collection("SemesterDocs");
+
 // Open modal
 openBtn.addEventListener("click", () => {
   semesterIdInput.value = "";
@@ -19,12 +23,12 @@ cancelBtn.addEventListener("click", () => {
   modal.style.display = "none";
 });
 
-// Close modal on outside click
+// Close modal when clicking outside
 modal.addEventListener("click", (e) => {
   if (e.target === modal) modal.style.display = "none";
 });
 
-// Save new semester (manual ID)
+// Save new semester manually
 saveBtn.addEventListener("click", async () => {
   const id = semesterIdInput.value.trim();
   const semesterName = semesterNameInput.value.trim();
@@ -35,7 +39,7 @@ saveBtn.addEventListener("click", async () => {
   }
 
   try {
-    const docRef = db.collection("semesterTable").doc(id);
+    const docRef = semesterRootRef.doc(id);
     const docSnap = await docRef.get();
 
     if (docSnap.exists) {
@@ -43,8 +47,13 @@ saveBtn.addEventListener("click", async () => {
       return;
     }
 
-    await docRef.set({ id, semester: semesterName, visibleToStudents: false, currentSemester: false });
-    addRowToTable(id, semesterName, false, false);
+    await docRef.set({
+      id,
+      semester: semesterName,
+      currentSemester: false, // only one field now
+    });
+
+    addRowToTable(id, semesterName, false);
     modal.style.display = "none";
   } catch (error) {
     console.error("Error saving semester:", error);
@@ -56,7 +65,6 @@ saveBtn.addEventListener("click", async () => {
 window.addEventListener("DOMContentLoaded", async () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
-
   usernameDisplay.textContent = storedAdminID || "Unknown";
 
   const logoutBtn = document.getElementById("logoutBtn");
@@ -64,41 +72,36 @@ window.addEventListener("DOMContentLoaded", async () => {
     logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
       [
-        "userData","studentName","schoolID","studentID","staffID",
-        "designeeID","category","office","department"
+        "userData", "studentName", "schoolID", "studentID",
+        "staffID", "designeeID", "category", "office", "department"
       ].forEach(key => localStorage.removeItem(key));
       window.location.href = "../../../logout.html";
     });
   }
 
   try {
-    const snapshot = await db.collection("semesterTable").get();
-    const docs = snapshot.docs
-      .filter(doc => !isNaN(parseInt(doc.id)))
-      .sort((a, b) => parseInt(a.id) - parseInt(b.id));
+    const snapshot = await semesterRootRef.get();
+    const docs = snapshot.docs.sort((a, b) => parseInt(a.id) - parseInt(b.id));
 
-    docs.forEach(doc => {
+    for (const doc of docs) {
       const data = doc.data();
-      addRowToTable(doc.id, data.semester, data.visibleToStudents || false, data.currentSemester || false);
-    });
-
+      addRowToTable(
+        data.id,
+        data.semester,
+        data.currentSemester || false
+      );
+    }
   } catch (error) {
     console.error("Error loading semesters:", error);
   }
 });
 
-// Add row to table
-function addRowToTable(id, name, visible, current) {
+// Add a row to the table
+function addRowToTable(id, name, current) {
   const row = document.createElement("tr");
   row.innerHTML = `
     <td>${id}</td>
     <td class="semester-name">${name}</td>
-    <td>
-      <label class="switch">
-        <input type="checkbox" ${visible ? "checked" : ""} data-id="${id}" class="visibility-toggle">
-        <span class="slider round"></span>
-      </label>
-    </td>
     <td>
       <label class="switch">
         <input type="checkbox" ${current ? "checked" : ""} data-id="${id}" class="current-sem-toggle">
@@ -112,31 +115,17 @@ function addRowToTable(id, name, visible, current) {
   `;
   tableBody.appendChild(row);
 
-  // Event listeners
+  // Event Listeners
   row.querySelector(".edit").addEventListener("click", handleEdit);
   row.querySelector(".delete").addEventListener("click", handleDelete);
-  row.querySelector(".visibility-toggle").addEventListener("change", handleToggleVisibility);
   row.querySelector(".current-sem-toggle").addEventListener("change", handleCurrentSemester);
-}
-
-// Handle visibility toggle
-async function handleToggleVisibility(e) {
-  const id = e.target.dataset.id;
-  const isVisible = e.target.checked;
-  try {
-    await db.collection("semesterTable").doc(id).update({ visibleToStudents: isVisible });
-    console.log(`Semester ${id} visibility set to ${isVisible}`);
-  } catch (error) {
-    console.error("Error updating visibility:", error);
-    alert("Failed to update visibility.");
-  }
 }
 
 // Handle current semester toggle
 async function handleCurrentSemester(e) {
   const newCurrentId = e.target.dataset.id;
   const isChecked = e.target.checked;
-  if (!isChecked) return; // only act when toggled ON
+  if (!isChecked) return;
 
   if (!confirm("Changing the current semester will delete all staff. Continue?")) {
     e.target.checked = false;
@@ -144,19 +133,18 @@ async function handleCurrentSemester(e) {
   }
 
   try {
-    // 1️⃣ Update all semesterTable rows so only one is current
-    const semestersSnap = await db.collection("semesterTable").get();
-    const batchSem = db.batch();
-    semestersSnap.forEach(doc => {
-      const docRef = db.collection("semesterTable").doc(doc.id);
-      batchSem.update(docRef, { currentSemester: doc.id === newCurrentId });
-    });
-    await batchSem.commit();
+    const snapshot = await semesterRootRef.get();
+    const batch = db.batch();
 
-    // 2️⃣ Delete all staff
+    snapshot.forEach(doc => {
+      const docRef = semesterRootRef.doc(doc.id);
+      const isCurrent = doc.id === newCurrentId;
+      batch.update(docRef, { currentSemester: isCurrent });
+    });
+
+    await batch.commit();
     await deleteAllStaff();
 
-    // 3️⃣ Update all students to this semester
     const studentsSnap = await db.collection("Students").get();
     const batchStudents = db.batch();
     studentsSnap.forEach(studentDoc => {
@@ -165,7 +153,6 @@ async function handleCurrentSemester(e) {
     });
     await batchStudents.commit();
 
-    // 4️⃣ Update UI: only one toggle can be checked
     document.querySelectorAll(".current-sem-toggle").forEach(toggle => {
       toggle.checked = toggle.dataset.id === newCurrentId;
     });
@@ -176,12 +163,11 @@ async function handleCurrentSemester(e) {
   }
 }
 
-// Helper: Delete all staff
+// Delete all staff helper
 async function deleteAllStaff() {
   try {
     const staffSnap = await db.collection("staffTable").get();
     if (staffSnap.empty) return;
-
     const batch = db.batch();
     staffSnap.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
@@ -216,7 +202,6 @@ function handleEdit(e) {
   currentEditId = id;
   editSemesterIdInput.value = id;
   editSemesterNameInput.value = name;
-
   editModal.style.display = "flex";
 }
 
@@ -229,7 +214,7 @@ editSaveBtn.addEventListener("click", async () => {
   }
 
   try {
-    await db.collection("semesterTable").doc(currentEditId).update({ semester: newName });
+    await semesterRootRef.doc(currentEditId).update({ semester: newName });
     const row = document.querySelector(`.edit[data-id="${currentEditId}"]`).closest("tr");
     row.querySelector("td:nth-child(2)").textContent = newName;
     editModal.style.display = "none";
@@ -259,7 +244,7 @@ deleteCancelBtn.addEventListener("click", () => {
 
 deleteConfirmBtn.addEventListener("click", async () => {
   try {
-    await db.collection("semesterTable").doc(currentDeleteId).delete();
+    await semesterRootRef.doc(currentDeleteId).delete();
     currentDeleteRow.remove();
     deleteModal.style.display = "none";
     currentDeleteId = null;
@@ -293,12 +278,17 @@ async function handleFileUpload(e) {
       if (!id || !name) continue;
 
       try {
-        const docRef = db.collection("semesterTable").doc(id);
+        const docRef = semesterRootRef.doc(id);
         const docSnap = await docRef.get();
         if (docSnap.exists) continue;
 
-        await docRef.set({ id, semester: name, visibleToStudents: false, currentSemester: false });
-        addRowToTable(id, name, false, false);
+        await docRef.set({
+          id,
+          semester: name,
+          currentSemester: false
+        });
+
+        addRowToTable(id, name, false);
       } catch (error) {
         console.error(`Failed to upload ${name}:`, error);
       }

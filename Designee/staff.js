@@ -1,5 +1,20 @@
-// ✅ Staff CRUD Logic
-async function saveNewStaff() {
+// ✅ Staff CRUD Logic for /User/Designees/StaffDocs with role: "Staff"
+
+// Use window-scoped globals to avoid duplicate declarations
+window.userOffice = window.userOffice || "";
+window.userCategory = window.userCategory || "";
+window.userDepartment = window.userDepartment || "";
+window.currentUserRole = window.currentUserRole || "designee";
+window.selectedStaffId = window.selectedStaffId || null;
+
+// Helper to generate staffDocId without double dashes
+function generateStaffDocId(id, office, department, category) {
+  return [id, office, department, category].filter(Boolean).join("-");
+}
+
+// -----------------------
+// Save New Staff
+window.saveNewStaff = async function() {
   const id = document.getElementById("staffId").value.trim();
   const firstName = document.getElementById("firstName").value.trim();
   const lastName = document.getElementById("lastName").value.trim();
@@ -12,82 +27,81 @@ async function saveNewStaff() {
   }
 
   try {
-    const designeeId = JSON.parse(localStorage.getItem("userData")).id;
-    const designeeDoc = await db.collection("Designees").doc(designeeId).get();
+    // Get logged-in designee info
+    const designeeData = JSON.parse(localStorage.getItem("userData"));
+    const designeeId = designeeData.id;
+
+    const designeeDoc = await db.collection("User").doc("Designees")
+      .collection("DesigneesDocs").doc(designeeId).get();
     if (!designeeDoc.exists) return alert("Designee record not found.");
 
     const d = designeeDoc.data();
-    userOffice = d.office || "";
-    userCategory = d.category || "";
-    userDepartment = d.department || "";
+    window.userOffice = d.office || "";
+    window.userCategory = d.category || "";
+    window.userDepartment = d.department || "";
 
-    // ✅ Check duplicate by staff ID + office + category + department
-    const existing = await db
-      .collection("staffTable")
-      .where("id", "==", id)
-      .where("office", "==", userOffice)
-      .where("category", "==", userCategory)
-      .where("department", "==", userDepartment)
-      .get();
+    // Create staffDocId
+    const staffDocId = generateStaffDocId(id, window.userOffice, window.userDepartment, window.userCategory);
 
-    if (!existing.empty) return alert("Staff with this ID already exists.");
+    // Check if document already exists
+    const existing = await db.collection("User").doc("Designees")
+      .collection("StaffDocs").doc(staffDocId).get();
+    if (existing.exists) return alert("Staff with this ID already exists.");
 
-    // ✅ Add staff with Firestore auto-generated ID
-    await db.collection("staffTable").add({
-      id,
-      firstName,
-      lastName,
-      email,
-      password,
-      category: userCategory,
-      department: userDepartment,
-      office: userOffice,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdByDesigneeID: designeeId,
-    });
+    // Add new staff
+    await db.collection("User").doc("Designees")
+      .collection("StaffDocs").doc(staffDocId).set({
+        id,
+        firstName,
+        lastName,
+        email,
+        password,
+        office: window.userOffice,
+        category: window.userCategory,
+        department: window.userDepartment,
+        role: "Staff",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdByDesigneeID: designeeId
+      });
 
     alert("Staff added successfully!");
     closeModal("modalOverlay");
     clearModalInputs();
     await loadAllStaff();
+
   } catch (err) {
     console.error(err);
     alert("Error saving staff.");
   }
-}
+};
 
-async function getDesigneeInfoAndLoadStaff(userId) {
-  const doc = await db.collection("Designees").doc(userId).get();
-  if (!doc.exists) return;
-  const d = doc.data();
-  userOffice = d.office || "";
-  userCategory = d.category || "";
-  userDepartment = d.department || "";
-  await loadAllStaff();
-}
-
+// -----------------------
+// Load all staff for current designee
 async function loadAllStaff() {
-  const snapshot = await db
-    .collection("staffTable")
-    .where("office", "==", userOffice)
-    .where("category", "==", userCategory)
-    .where("department", "==", userDepartment)
+  const snapshot = await db.collection("User").doc("Designees")
+    .collection("StaffDocs")
+    .where("office", "==", window.userOffice)
+    .where("category", "==", window.userCategory)
+    .where("department", "==", window.userDepartment)
+    .where("role", "==", "Staff")
     .orderBy("createdAt", "desc")
     .get();
 
   const tbody = document.querySelector("tbody");
   tbody.innerHTML = "";
-  snapshot.forEach((doc) => addRowToTable(doc.data()));
+  snapshot.forEach(doc => addRowToTable(doc.data()));
 }
 
+// -----------------------
+// Add staff row to table
 function addRowToTable(data) {
   const tbody = document.querySelector("tbody");
   const row = document.createElement("tr");
   let actionButtons = "";
-  if (currentUserRole === "designee") {
+  if (window.currentUserRole === "designee") {
     actionButtons = `
       <button class="action-btn edit" onclick="editStaff('${data.id}')"><i class="fas fa-edit"></i></button>
-      <button class="action-btn delete" onclick="deleteStaff('${data.id}', this)"><i class="fas fa-trash"></i></button>
+      <button class="action-btn delete" onclick="deleteStaff('${data.id}')"><i class="fas fa-trash"></i></button>
     `;
   }
   row.innerHTML = `
@@ -101,17 +115,12 @@ function addRowToTable(data) {
   tbody.appendChild(row);
 }
 
-// Global variables to track which staff is being edited/deleted
-let selectedStaffId = null;
-
-// ✅ Open Edit Modal and populate fields
+// -----------------------
+// Open Edit Modal
 function editStaff(staffId) {
-  selectedStaffId = staffId;
-
+  window.selectedStaffId = staffId;
   const tbody = document.querySelector("tbody");
-  const row = Array.from(tbody.rows).find(
-    (r) => r.cells[0].innerText === staffId
-  );
+  const row = Array.from(tbody.rows).find(r => r.cells[0].innerText === staffId);
   if (!row) return;
 
   document.getElementById("editStaffId").value = row.cells[0].innerText;
@@ -123,14 +132,15 @@ function editStaff(staffId) {
   document.getElementById("editModalOverlay").style.display = "flex";
 }
 
-// ✅ Close Edit Modal
+// Close Edit Modal
 document.getElementById("editCancelBtn").addEventListener("click", () => {
   document.getElementById("editModalOverlay").style.display = "none";
 });
 
-// ✅ Save Edited Staff
+// -----------------------
+// Save Edited Staff
 document.getElementById("editSaveBtn").addEventListener("click", async () => {
-  if (!selectedStaffId) return;
+  if (!window.selectedStaffId) return;
 
   const firstName = document.getElementById("editFirstName").value.trim();
   const lastName = document.getElementById("editLastName").value.trim();
@@ -142,60 +152,64 @@ document.getElementById("editSaveBtn").addEventListener("click", async () => {
   }
 
   try {
-    // Find the document by staffId (manual field)
-    const snapshot = await db
-      .collection("staffTable")
-      .where("id", "==", selectedStaffId)
-      .get();
-    if (snapshot.empty) return alert("Staff not found.");
+    // Rebuild staffDocId
+    const staffDocId = generateStaffDocId(window.selectedStaffId, window.userOffice, window.userDepartment, window.userCategory);
 
-    const docId = snapshot.docs[0].id;
+    const docRef = db.collection("User").doc("Designees")
+      .collection("StaffDocs").doc(staffDocId);
 
-    await db.collection("staffTable").doc(docId).update({
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) return alert("Staff not found.");
+
+    await docRef.update({
       firstName,
       lastName,
       email,
-      password,
+      password
     });
 
     alert("Staff updated successfully!");
     document.getElementById("editModalOverlay").style.display = "none";
-    await loadAllStaff(); // Refresh table
+    await loadAllStaff();
+
   } catch (err) {
     console.error(err);
     alert("Error updating staff.");
   }
 });
 
-// ✅ Open Delete Modal
+// -----------------------
+// Delete Staff
 function deleteStaff(staffId) {
-  selectedStaffId = staffId;
+  window.selectedStaffId = staffId;
   document.getElementById("deleteModalOverlay").style.display = "flex";
 }
 
-// ✅ Cancel Delete
+// Cancel Delete
 document.getElementById("deleteCancelBtn").addEventListener("click", () => {
-  selectedStaffId = null;
+  window.selectedStaffId = null;
   document.getElementById("deleteModalOverlay").style.display = "none";
 });
 
-// ✅ Confirm Delete
+// Confirm Delete
 document.getElementById("deleteConfirmBtn").addEventListener("click", async () => {
-  if (!selectedStaffId) return;
+  if (!window.selectedStaffId) return;
 
   try {
-    const snapshot = await db
-      .collection("staffTable")
-      .where("id", "==", selectedStaffId)
-      .get();
-    if (snapshot.empty) return alert("Staff not found.");
+    const staffDocId = generateStaffDocId(window.selectedStaffId, window.userOffice, window.userDepartment, window.userCategory);
 
-    const docId = snapshot.docs[0].id;
-    await db.collection("staffTable").doc(docId).delete();
+    const docRef = db.collection("User").doc("Designees")
+      .collection("StaffDocs").doc(staffDocId);
+
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) return alert("Staff not found.");
+
+    await docRef.delete();
 
     alert("Staff deleted successfully!");
     document.getElementById("deleteModalOverlay").style.display = "none";
-    await loadAllStaff(); // Refresh table
+    await loadAllStaff();
+
   } catch (err) {
     console.error(err);
     alert("Error deleting staff.");

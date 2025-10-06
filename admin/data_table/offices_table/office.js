@@ -1,5 +1,3 @@
-
-
 // DOM Elements
 const openBtn = document.getElementById("openModalBtn");
 const modal = document.getElementById("modalOverlay");
@@ -8,6 +6,12 @@ const saveBtn = document.getElementById("saveOfficeBtn");
 const officeIdInput = document.getElementById("officeId");
 const officeInput = document.getElementById("officeName");
 const tableBody = document.querySelector("tbody");
+
+// Firestore reference
+const officeCollection = db
+  .collection("DataTable")
+  .doc("Office")
+  .collection("OfficeDocs");
 
 // Open modal
 openBtn.addEventListener("click", () => {
@@ -23,9 +27,7 @@ cancelBtn.addEventListener("click", () => {
 
 // Close modal on outside click
 modal.addEventListener("click", (e) => {
-  if (e.target === modal) {
-    modal.style.display = "none";
-  }
+  if (e.target === modal) modal.style.display = "none";
 });
 
 // Save new office (manual ID)
@@ -39,7 +41,7 @@ saveBtn.addEventListener("click", async () => {
   }
 
   try {
-    await db.collection("officeTable").doc(id).set({
+    await officeCollection.doc(id).set({
       id: id,
       office: officeName
     });
@@ -57,11 +59,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
+  if (storedAdminID) usernameDisplay.textContent = storedAdminID;
+  else usernameDisplay.textContent = "Unknown";
+
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", function (e) {
@@ -78,16 +78,13 @@ window.addEventListener("DOMContentLoaded", async () => {
         "office",
         "department"
       ];
-
       keysToRemove.forEach(key => localStorage.removeItem(key));
-
       window.location.href = "../../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
   }
+
   try {
-    const snapshot = await db.collection("officeTable").get();
+    const snapshot = await officeCollection.get();
     const docs = snapshot.docs
       .filter(doc => !isNaN(parseInt(doc.id)))
       .sort((a, b) => parseInt(a.id) - parseInt(b.id));
@@ -152,7 +149,7 @@ editSaveBtn.addEventListener("click", async () => {
   }
 
   try {
-    await db.collection("officeTable").doc(currentEditId).update({ office: newName });
+    await officeCollection.doc(currentEditId).update({ office: newName });
     const row = document.querySelector(`.edit[data-id="${currentEditId}"]`).closest("tr");
     row.querySelector("td:nth-child(2)").textContent = newName;
     editModal.style.display = "none";
@@ -182,7 +179,7 @@ deleteCancelBtn.addEventListener("click", () => {
 
 deleteConfirmBtn.addEventListener("click", async () => {
   try {
-    await db.collection("officeTable").doc(currentDeleteId).delete();
+    await officeCollection.doc(currentDeleteId).delete();
     currentDeleteRow.remove();
     deleteModal.style.display = "none";
     currentDeleteId = null;
@@ -197,7 +194,6 @@ const uploadBtn = document.getElementById("uploadBtn");
 const uploadInput = document.getElementById("uploadInput");
 
 uploadBtn.addEventListener("click", () => uploadInput.click());
-
 uploadInput.addEventListener("change", handleFileUpload);
 
 async function handleFileUpload(e) {
@@ -213,11 +209,11 @@ async function handleFileUpload(e) {
 
     for (const row of jsonData) {
       const id = row["ID no."]?.toString().trim();
-      const officeName = row["Types of Office"]?.trim();
+      const officeName = row["Office"]?.trim(); // ✅ corrected column name
       if (!id || !officeName) continue;
 
       try {
-        await db.collection("officeTable").doc(id).set({
+        await officeCollection.doc(id).set({
           id: id,
           office: officeName
         });

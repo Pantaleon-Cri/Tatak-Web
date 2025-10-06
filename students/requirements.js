@@ -1,25 +1,93 @@
-async function loadCurrentSemester(db) {
-  try {
-    const snapshot = await db.collection("semesterTable")
-      .where("currentSemester", "==", true)
-      .limit(1)
-      .get();
+// ========================== Firebase v8 Initialization ==========================
+var firebaseConfig = {
+  apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
+  authDomain: "tatak-mobile-web.firebaseapp.com",
+  projectId: "tatak-mobile-web",
+  storageBucket: "tatak-mobile-web.appspot.com",
+  messagingSenderId: "771908675869",
+  appId: "1:771908675869:web:88e68ca51ed7ed4da019f4",
+  measurementId: "G-CENPP29LKQ"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-    if (!snapshot.empty) {
-      const semesterData = snapshot.docs[0].data();
-      const semesterName = semesterData.semester || "No Semester Found"; // adjust field name if different
-      document.getElementById("semesterDisplay").textContent = semesterName;
-    } else {
-      document.getElementById("semesterDisplay").textContent = "No Active Semester";
+// ========================== Utilities ==========================
+function normalizeString(str) {
+  return String(str || "").trim().toLowerCase();
+}
+
+// Resolve office name from designee
+async function resolveOfficeName(designeeID) {
+  try {
+    const snap = await db.collection("/User/Designees/DesigneesDocs").doc(designeeID).get();
+    if (!snap.exists) return designeeID;
+    const designee = snap.data();
+
+    if (designee.category) {
+      let catDoc = await db.collection("/DataTable/Clubs/ClubsDocs").doc(designee.category).get();
+      if (catDoc.exists && catDoc.data().club) return catDoc.data().club;
+
+      catDoc = await db.collection("/DataTable/Lab/LabDocs").doc(designee.category).get();
+      if (catDoc.exists && catDoc.data().lab) return catDoc.data().lab;
     }
-  } catch (error) {
-    console.error("Error fetching semester:", error);
-    document.getElementById("semesterDisplay").textContent = "Error Loading Semester";
+
+    if (designee.department) {
+      const depDoc = await db.collection("/DataTable/Department/DepartmentDocs").doc(designee.department).get();
+      const depName = depDoc.exists ? depDoc.data().department : "";
+
+      if (designee.office) {
+        const officeDoc = await db.collection("/DataTable/Office/OfficeDocs").doc(designee.office).get();
+        const officeName = officeDoc.exists ? officeDoc.data().office : "";
+        return depName && officeName ? `${depName} - ${officeName}` : depName || officeName;
+      }
+      return depName;
+    }
+
+    if (designee.office) {
+      const officeDoc = await db.collection("/DataTable/Office/OfficeDocs").doc(designee.office).get();
+      if (officeDoc.exists) return officeDoc.data().office;
+    }
+
+    if (designee.firstName || designee.lastName) {
+      return `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
+    }
+
+    return designeeID;
+  } catch (err) {
+    console.error("Error resolving office name:", err);
+    return designeeID;
   }
 }
 
+// ========================== Load Current Semester ==========================
+async function getCurrentSemester() {
+  try {
+    const semesterSnapshot = await db.collection("/DataTable/Semester/SemesterDocs")
+                                     .where("currentSemester", "==", true)
+                                     .limit(1)
+                                     .get();
+    if (!semesterSnapshot.empty) {
+      const semesterData = semesterSnapshot.docs[0].data();
+      console.log("Current semester found:", semesterData.semester);
+      return { id: semesterSnapshot.docs[0].id, name: semesterData.semester };
+    } else {
+      console.log("No current semester found in Firestore.");
+    }
+  } catch (err) {
+    console.error("Error fetching semester:", err);
+  }
+  return null;
+}
+
+// ========================== Main ==========================
 document.addEventListener("DOMContentLoaded", async () => {
-    await loadCurrentSemester(db);
+  const semester = await getCurrentSemester();
+  if (!semester) {
+    alert("No active semester found.");
+    return;
+  }
+  document.getElementById("semesterDisplay").textContent = semester.name;
+
   const studentId = localStorage.getItem("schoolID");
   if (!studentId) {
     alert("Session expired. Please log in again.");
@@ -27,202 +95,106 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
+  const container = document.querySelector(".student-main-content");
+  container.innerHTML = "";
+
   try {
-    const requirementsContainer = document.querySelector(".student-main-content");
-    requirementsContainer.innerHTML = "";
-
-    // 🔹 Fetch student
-    const studentDoc = await db.collection("Students").doc(studentId).get();
-    if (!studentDoc.exists) throw new Error("Student not found");
-    const student = studentDoc.data();
-    const studentSemesterId = String(student.semester || "").trim();
-
-    // 🔹 Match semesterTable with student.semester AND currentSemester == true
-    const semesterSnap = await db.collection("semesterTable")
-      .where("id", "==", studentSemesterId)
-      .where("currentSemester", "==", true)
-      .limit(1)
-      .get();
-
-    if (semesterSnap.empty) {
-      requirementsContainer.innerHTML = `
-        <div class="clearance-section-card">
-          <div class="section-header">No Active Semester Found</div>
-          <div class="notes-section">
-            <p>No requirements available because your semester is not currently active.</p>
-          </div>
-        </div>
-      `;
+    const designeeSnap = await db.collection("/User/Designees/DesigneesDocs").get();
+    if (designeeSnap.empty) {
+      container.innerHTML = "<p>No offices found in Validation</p>";
+      console.log("No designees found in Firestore.");
       return;
     }
 
-    const semesterRecord = semesterSnap.docs[0].data();
-    const currentSemesterName = semesterRecord.semester;
-    console.log("📖 Active semester for student:", currentSemesterName);
-
-    // 🔹 Fetch requirements from ValidateRequirementsTable
-    const valDoc = await db.collection("ValidateRequirementsTable").doc(studentId).get();
-    if (!valDoc.exists) {
-      requirementsContainer.innerHTML = `
-        <div class="clearance-section-card">
-          <div class="section-header">No Requirements Found</div>
-          
-        </div>
-      `;
-      return;
-    }
-
-    const validationData = valDoc.data();
-    const offices = validationData.offices || {};
     let anyRequirementsFound = false;
 
-    // 🔹 Loop through each office requirements
-    for (const officeKey in offices) {
-      const officeReqs = offices[officeKey];
-      if (!Array.isArray(officeReqs)) continue;
+    for (const designeeDoc of designeeSnap.docs) {
+      const designeeID = designeeDoc.id;
+      console.log("Processing designee:", designeeID);
 
-      // Filter only this semester’s requirements
-      const filteredReqs = officeReqs.filter(req =>
-        !req.semester || normalizeString(req.semester) === normalizeString(currentSemesterName)
-      );
+      // Check if student exists under this designee
+      const semesterDoc = await db
+        .collection("Validation")
+        .doc(designeeID)
+        .collection(studentId)
+        .doc(semester.id)
+        .get();
 
-      if (filteredReqs.length === 0) continue;
+      if (!semesterDoc.exists) {
+        console.log(`No validation document for student ${studentId} in designee ${designeeID}`);
+        continue;
+      }
 
+      const requirements = semesterDoc.data().requirements || [];
+      console.log(`Requirements found for ${designeeID}:`, requirements);
+
+      if (requirements.length === 0) continue;
       anyRequirementsFound = true;
 
-      // 🔹 Resolve office header (human-readable name)
-      let officeName = await resolveOfficeName(officeKey);
-      if (!officeName) officeName = officeKey; // fallback
+      const officeName = await resolveOfficeName(designeeID);
 
-      // 🔹 Build requirements list
-      let reqListHTML = "<ul class='requirements-list'>";
-      for (const req of filteredReqs) {
+      // Build requirements HTML
+      let reqHTML = "<ul class='requirements-list'>";
+      for (const req of requirements) {
         const safeId = req.requirement.replace(/\s+/g, "-").toLowerCase();
-        const isChecked = req.status === true;
-
-        reqListHTML += `
-          <li class="requirement-item">
-            <input type="checkbox" id="${safeId}" ${isChecked ? "checked" : ""} onclick="return false;">
-            <label for="${safeId}">${req.requirement}</label>
-          </li>
-        `;
+        const checked = req.status ? "checked" : "";
+        reqHTML += `<li class="requirement-item">
+                      <input type="checkbox" id="${safeId}" ${checked} onclick="return false;">
+                      <label for="${safeId}">${req.requirement}</label>
+                    </li>`;
       }
-      reqListHTML += "</ul>";
+      reqHTML += "</ul>";
 
-      // 🔹 Fetch notes for this office & semester
-     // 🔹 Fetch notes for this officer & semester
-const notesSnap = await db.collection("notesTable")
-  .where("semester", "==", currentSemesterName)
-  .where("addedBy", "==", officeKey) // <-- match officer's userID
-  .get();
+      // ========================== Fetch Notes ==========================
+      let notesHTML = "<p>No Notes Yet</p>";
+try {
+  const notesSnap = await db
+    .collection("RequirementsAndNotes") // collection
+    .doc("NotesList")                  // doc
+    .collection(designeeID)            // subcollection for designee
+    .get();
 
-let notesHTML = `<p>No Notes Yet</p>`;
-if (!notesSnap.empty) {
-  notesHTML = "";
-  notesSnap.forEach(doc => {
-    const noteData = doc.data();
-    if (noteData.note) notesHTML += `<p>${noteData.note}</p>`;
-  });
+  if (!notesSnap.empty) {
+    notesHTML = "";
+    notesSnap.forEach(doc => {
+      const noteData = doc.data();
+      console.log(`Note found for ${designeeID}:`, noteData);
+
+      // Only show notes for this designee and current semester
+      if (noteData.addedBy === designeeID && noteData.semesterId === semester.id) {
+        notesHTML += `<p>${noteData.note}</p>`;
+      }
+    });
+  } else {
+    console.log(`No notes found for designeeID ${designeeID}`);
+  }
+} catch (e) {
+  console.warn("Error fetching notes:", e);
 }
 
 
-      // 🔹 Render section
-      const requirementSection = document.createElement("div");
-      requirementSection.className = "clearance-section-card";
-      requirementSection.innerHTML = `
+      // Render section
+      const section = document.createElement("div");
+      section.className = "clearance-section-card";
+      section.innerHTML = `
         <div class="section-header">${officeName}</div>
-        ${reqListHTML}
+        ${reqHTML}
         <div class="notes-section">
           <h4>Notes</h4>
           ${notesHTML}
         </div>
       `;
-
-      requirementsContainer.appendChild(requirementSection);
+      container.appendChild(section);
     }
 
-    // 🔹 Fallback if no requirements matched
     if (!anyRequirementsFound) {
-      requirementsContainer.innerHTML = `
-        <div class="clearance-section-card">
-          <div class="section-header">No Requirements Found</div>
-          
-        </div>
-      `;
+      container.innerHTML = `<div class="clearance-section-card">
+                               <div class="section-header">No Requirements Found</div>
+                             </div>`;
     }
 
   } catch (err) {
-    console.error("Error loading student requirements:", err);
-    alert("Unable to load your requirements. Please try again later.");
+    console.error("Error loading requirements:", err);
+    container.innerHTML = "<p>Error loading requirements. Please try again later.</p>";
   }
 });
-
-// 🔹 Utility normalizer
-function normalizeString(str) {
-  return String(str || "").trim().toLowerCase();
-}
-
-// 🔹 Resolve officeName using userID field in Designees
-// 🔹 Resolve officeName using userID field in Designees
-async function resolveOfficeName(userId) {
-  try {
-    // 🔑 Always query by userID field (not docId)
-    const snap = await db.collection("Designees")
-      .where("userID", "==", String(userId))
-      .limit(1)
-      .get();
-
-    if (snap.empty) {
-      console.warn("⚠️ No Designee found for userID:", userId);
-      return null;
-    }
-
-    const designee = snap.docs[0].data();
-
-    // Case 1: Has category (priority: acadClub → lab → group)
-    if (designee.category) {
-      // acadClubTable → use .club
-      let catDoc = await db.collection("acadClubTable").doc(designee.category).get();
-      if (catDoc.exists && catDoc.data().club) return catDoc.data().club;
-
-      // labTable → use .lab
-      catDoc = await db.collection("labTable").doc(designee.category).get();
-      if (catDoc.exists && catDoc.data().lab) return catDoc.data().lab;
-
-      // groupTable → use .club
-      catDoc = await db.collection("groupTable").doc(designee.category).get();
-      if (catDoc.exists && catDoc.data().club) return catDoc.data().club;
-    }
-
-    // Case 2: Has department (+ maybe office)
-    if (designee.department) {
-      const depDoc = await db.collection("departmentTable").doc(designee.department).get();
-      const depName = depDoc.exists ? depDoc.data().department : "";
-
-      if (designee.office) {
-        const officeDoc = await db.collection("officeTable").doc(designee.office).get();
-        const officeName = officeDoc.exists ? officeDoc.data().office : "";
-        return depName && officeName ? `${depName} - ${officeName}` : depName || officeName;
-      }
-
-      return depName;
-    }
-
-    // Case 3: Only office
-    if (designee.office) {
-      const officeDoc = await db.collection("officeTable").doc(designee.office).get();
-      if (officeDoc.exists) return officeDoc.data().office;
-    }
-
-    // Case 4: Fallback → full name
-    if (designee.firstName || designee.lastName) {
-      return `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
-    }
-
-    return null;
-  } catch (err) {
-    console.error("Error resolving office name:", err);
-    return null;
-  }
-}
-

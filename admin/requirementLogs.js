@@ -1,21 +1,21 @@
+// ========================== requirement_approval_logs.js ==========================
+
+// ✅ On page load
 document.addEventListener("DOMContentLoaded", async () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID; // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
+  usernameDisplay.textContent = storedAdminID || "Unknown";
 
   await loadRequirementApprovalLogs();
   setupExportButton();
 });
 
+// ========================== Load Requirement Approval Logs ==========================
 async function loadRequirementApprovalLogs(full = false) {
   const db = firebase.firestore();
 
-  // Detect which container exists
+  // Detect container (Dashboard or Activity Page)
   const dashboardList = document.getElementById("requirementLogsList");
   const fullTable = document.getElementById("fullCheckedByLog");
 
@@ -24,83 +24,83 @@ async function loadRequirementApprovalLogs(full = false) {
     return;
   }
 
-  // Loading placeholder
-  if (dashboardList) {
-    dashboardList.innerHTML = `<li>Loading requirement logs...</li>`;
-  }
-  if (fullTable) {
-    fullTable.innerHTML = `<tr><td colspan="6">Loading requirement logs...</td></tr>`;
-  }
+  // Loading placeholders
+  if (dashboardList) dashboardList.innerHTML = `<li>Loading requirement logs...</li>`;
+  if (fullTable) fullTable.innerHTML = `<tr><td colspan="6">Loading requirement logs...</td></tr>`;
 
   try {
-    // 🔹 Get current semester
-    const semesterSnap = await db.collection("semesterTable").where("currentSemester", "==", true).limit(1).get();
+    // 🔹 Get current semester document
+    const semesterSnap = await db
+      .collection("/DataTable/Semester/SemesterDocs")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
+
     if (semesterSnap.empty) {
-      console.warn("⚠️ No current semester found.");
       if (dashboardList) dashboardList.innerHTML = `<li>No current semester set.</li>`;
       if (fullTable) fullTable.innerHTML = `<tr><td colspan="6">No current semester set.</td></tr>`;
       return;
     }
-    const currentSemester = semesterSnap.docs[0].data().semester;
 
-    let query = db.collection("ValidateRequirementsTable");
-    if (dashboardList) {
-      // If we're on Dashboard → show only latest 5
-      query = query.limit(5);
-    }
-    const snapshot = await query.get();
+    const currentSemesterDoc = semesterSnap.docs[0];
+    const currentSemesterName = currentSemesterDoc.data().semester;
+    const currentSemesterID = currentSemesterDoc.id;
 
     const allLogs = [];
-    for (const doc of snapshot.docs) {
-      const data = doc.data();
-      if (!data.offices) continue;
 
-      for (const [userID, requirementsArr] of Object.entries(data.offices)) {
-        if (!Array.isArray(requirementsArr)) continue;
+    // 🔹 Loop through all Designees
+    const designeeSnap = await db.collection("/User/Designees/DesigneesDocs").get();
+    for (const designeeDoc of designeeSnap.docs) {
+      const designeeID = designeeDoc.id;
 
-        const officeName = await resolveOfficeName(db, userID);
+      // 🔹 Loop through all students
+      const studentSnap = await db.collection("/User/Students/StudentsDocs").get();
+      for (const studentDoc of studentSnap.docs) {
+        const studentID = studentDoc.id;
 
-        for (const req of requirementsArr) {
-          // 🔹 Only include logs for current semester
-          if (!req.status || !req.checkedBy || req.semester !== currentSemester) continue;
+        // 🔹 Check if this student has validation data under this designee
+        const semesterDocRef = await db
+          .collection(`/Validation/${designeeID}/${studentID}`)
+          .doc(currentSemesterID)
+          .get();
 
-          const studentID = data.studentID || req.studentID;
-          let studentName = studentID || "Unknown Student";
+        if (!semesterDocRef.exists) continue;
 
-          if (studentID) {
-            try {
-              const studentDoc = await db.collection("Students").doc(studentID).get();
-              if (studentDoc.exists) {
-                const sData = studentDoc.data();
-                studentName = `${sData.firstName || ""} ${sData.lastName || ""}`.trim();
-              }
-            } catch (err) {
-              console.error("Error fetching student:", err);
-            }
-          }
+        const semData = semesterDocRef.data();
+        const requirements = semData.requirements || [];
+
+        // 🔹 Student name
+        let studentName = `${studentDoc.data().firstName || ""} ${studentDoc.data().lastName || ""}`.trim();
+
+        for (const req of requirements) {
+          if (!req.status || !req.checkedBy) continue;
+
+          // 🔹 Resolve office/department/club from designee
+          const officeName = await resolveOfficeName(db, designeeID);
 
           allLogs.push({
             office: officeName,
             personnel: req.checkedBy,
-            action: "Approved",
+            action: req.status === true ? "Approved" : "Pending",
             student: studentName,
             requirement: req.requirement || "—",
-            timestamp: req.checkedAt ? new Date(req.checkedAt) : null
+            timestamp: req.checkedAt ? new Date(req.checkedAt) : null,
           });
         }
       }
     }
 
-    // Sort by latest
+    // Sort by timestamp (latest first)
     allLogs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-    // Render for Dashboard
+    // ========================== Dashboard Preview ==========================
     if (dashboardList) {
       dashboardList.innerHTML = "";
-      if (allLogs.length === 0) {
-        dashboardList.innerHTML = `<li>No approvals yet for ${currentSemester}.</li>`;
+      const previewLogs = allLogs.slice(0, 5); // latest 5
+      if (previewLogs.length === 0) {
+        dashboardList.innerHTML = `<li>No approvals yet for ${currentSemesterName}.</li>`;
       } else {
-        allLogs.forEach(log => {
+        previewLogs.forEach(log => {
           const li = document.createElement("li");
           li.textContent = `${log.personnel} approved "${log.requirement}" for ${log.student} (${log.office})`;
           dashboardList.appendChild(li);
@@ -108,13 +108,25 @@ async function loadRequirementApprovalLogs(full = false) {
       }
     }
 
-    // Render for Full Logs page
+    // ========================== Full Activity Log Table ==========================
     if (fullTable) {
       fullTable.innerHTML = "";
       if (allLogs.length === 0) {
-        fullTable.innerHTML = `<tr><td colspan="6">No approvals yet for ${currentSemester}.</td></tr>`;
+        fullTable.innerHTML = `<tr><td colspan="6">No approvals yet for ${currentSemesterName}.</td></tr>`;
       } else {
         allLogs.forEach(log => {
+          const formattedTime = log.timestamp
+            ? log.timestamp.toLocaleString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: true,
+              })
+            : "No time";
+
           const row = document.createElement("tr");
           row.innerHTML = `
             <td>${log.office}</td>
@@ -122,13 +134,12 @@ async function loadRequirementApprovalLogs(full = false) {
             <td>${log.action}</td>
             <td>${log.student}</td>
             <td>${log.requirement}</td>
-            <td>${log.timestamp ? log.timestamp.toLocaleString() : "No time"}</td>
+            <td>${formattedTime}</td>
           `;
           fullTable.appendChild(row);
         });
       }
     }
-
   } catch (err) {
     console.error("Error loading requirement logs:", err);
     if (dashboardList) dashboardList.innerHTML = `<li>Error loading requirement logs.</li>`;
@@ -136,49 +147,48 @@ async function loadRequirementApprovalLogs(full = false) {
   }
 }
 
-async function resolveOfficeName(db, userID) {
+// ========================== Resolve Office Name ==========================
+async function resolveOfficeName(db, designeeID) {
   try {
-    const designeeDoc = await db.collection("Designees").doc(userID).get();
-    if (!designeeDoc.exists) return userID;
+    const designeeDoc = await db.collection("/User/Designees/DesigneesDocs").doc(designeeID).get();
+    if (!designeeDoc.exists) return designeeID;
 
     const { office, department, category } = designeeDoc.data();
 
+    // Office only
     if (!category && !department) {
-      const officeDoc = await db.collection("officeTable").doc(office).get();
+      const officeDoc = await db.collection("/DataTable/Office/OfficeDocs").doc(office).get();
       return officeDoc.exists ? officeDoc.data().office : office;
     }
 
+    // Office + Department
     if (!category && department) {
-      const officeDoc = await db.collection("officeTable").doc(office).get();
-      const deptDoc = await db.collection("departmentTable").doc(department).get();
+      const officeDoc = await db.collection("/DataTable/Office/OfficeDocs").doc(office).get();
+      const deptDoc = await db.collection("/DataTable/Department/DepartmentDocs").doc(department).get();
       const officeName = officeDoc.exists ? officeDoc.data().office : office;
       const deptName = deptDoc.exists ? deptDoc.data().department : department;
       return `${officeName} - ${deptName}`;
     }
 
+    // Academic Club / Group / Lab
     if (category) {
-      const labDoc = await db.collection("labTable").doc(category).get();
+      const labDoc = await db.collection("/DataTable/Lab/LabDocs").doc(category).get();
       if (labDoc.exists) return labDoc.data().lab;
 
-      const acadDoc = await db.collection("acadClubTable").doc(category).get();
-      if (acadDoc.exists) return acadDoc.data().codeName;
-
-      const groupDoc = await db.collection("groupTable").doc(category).get();
-      if (groupDoc.exists) return groupDoc.data().club;
+      const clubDoc = await db.collection("/DataTable/Clubs/ClubsDocs").doc(category).get();
+      if (clubDoc.exists) return clubDoc.data().codeName || clubDoc.data().club;
 
       return category;
     }
 
-    return userID;
+    return designeeID;
   } catch (err) {
     console.error("Error resolving office name:", err);
-    return userID;
+    return designeeID;
   }
 }
 
-// --------------------------
-// XLSX Export
-// --------------------------
+// ========================== XLSX Export ==========================
 async function setupExportButton() {
   const exportBtn = document.getElementById("exportSheetBtn");
   if (!exportBtn) return;
@@ -187,15 +197,19 @@ async function setupExportButton() {
     try {
       const db = firebase.firestore();
 
-      // Get current semester
-      const semesterSnap = await db.collection("semesterTable").where("currentSemester", "==", true).limit(1).get();
+      const semSnap = await db
+        .collection("/DataTable/Semester/SemesterDocs")
+        .where("currentSemester", "==", true)
+        .limit(1)
+        .get();
+
       let semesterName = "UnknownSemester";
-      if (!semesterSnap.empty) {
-        semesterName = semesterSnap.docs[0].data().semester.replace(/\s+/g, "_");
+      if (!semSnap.empty) {
+        semesterName = semSnap.docs[0].data().semester.replace(/\s+/g, "_");
       }
 
       const tableRows = document.querySelectorAll("#fullCheckedByLog tr");
-      const data = [["Office","Personnel","Action","Student Name","Requirement","Timestamp"]];
+      const data = [["Office", "Personnel", "Action", "Student Name", "Requirement", "Timestamp"]];
 
       tableRows.forEach(tr => {
         const row = Array.from(tr.children).map(td => td.textContent);

@@ -1,4 +1,3 @@
-
 // Firebase configuration (v8)
 var firebaseConfig = {
   apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
@@ -12,7 +11,7 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 var db = firebase.firestore();
 
-// DOM element
+// DOM elements
 const semester = document.querySelector("#semesterTable tbody");
 const department = document.querySelector("#departmentTable tbody");
 const course = document.querySelector("#courseTable tbody");
@@ -22,265 +21,169 @@ const clubs = document.querySelector("#clubsTable tbody");
 const lab = document.querySelector("#labTable tbody");
 const group = document.querySelector("#groupTable tbody");
 
-
-// Load first 3 semester entries
 window.addEventListener("DOMContentLoaded", async () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
+  usernameDisplay.textContent = storedAdminID || "Unknown";
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID;  // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
-   const dropdownToggle = document.getElementById("userDropdownToggle");
+  const dropdownToggle = document.getElementById("userDropdownToggle");
   const dropdownMenu = document.getElementById("dropdownMenu");
-
-  // Toggle dropdown on click
   dropdownToggle.addEventListener("click", () => {
-    dropdownMenu.style.display = 
-      dropdownMenu.style.display === "block" ? "none" : "block";
+    dropdownMenu.style.display = dropdownMenu.style.display === "block" ? "none" : "block";
   });
-
-  // Hide dropdown if clicked outside
   document.addEventListener("click", (event) => {
     if (!dropdownToggle.contains(event.target) && !dropdownMenu.contains(event.target)) {
       dropdownMenu.style.display = "none";
     }
   });
+
+  // Load all tables
+  loadSemester();
+  loadDepartment();
+  loadCourse();
+  loadYear();
+  loadOffice();
+  loadLab();
+  loadClubs();
+  loadGroup();
+});
+
+// 🔹 SEMESTER
+async function loadSemester() {
   try {
-    semester.innerHTML = ""; // Clear previous rows
-
-    const snapshot = await db.collection("semesterTable")
-      .orderBy(firebase.firestore.FieldPath.documentId()) // sort by document ID
-      .limit(3) // get first 3 only
-      .get();
-
+    semester.innerHTML = "";
+    const snapshot = await db.collection("DataTable").doc("Semester").collection("SemesterDocs").limit(3).get();
     snapshot.forEach(doc => {
       const data = doc.data();
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${data.id}</td>
-        <td>${data.semester}</td>
-      `;
-      semester.appendChild(row);
+      semester.innerHTML += `<tr><td>${doc.id}</td><td>${data.semester}</td></tr>`;
     });
   } catch (error) {
     console.error("Error loading semesters:", error);
   }
-});
+}
 
-window.addEventListener("DOMContentLoaded", async () => {
+// 🔹 DEPARTMENT
+async function loadDepartment() {
   try {
-    department.innerHTML = ""; // Clear previous rows
-
-    const snapshot = await db.collection("departmentTable")
-      .orderBy(firebase.firestore.FieldPath.documentId()) // sort by document ID
-      .limit(3) // get first 3 only
-      .get();
-
+    department.innerHTML = "";
+    const snapshot = await db.collection("DataTable").doc("Department").collection("DepartmentDocs").limit(3).get();
     snapshot.forEach(doc => {
       const data = doc.data();
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${data.id}</td>
-        <td>${data.code}</td>
-        <td>${data.department}</td>
-      `;
-      department.appendChild(row);
+      department.innerHTML += `<tr><td>${doc.id}</td><td>${data.code}</td><td>${data.department}</td></tr>`;
     });
   } catch (error) {
     console.error("Error loading department:", error);
   }
-});
+}
 
-window.addEventListener("DOMContentLoaded", async () => {
+// 🔹 COURSE
+async function loadCourse() {
   try {
-    course.innerHTML = ""; // Clear previous rows
-
-    const snapshot = await db.collection("courseTable")
-      .orderBy(firebase.firestore.FieldPath.documentId()) // sort by document ID
-      .limit(3) // get first 3 only
-      .get();
-
+    course.innerHTML = "";
+    const snapshot = await db.collection("DataTable").doc("Course").collection("CourseDocs").limit(3).get();
     snapshot.forEach(doc => {
       const data = doc.data();
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${data.id}</td>
-        <td>${data.course}</td>
-        <td>${data.deptCodeName}</td>
-        <td>${data.clubCodeName}</td>
-       
-      `;
-      course.appendChild(row);
+      // Convert clubCodeName array properly
+      const clubsDisplay = Array.isArray(data.clubCodeName) ? data.clubCodeName.join(", ") : data.clubCodeName;
+      course.innerHTML += `
+        <tr>
+          <td>${doc.id}</td>
+          <td>${data.course}</td>
+         
+        </tr>`;
     });
   } catch (error) {
     console.error("Error loading course:", error);
   }
-});
+}
 
-window.addEventListener("DOMContentLoaded", async () => {
+// 🔹 YEAR LEVEL
+async function loadYear() {
   try {
-    year.innerHTML = ""; // Clear previous rows
-
-    const snapshot = await db.collection("yearLevelTable")
-      .orderBy(firebase.firestore.FieldPath.documentId()) // sort by document ID
-      .limit(3) // get first 3 only
-      .get();
-
+    year.innerHTML = "";
+    const snapshot = await db.collection("DataTable").doc("YearLevel").collection("YearLevelDocs").limit(3).get();
     snapshot.forEach(doc => {
       const data = doc.data();
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${data.id}</td>
-        <td>${data.yearLevel}</td>
-      `;
-      year.appendChild(row);
+      year.innerHTML += `<tr><td>${doc.id}</td><td>${data.yearLevel}</td></tr>`;
     });
   } catch (error) {
-    console.error("Error loading year:", error);
+    console.error("Error loading year level:", error);
   }
-});
-window.addEventListener("DOMContentLoaded", async () => {
+}
+
+// 🔹 OFFICE
+async function loadOffice() {
   try {
-    office.innerHTML = ""; // Clear previous rows
-
-    const snapshot = await db.collection("officeTable")
-      .orderBy(firebase.firestore.FieldPath.documentId()) // sort by document ID
-      .limit(3) // get first 3 only
-      .get();
-
+    office.innerHTML = "";
+    const snapshot = await db.collection("DataTable").doc("Office").collection("OfficeDocs").limit(3).get();
     snapshot.forEach(doc => {
       const data = doc.data();
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${doc.id}</td>
-        <td>${data.office}</td>
-      `;
-      office.appendChild(row);
+      office.innerHTML += `<tr><td>${doc.id}</td><td>${data.office}</td></tr>`;
     });
   } catch (error) {
     console.error("Error loading office:", error);
   }
-});
+}
 
-window.addEventListener("DOMContentLoaded", async () => {
+// 🔹 LAB
+async function loadLab() {
   try {
-    course.innerHTML = ""; // Clear previous rows
-
-    const snapshot = await db.collection("labTable")
-      .orderBy(firebase.firestore.FieldPath.documentId()) // sort by document ID
-      .limit(3) // get first 3 only
-      .get();
-
+    lab.innerHTML = "";
+    const snapshot = await db.collection("DataTable").doc("Lab").collection("LabDocs").limit(3).get();
     snapshot.forEach(doc => {
       const data = doc.data();
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${doc.id}</td>
-        <td>${data.lab}</td>
-      `;
-      lab.appendChild(row);
+      lab.innerHTML += `<tr><td>${doc.id}</td><td>${data.lab}</td></tr>`;
     });
   } catch (error) {
     console.error("Error loading lab:", error);
   }
-});
-window.addEventListener("DOMContentLoaded", async () => {
+}
+
+// 🔹 CLUBS
+async function loadClubs() {
   try {
-    clubs.innerHTML = ""; // Clear previous rows
-
-    const snapshot = await db.collection("acadClubTable")
-      .orderBy(firebase.firestore.FieldPath.documentId()) // sort by document ID
-      .limit(3) // get first 3 only
-      .get();
-
+    clubs.innerHTML = "";
+    const snapshot = await db.collection("DataTable").doc("Clubs").collection("ClubsDocs").limit(3).get();
     snapshot.forEach(doc => {
       const data = doc.data();
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${doc.id}</td>
-        <td>${data.codeName}</td>
-        <td>${data.club}</td>
-        <td>${data.deptCode}</td>
-      `;
-      clubs.appendChild(row);
+      clubs.innerHTML += `
+        <tr>
+          <td>${doc.id}</td>
+          <td>${data.code}</td>
+          <td>${data.club}</td>
+ 
+        </tr>`;
     });
   } catch (error) {
-    console.error("Error loading club:", error);
+    console.error("Error loading clubs:", error);
   }
-});
-window.addEventListener("DOMContentLoaded", async () => {
+}
+
+
+
+// 🔹 LOGOUT
+window.addEventListener("DOMContentLoaded", () => {
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
-    logoutBtn.addEventListener("click", function (e) {
+    logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
-
-      const keysToRemove = [
-        "userData",
-        "studentName",
-        "schoolID",
-        "studentID",
-        "staffID",
-        "designeeID",
-        "category",
-        "office",
-        "department"
-      ];
-
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-
+      ["userData", "studentName", "schoolID", "studentID", "staffID", "designeeID", "category", "office", "department"]
+        .forEach(key => localStorage.removeItem(key));
       window.location.href = "../../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
-  }
-  try {
-    course.innerHTML = ""; // Clear previous rows
-
-    const snapshot = await db.collection("groupTable")
-      .orderBy(firebase.firestore.FieldPath.documentId()) // sort by document ID
-      .limit(3) // get first 3 only
-      .get();
-
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${doc.id}</td>
-        <td>${data.codeName}</td>
-        <td>${data.club}</td>
-        
-      `;
-      group.appendChild(row);
-    });
-  } catch (error) {
-    console.error("Error loading group:", error);
   }
 });
-function initSidebarDropdowns() {
-  // Get all dropdown toggles
-  const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
 
+// 🔹 SIDEBAR
+function initSidebarDropdowns() {
+  const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
   dropdownToggles.forEach(toggle => {
     toggle.addEventListener('click', function (e) {
       e.preventDefault();
-
-      const parentLi = this.parentElement; // <li class="has-submenu">
-      const submenu = parentLi.querySelector('.submenu');
-
-      // Toggle visibility of the submenu
-      if (submenu.style.display === 'block') {
-        submenu.style.display = 'none';
-        this.querySelector('.arrow')?.classList.remove('rotated');
-      } else {
-        submenu.style.display = 'block';
-        this.querySelector('.arrow')?.classList.add('rotated');
-      }
+      const submenu = this.parentElement.querySelector('.submenu');
+      submenu.style.display = submenu.style.display === 'block' ? 'none' : 'block';
+      this.querySelector('.arrow')?.classList.toggle('rotated');
     });
   });
 }
-
-// 🔥 Run function after DOM loads
 document.addEventListener('DOMContentLoaded', initSidebarDropdowns);

@@ -1,346 +1,218 @@
 // ================= validate_modal.js =================
 
-// Declare modal element variables
 let checklistModal, modalBody, cancelBtn, saveBtn, approveBtn;
-
 let currentStudentID = null;
-let currentDesigneeUserID = null;
+let currentDesigneeID = null;
 let dbInstance = null;
-let unsubscribeRequirementsListener = null;
 
 // -------------------- Helper Functions --------------------
 
-// Get current user's full name from localStorage or fallback to ID
 function getCurrentUserFullName() {
   const currentUser = JSON.parse(localStorage.getItem("userData"));
   if (!currentUser) return null;
-
   const firstName = currentUser.firstName || "";
   const lastName = currentUser.lastName || "";
-  const fullName = (firstName + " " + lastName).trim();
-
-  return fullName || currentUser.id || null;
+  return (firstName + " " + lastName).trim() || currentUser.id || null;
 }
 
-// Fetch current semester from semesterTable
 async function getCurrentSemester() {
   if (!dbInstance) return null;
-  const snapshot = await dbInstance.collection("semesterTable")
+  const snapshot = await dbInstance
+    .collection("DataTable")
+    .doc("Semester")
+    .collection("SemesterDocs")
     .where("currentSemester", "==", true)
+    .limit(1)
     .get();
-
   if (!snapshot.empty) {
     const semDoc = snapshot.docs[0].data();
-    return semDoc.semester || null;
+    return { id: snapshot.docs[0].id, semester: semDoc.semester };
   }
   return null;
 }
 
-// Fetch student's year level
-async function getStudentYearLevel(studentID) {
+async function getStudentData(studentID) {
   if (!dbInstance) return null;
-  const studentDoc = await dbInstance.collection("Students").doc(studentID).get();
-  if (studentDoc.exists) {
-    const data = studentDoc.data();
-    return data.yearLevel || null;
-  }
-  return null;
-}
-
-// Fetch student officer status
-async function isStudentOfficer(studentID) {
-  if (!dbInstance) return false;
-  const studentDoc = await dbInstance.collection("Students").doc(studentID).get();
-  if (studentDoc.exists) {
-    const data = studentDoc.data();
-    return Array.isArray(data.officer) && data.officer.length > 0; // officer is now array
-  }
-  return false;
-}
-
-/**
- * Copy the latest ValidateRequirementsTable snapshot
- * into History/{studentID} under semesters[{semesterName}]
- * without overwriting other semesters.
- */
-async function copyValidateToHistory(studentID, semesterName) {
-  try {
-    const validateRef = dbInstance.collection("ValidateRequirementsTable").doc(studentID);
-    const validateDoc = await validateRef.get();
-    if (!validateDoc.exists) return;
-
-    const validateData = validateDoc.data() || {};
-    let overallCleared = true;
-    const offices = validateData.offices || {};
-    Object.values(offices).forEach(arr => {
-      if (Array.isArray(arr)) {
-        arr.forEach(item => {
-          if (!item?.status) overallCleared = false;
-        });
-      }
-    });
-
-    const historyRef = dbInstance.collection("History").doc(studentID);
-    await historyRef.set({
-      studentID,
-      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
-      semesters: {
-        [semesterName]: {
-          snapshot: validateData,
-          overallStatus: overallCleared ? "Cleared" : "Pending",
-          snapshotAt: firebase.firestore.FieldValue.serverTimestamp()
-        }
-      }
-    }, { merge: true });
-
-    console.log(`[History] Saved snapshot for ${studentID} @ ${semesterName}`);
-  } catch (err) {
-    console.error("[History] Failed to copy to History:", err);
-  }
+  const doc = await dbInstance
+    .collection("User")
+    .doc("Students")
+    .collection("StudentsDocs")
+    .doc(studentID)
+    .get();
+  return doc.exists ? doc.data() : null;
 }
 
 // -------------------- Firestore Sync --------------------
 
-// Auto-sync requirements for a student+designee
-async function autoValidateRequirements(designeeId, studentID) {
-  if (!dbInstance) return;
-  if (!designeeId || designeeId === "undefined") return;
+async function autoValidateRequirements(designeeID, studentID) {
+  if (!dbInstance || !designeeID) return;
 
   try {
-    const currentSemester = await getCurrentSemester();
-    const studentYearLevel = await getStudentYearLevel(studentID);
+    const currentSemesterData = await getCurrentSemester();
+    if (!currentSemesterData) return;
+    const currentSemesterId = currentSemesterData.id;
 
-    // 🔹 Fetch student data
-    const studentDoc = await dbInstance.collection("Students").doc(studentID).get();
-    const studentData = studentDoc.exists ? studentDoc.data() : {};
-    const studentOfficerRoles = Array.isArray(studentData.officer) ? studentData.officer : [];
-    const studentViolations = Array.isArray(studentData.violation) ? studentData.violation : [];
+    const studentData = await getStudentData(studentID);
+    if (!studentData) return;
 
-    // 🔹 Fetch all requirements for this designee
-    const reqSnapshot = await dbInstance.collection("RequirementsTable")
-      .where("addedByDesigneeId", "==", designeeId)
-      .orderBy("createdAt", "desc")
+    const hasOfficer =
+      Array.isArray(studentData?.officers) && studentData.officers.includes(designeeID);
+    const hasViolation =
+      Array.isArray(studentData?.violations) && studentData.violations.includes(designeeID);
+
+    const reqSnapshot = await dbInstance
+      .collection("RequirementsAndNotes")
+      .doc("RequirementsList")
+      .collection(designeeID)
       .get();
 
-    // 🔹 Map and filter requirements according to semester, yearLevel, officer, violation
+    const studentYear = studentData?.yearLevel?.toString().trim().toLowerCase() || "";
+
     const masterRequirements = reqSnapshot.docs
-      .map(doc => doc.data())
-      .filter(d => !d.semester || d.semester === currentSemester)
-      .filter(d => {
-        const hasOfficer = Array.isArray(d.officer) && d.officer.length > 0;
-        const hasViolation = Array.isArray(d.violation) && d.violation.length > 0;
-        const hasYearLevel = d.yearLevel && d.yearLevel.toLowerCase() !== "all";
+      .map((doc) => doc.data())
+      .filter((d) => {
+        if (d.semester && d.semester !== currentSemesterId) return false;
+        if (d.officer && !hasOfficer) return false;
+        if (d.violation && !hasViolation) return false;
 
-        const officerMatches = hasOfficer && studentOfficerRoles.some(role => d.officer.includes(role));
-        const violationMatches = hasViolation && d.violation.some(v => studentViolations.includes(v));
-        const yearLevelMatches = hasYearLevel && d.yearLevel === studentYearLevel;
-        const allYearLevel = d.yearLevel && d.yearLevel.toLowerCase() === "all";
+        const reqYear = d.yearLevel ? d.yearLevel.toString().trim().toLowerCase() : "all";
+        if (reqYear !== "all" && reqYear !== studentYear) return false;
 
-        // ✅ Now combine conditions properly
-        // Officer + YearLevel
-        if (hasOfficer && hasYearLevel) return officerMatches && yearLevelMatches;
-        if (hasOfficer && !hasYearLevel) return officerMatches;
-        
-        // Violation + YearLevel
-        if (hasViolation && hasYearLevel) return violationMatches && yearLevelMatches;
-        if (hasViolation && !hasYearLevel) return violationMatches;
-
-        // YearLevel only
-        if (hasYearLevel && !hasOfficer && !hasViolation) return yearLevelMatches;
-
-        // "All" YearLevel only
-        if (allYearLevel && !hasOfficer && !hasViolation) return true;
-
-        return false;
+        return true;
       })
-      .map(d => ({
+      .map((d) => ({
         requirement: d.requirement,
         status: false,
         checkedBy: null,
         checkedAt: null,
-        semester: currentSemester,
+        semester: currentSemesterId,
         yearLevel: d.yearLevel || "All",
-        violation: Array.isArray(d.violation) ? d.violation : [],
-        officer: Array.isArray(d.officer) ? d.officer : []
+        officer: d.officer || false,
+        violation: d.violation || false,
       }));
 
-    // 🔹 Merge with saved requirements
-    const valDocRef = dbInstance.collection("ValidateRequirementsTable").doc(studentID);
+    const valDocRef = dbInstance
+      .collection("Validation")
+      .doc(designeeID)
+      .collection(studentID)
+      .doc(currentSemesterId);
+
     const valDoc = await valDocRef.get();
-    let requirementsByOffice = {};
-    if (valDoc.exists) requirementsByOffice = valDoc.data().offices || {};
+    const existingRequirements = valDoc.exists ? valDoc.data().requirements || [] : [];
 
-    const savedRequirementsForOffice = Array.isArray(requirementsByOffice[designeeId])
-      ? requirementsByOffice[designeeId]
-      : [];
-
-    const mergedRequirements = masterRequirements.map(masterReq => {
-      const savedReq = savedRequirementsForOffice.find(
-        r =>
-          r.requirement?.toLowerCase() === masterReq.requirement?.toLowerCase() &&
-          r.semester === currentSemester
+    // Merge existing checked states with master requirements
+    const mergedRequirements = masterRequirements.map((masterReq) => {
+      const savedReq = existingRequirements.find(
+        (r) => r.requirement?.toLowerCase() === masterReq.requirement?.toLowerCase()
       );
       return savedReq ? { ...masterReq, ...savedReq } : masterReq;
     });
 
-    requirementsByOffice[designeeId] = mergedRequirements;
-
-    await valDocRef.set(
-      {
-        offices: requirementsByOffice,
-        studentID: studentID
-      },
-      { merge: true }
-    );
-
-    await copyValidateToHistory(studentID, currentSemester);
-
-    console.log(
-      `Auto-validated requirements for student ${studentID}, office ${designeeId}, semester ${currentSemester}`
-    );
-  } catch (error) {
-    console.error("Error in autoValidateRequirements:", error);
+    // Always write the document
+    await valDocRef.set({
+      studentID,
+      semester: currentSemesterId,
+      requirements: mergedRequirements,
+    });
+  } catch (err) {
+    console.error("Error in autoValidateRequirements:", err);
   }
 }
-
-
-
 
 // -------------------- Modal Initialization --------------------
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if (!window.validateRequirementsData) return;
+  checklistModal = document.getElementById("checklistModal");
+  modalBody = checklistModal?.querySelector(".modal-body");
+  cancelBtn = document.getElementById("cancelBtn");
+  saveBtn = document.getElementById("saveBtn");
+  approveBtn = document.getElementById("approveBtn");
 
-  // Destructure modal elements
-  ({ checklistModal, modalBody, cancelBtn, saveBtn, approveBtn } = window.validateRequirementsData);
+  if (!checklistModal || !modalBody || !cancelBtn || !saveBtn) {
+    console.error("Modal elements not found!");
+    return;
+  }
 
-  // Modal event listeners
   cancelBtn.addEventListener("click", closeModal);
   saveBtn.addEventListener("click", saveRequirements);
-
   checklistModal.addEventListener("click", (e) => {
     if (e.target === checklistModal) closeModal();
   });
 
   try {
-    // Get current user
     const currentUser = JSON.parse(localStorage.getItem("userData"));
     if (!currentUser || !currentUser.id) throw new Error("User not logged in");
 
     dbInstance = firebase.firestore();
 
-    // Determine designee ID
-    let designeeIdToUse = currentUser.role === "staff"
-      ? (currentUser.createdByDesigneeID && currentUser.createdByDesigneeID !== "undefined" ? currentUser.createdByDesigneeID : null)
-      : currentUser.role === "designee" ? currentUser.id : null;
-    if (!designeeIdToUse) return;
+    currentDesigneeID =
+      currentUser.role === "staff"
+        ? currentUser.createdByDesigneeID || currentUser.id
+        : currentUser.role === "designee"
+        ? currentUser.id
+        : null;
 
-    // -------------------- FETCH CURRENT SEMESTER --------------------
-    const semesterSnapshot = await dbInstance.collection("semesterTable")
-      .where("currentSemester", "==", true)
-      .limit(1)
+    if (!currentDesigneeID) return;
+
+    const studentsSnapshot = await dbInstance
+      .collection("User")
+      .doc("Students")
+      .collection("StudentsDocs")
       .get();
-    if (semesterSnapshot.empty) {
-      console.warn("No current semester found.");
-      return;
+
+    const currentSemesterData = await getCurrentSemester();
+    if (!currentSemesterData) return;
+    const currentSemesterId = currentSemesterData.id;
+
+    let office, currentCategory, currentDepartment;
+    const userDataString = localStorage.getItem("userData");
+    if (userDataString) {
+      const userDataObj = JSON.parse(userDataString);
+      office = userDataObj.office;
+      currentCategory = userDataObj.category?.toLowerCase();
+      currentDepartment = userDataObj.department;
     }
-    const currentSemesterDoc = semesterSnapshot.docs[0].data();
-    const currentSemesterId = currentSemesterDoc.id;
-    const currentSemesterName = currentSemesterDoc.semester;
-    console.log("Current semester:", currentSemesterName);
 
-    // -------------------- FETCH DEPARTMENT & COLLECTION MAPS --------------------
-    const deptSnapshot = await dbInstance.collection("departmentTable").get();
-    const departmentMap = {};
-    deptSnapshot.forEach(doc => {
-      const data = doc.data();
-      departmentMap[doc.id] = data.code || doc.id;
-    });
+    let students = studentsSnapshot.docs.map(doc => ({ schoolID: doc.id, ...doc.data() }));
 
-    const groupSnapshot = await dbInstance.collection("groupTable").get();
-    const labSnapshot = await dbInstance.collection("labTable").get();
-    const collectionMap = {};
-    groupSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.id && data.club) collectionMap[String(data.id)] = data.club;
-    });
-    labSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.id && data.lab) collectionMap[String(data.id)] = data.lab;
-    });
-
-    // -------------------- DETERMINE COLLECTION --------------------
-    const designeeOffice = currentUser.office || "";
-    const designeeCategory = currentUser.category || "";
-    const designeeDepartment = currentUser.department || "";
-
-    const personalOffices = ["301","310","311","312","313","314"];
-    const excludeCategories = ["401","403"];
-    const showAllCategories = ["401","403"];
-    const showAllOffices = ["302","303","304","305","306","315","316"];
-
-    let collectionName = "Students"; // fallback
-    let useStudentsCollection = true;
-
-    if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
-      collectionName = "Students";
-      useStudentsCollection = true;
-    } else if (designeeOffice === "307" || designeeOffice === "308" || designeeOffice === "309") {
-      collectionName = "Students"; // always refer to main Students collection
-      useStudentsCollection = true;
-    } else if (personalOffices.includes(designeeOffice) && !excludeCategories.includes(designeeCategory)) {
-      collectionName = collectionMap[designeeCategory] || null;
-      useStudentsCollection = false;
-      if (!collectionName) {
-        console.warn("No collection found for personal office category:", designeeCategory);
-        return;
+    // --- FILTERING LOGIC (matches loadStudents) ---
+    if (currentCategory === "39" || currentCategory === "41") {
+      students = students.filter(student => student.semester === currentSemesterId);
+    } else {
+      if (office === "1") {
+        students = students.filter(student => currentCategory && student.clubs?.map(c => c.toLowerCase()).includes(currentCategory) && student.semester === currentSemesterId);
+      } else if (["2","3","5","6","9","10","12"].includes(office)) {
+        students = students.filter(student => student.semester === currentSemesterId);
+      } else if (["4","7","11"].includes(office)) {
+        students = students.filter(student => currentDepartment && student.department === currentDepartment && student.semester === currentSemesterId);
+      } else if (["16","15","14","13","8"].includes(office)) {
+        if (!currentCategory) {
+          students = [];
+        } else {
+          const membershipRef = dbInstance.collection("Membership").doc(currentCategory).collection("Members");
+          const membershipSnapshot = await membershipRef.where("semester", "==", currentSemesterId).get();
+          const allowedIDs = membershipSnapshot.docs.map(doc => doc.id);
+          students = students.filter(student => allowedIDs.includes(student.schoolID));
+        }
+      } else {
+        students = [];
       }
     }
-    
 
-    // -------------------- FILTER STUDENTS BY SEMESTER --------------------
-    const filteredBySemester = allStudents.filter(s => s.semester === currentSemesterId || s.semester === currentSemesterName);
-    console.log(`Students after semester filter: ${filteredBySemester.length}`);
-
-    // -------------------- FILTER STUDENTS BASED ON OFFICE RULES --------------------
-    let filteredStudents = [];
-    if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
-      filteredStudents = filteredBySemester;
-    } else if (designeeOffice === "307" || designeeOffice === "308") {
-      filteredStudents = filteredBySemester.filter(student => student.department === designeeDepartment);
-    } else if (designeeOffice === "309") {
-      const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
-      filteredStudents = filteredBySemester.filter(student => student.clubs.some(club => designeeClubs.includes(club)));
-    } else if (!useStudentsCollection) {
-      // Personal office uploaded collection
-      filteredStudents = filteredBySemester;
-    } else {
-      filteredStudents = filteredBySemester;
+    // ---------------- AUTO-VALIDATE FILTERED STUDENTS ----------------
+    for (const student of students) {
+      await autoValidateRequirements(currentDesigneeID, student.schoolID);
     }
-    console.log(`Students after office/category filtering: ${filteredStudents.length}`);
-
-    // -------------------- AUTO-VALIDATE ONLY FILTERED STUDENTS --------------------
-    for (const student of filteredStudents) {
-      console.log(`Auto-validating student: ${student.schoolID}`);
-      await autoValidateRequirements(designeeIdToUse, student.schoolID);
-    }
-
-    console.log("Auto-validation completed for filtered students.");
 
   } catch (err) {
-    console.error("Auto-validation failed on load:", err);
+    console.error("Auto-validation failed:", err);
   }
 });
 
-
-
-
-
-
 // -------------------- Modal Actions --------------------
 
-window.openRequirementsModal = async function (studentID, designeeUserID, db, options = {}) {
-  const { autoRun = false } = options; // ✅ detect auto-run mode
+window.openRequirementsModal = async function (studentID, designeeIDParam, db, options = {}) {
+  const { autoRun = false } = options;
 
   currentStudentID = studentID;
   dbInstance = db;
@@ -348,7 +220,6 @@ window.openRequirementsModal = async function (studentID, designeeUserID, db, op
   if (!modalBody || !checklistModal) return;
 
   if (!autoRun) {
-    // Normal manual open
     modalBody.innerHTML = "<p>Loading requirements...</p>";
     checklistModal.classList.add("active");
   }
@@ -357,86 +228,93 @@ window.openRequirementsModal = async function (studentID, designeeUserID, db, op
     const currentUser = JSON.parse(localStorage.getItem("userData"));
     if (!currentUser || !currentUser.id) throw new Error("User not logged in");
 
-    let linkedDesigneeId =
+    const linkedDesigneeID =
       currentUser.role === "staff"
-        ? currentUser.createdByDesigneeID &&
-          currentUser.createdByDesigneeID !== "undefined"
-          ? currentUser.createdByDesigneeID
-          : null
+        ? currentUser.createdByDesigneeID || currentUser.id
         : currentUser.role === "designee"
         ? currentUser.id
-        : designeeUserID;
+        : designeeIDParam;
 
-    if (!linkedDesigneeId) {
-      if (!autoRun) {
-        modalBody.innerHTML = "<p>No requirements assigned to you.</p>";
-      }
+    if (!linkedDesigneeID) {
+      if (!autoRun) modalBody.innerHTML = "<p>No requirements assigned to you.</p>";
       return;
     }
 
-    currentDesigneeUserID = linkedDesigneeId;
+    currentDesigneeID = linkedDesigneeID;
 
-    // ✅ Always validate silently
-    await autoValidateRequirements(currentDesigneeUserID, studentID);
+    const studentData = await getStudentData(studentID);
+    const hasOfficer =
+      Array.isArray(studentData?.officers) && studentData.officers.includes(currentDesigneeID);
+    const hasViolation =
+      Array.isArray(studentData?.violations) && studentData.violations.includes(currentDesigneeID);
 
-    // Fetch validation document
-    const valDocRef = dbInstance.collection("ValidateRequirementsTable").doc(studentID);
+    // Auto-validate the selected student before rendering modal
+    await autoValidateRequirements(currentDesigneeID, studentID);
+
+    const currentSemesterData = await getCurrentSemester();
+    if (!currentSemesterData) return;
+    const currentSemesterId = currentSemesterData.id;
+
+    const valDocRef = dbInstance
+      .collection("Validation")
+      .doc(currentDesigneeID)
+      .collection(studentID)
+      .doc(currentSemesterId);
+
     const valDoc = await valDocRef.get();
+    let requirements = valDoc.exists ? valDoc.data().requirements || [] : [];
 
-    const data = valDoc.data();
-    const requirements = data?.offices?.[currentDesigneeUserID] || [];
+    const studentYear = studentData?.yearLevel?.toString().trim().toLowerCase() || "";
 
-    // Render checklist (disable if autoRun mode)
-    if (!autoRun) {
-      renderRequirementsChecklist(requirements, { autoRun: false });
-    } else {
-      renderRequirementsChecklist(requirements, { autoRun: true });
-      console.log(`✅ Auto-validated student ${studentID}`);
-    }
-  } catch (error) {
-    console.error("Error loading validation requirements:", error);
-    if (!autoRun) {
-      modalBody.innerHTML = "<p>Failed to load requirements.</p>";
-    }
+    // Filter based on officer/violation roles and yearLevel
+    requirements = requirements.filter((r) => {
+      if (r.officer && !hasOfficer) return false;
+      if (r.violation && !hasViolation) return false;
+
+      const reqYear = r.yearLevel ? r.yearLevel.toString().trim().toLowerCase() : "all";
+      if (reqYear !== "all" && reqYear !== studentYear) return false;
+
+      return true;
+    });
+
+    renderRequirementsChecklist(requirements, { autoRun });
+  } catch (err) {
+    console.error("Error loading validation requirements:", err);
+    if (!autoRun) modalBody.innerHTML = "<p>Failed to load requirements.</p>";
   }
 };
 
-
 // -------------------- Render & Save --------------------
 
-function renderRequirementsChecklist(requirements) {
+function renderRequirementsChecklist(requirements, { autoRun = false } = {}) {
   modalBody.innerHTML = "";
-
   requirements.forEach((req, i) => {
     const checkedClass = req.status ? "checked" : "";
     const checkedAttr = req.status ? "checked" : "";
     const checkerText = req.checkedBy
-  ? ` (checked by ${req.checkedBy}${req.checkedAt ? " at " + new Date(req.checkedAt).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: true // 12-hour format with AM/PM
-      }) : ""})`
-  : "";
+      ? ` (checked by ${req.checkedBy}${req.checkedAt ? " at " + new Date(req.checkedAt).toLocaleString() : ""})`
+      : "";
 
-    modalBody.insertAdjacentHTML("beforeend", `
+    modalBody.insertAdjacentHTML(
+      "beforeend",
+      `
       <label class="checkbox-item ${checkedClass}">
         <input type="checkbox" data-index="${i}" ${checkedAttr}>
         <i class="fa-solid fa-check-square checkbox-icon"></i>
         <span>${req.requirement || ""}${checkerText}</span>
       </label>
-    `);
+    `
+    );
   });
 
-  modalBody.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-    checkbox.addEventListener("change", () => {
-      const label = checkbox.closest('label.checkbox-item');
-      if (checkbox.checked) label.classList.add('checked');
-      else label.classList.remove('checked');
+  if (!autoRun) {
+    modalBody.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        const label = checkbox.closest("label.checkbox-item");
+        label.classList.toggle("checked", checkbox.checked);
+      });
     });
-  });
+  }
 }
 
 function closeModal() {
@@ -445,37 +323,38 @@ function closeModal() {
 
 async function saveRequirements() {
   const checkboxes = modalBody.querySelectorAll("input[type='checkbox']");
-  const updatedRequirements = [];
-
   const currentUserFullName = getCurrentUserFullName();
   const currentTimestamp = new Date().toISOString();
-  const currentSemester = await getCurrentSemester();
+  const currentSemesterData = await getCurrentSemester();
+  if (!currentSemesterData) return;
+  const currentSemesterId = currentSemesterData.id;
 
   try {
-    const valDocRef = dbInstance.collection("ValidateRequirementsTable").doc(currentStudentID);
+    const valDocRef = dbInstance
+      .collection("Validation")
+      .doc(currentDesigneeID)
+      .collection(currentStudentID)
+      .doc(currentSemesterId);
+
     const valDoc = await valDocRef.get();
-    let requirementsByOffice = {};
-    if (valDoc.exists) requirementsByOffice = valDoc.data().offices || {};
+    const existingRequirements = valDoc.exists ? valDoc.data().requirements || [] : [];
 
-    const existingRequirements = Array.isArray(requirementsByOffice[currentDesigneeUserID])
-      ? requirementsByOffice[currentDesigneeUserID]
-      : [];
+    const studentData = await getStudentData(currentStudentID);
 
-    for (const checkbox of checkboxes) {
-      const index = parseInt(checkbox.getAttribute("data-index"));
+    const updatedRequirements = [];
+    checkboxes.forEach((checkbox, i) => {
       const span = checkbox.parentElement.querySelector("span");
-      let requirementText = span.textContent.replace(/\s*\(checked by .*?\)$/, "");
+      const requirementText = span.textContent.replace(/\s*\(checked by .*?\)$/, "");
       const isChecked = checkbox.checked;
 
       const existingReq = existingRequirements.find(
-        r => r.requirement?.toLowerCase() === requirementText?.toLowerCase() && r.semester === currentSemester
+        (r) => r.requirement?.toLowerCase() === requirementText?.toLowerCase()
       );
-
-      const normalizedCurrentUser = currentUserFullName?.trim().toLowerCase() || "";
-      const normalizedCheckedBy = existingReq?.checkedBy?.trim().toLowerCase() || "";
 
       let newCheckedBy = null;
       let newCheckedAt = null;
+      const normalizedCurrentUser = currentUserFullName?.trim().toLowerCase() || "";
+      const normalizedCheckedBy = existingReq?.checkedBy?.trim().toLowerCase() || "";
 
       if (isChecked) {
         if (existingReq && existingReq.checkedBy && normalizedCheckedBy !== normalizedCurrentUser) {
@@ -487,36 +366,33 @@ async function saveRequirements() {
         }
       } else {
         if (existingReq) {
-          newCheckedBy = (normalizedCheckedBy === normalizedCurrentUser) ? null : existingReq.checkedBy || null;
-          newCheckedAt = (normalizedCheckedBy === normalizedCurrentUser) ? null : existingReq.checkedAt || null;
+          newCheckedBy = normalizedCheckedBy === normalizedCurrentUser ? null : existingReq.checkedBy || null;
+          newCheckedAt = normalizedCheckedBy === normalizedCurrentUser ? null : existingReq.checkedAt || null;
         }
       }
 
-      updatedRequirements[index] = {
+      updatedRequirements[i] = {
         requirement: requirementText,
         status: isChecked,
         checkedBy: newCheckedBy,
         checkedAt: newCheckedAt,
-        semester: currentSemester,
-        yearLevel: existingReq?.yearLevel || "All",
-        violation: Array.isArray(existingReq?.violation) ? existingReq.violation : [],
-        officer: Array.isArray(existingReq?.officer) ? existingReq.officer : []  // now array
+        semester: currentSemesterId,
+        yearLevel: existingReq?.yearLevel?.toLowerCase() === "all" ? studentData.yearLevel : existingReq?.yearLevel || "All",
+        officer: existingReq?.officer || false,
+        violation: existingReq?.violation || false,
       };
-    }
-
-    requirementsByOffice[currentDesigneeUserID] = updatedRequirements;
+    });
 
     await valDocRef.set({
-      offices: requirementsByOffice,
-      studentID: currentStudentID
-    }, { merge: true });
-
-    await copyValidateToHistory(currentStudentID, currentSemester);
+      studentID: currentStudentID,
+      semester: currentSemesterId,
+      requirements: updatedRequirements,
+    });
 
     alert("Requirements saved successfully!");
     closeModal();
-  } catch (error) {
-    console.error("Failed to save requirements:", error);
+  } catch (err) {
+    console.error("Failed to save requirements:", err);
     alert("Failed to save. Please try again.");
   }
 }

@@ -10,8 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     measurementId: "G-CENPP29LKQ"
   };
 
-  // Initialize Firebase
-  firebase.initializeApp(firebaseConfig);
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
 
   // DOM Elements
@@ -25,77 +24,125 @@ document.addEventListener('DOMContentLoaded', async () => {
   const passwordInput = document.getElementById('password');
   const confirmPasswordInput = document.getElementById('confirmPassword');
 
-  // Store course metadata by ID
   const courseDataMap = {};
 
-  // Load semesters visible to students
-  const semesterSnapshot = await db.collection("semesterTable")
-    .where("visibleToStudents", "==", true)
+  // -----------------------
+  // Load current semester
+  const semesterSnapshot = await db.collection("DataTable")
+    .doc("Semester")
+    .collection("SemesterDocs")
+    .where("currentSemester", "==", true)
+    .limit(1)
     .get();
 
-  semesterSnapshot.forEach(doc => {
+  if (!semesterSnapshot.empty) {
+    semesterSnapshot.forEach(doc => {
+      const data = doc.data();
+      const option = document.createElement("option");
+      option.value = doc.id;
+      option.textContent = data.semester || doc.id;
+      semesterSelect.appendChild(option);
+    });
+  } else {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No active semester";
+    semesterSelect.appendChild(option);
+  }
+
+  // -----------------------
+  // Load year levels
+  const yearSnapshot = await db.collection("DataTable")
+    .doc("YearLevel")
+    .collection("YearLevelDocs")
+    .get();
+  yearSnapshot.forEach(doc => {
     const data = doc.data();
     const option = document.createElement("option");
     option.value = doc.id;
-    option.textContent = data.semester || doc.id;
-    semesterSelect.appendChild(option);
+    option.textContent = data.yearLevel || doc.id;
+    yearLevelSelect.appendChild(option);
   });
 
-  // Load courses
-  const courseSnapshot = await db.collection("courseTable").get();
+  // -----------------------
+  // Load Departments into a map
+  // key = doc ID, value = {code: "human-readable code"}
+  const departmentMap = {};
+  const deptSnapshot = await db.collection("DataTable")
+    .doc("Department")
+    .collection("DepartmentDocs")
+    .get();
+  deptSnapshot.forEach(doc => {
+    const data = doc.data();
+    departmentMap[doc.id] = { code: data.code }; // human-readable code
+  });
+
+  // -----------------------
+  // Load Clubs into a map
+  // key = doc ID, value = {code: "human-readable code"}
+  const clubsMap = {};
+  const clubSnapshot = await db.collection("DataTable")
+    .doc("Clubs")
+    .collection("ClubsDocs")
+    .get();
+  clubSnapshot.forEach(doc => {
+    const data = doc.data();
+    clubsMap[doc.id] = { code: data.code }; // human-readable code
+  });
+
+  // -----------------------
+  // Load Courses and map department & clubs
+  const courseSnapshot = await db.collection("DataTable")
+    .doc("Course")
+    .collection("CourseDocs")
+    .get();
   courseSnapshot.forEach(doc => {
     const data = doc.data();
     const option = document.createElement("option");
     option.value = doc.id;
-    option.textContent = data.course;
+    option.textContent = data.course || doc.id; // readable course name
     courseSelect.appendChild(option);
+
+    // Map department doc ID and club doc IDs array
     courseDataMap[doc.id] = {
-      deptCodeName: data.deptCodeName || '',
-      clubCodeName: data.clubCodeName || '',
+      deptId: data.deptCodeName || '',            // department doc ID
+      clubIds: Array.isArray(data.clubCodeName) ? data.clubCodeName : [] // array of club doc IDs
     };
   });
 
-  // Load year levels
-  const yearSnapshot = await db.collection("yearLevelTable").get();
-  yearSnapshot.forEach(doc => {
-    const data = doc.data();
-    const option = document.createElement("option");
-    option.value = data.yearLevel;
-    option.textContent = data.yearLevel;
-    yearLevelSelect.appendChild(option);
-  });
-
-  // Auto-fill department and clubs
+  // -----------------------
+  // Auto-fill department and clubs when course is selected
   courseSelect.addEventListener('change', () => {
     const selected = courseSelect.value;
     const courseInfo = courseDataMap[selected];
-    if (courseInfo) {
-      departmentInput.value = courseInfo.deptCodeName;
-      clubsInput.value = courseInfo.clubCodeName;
-    } else {
-      departmentInput.value = '';
-      clubsInput.value = '';
-    }
+
+    // Department name (from doc ID -> code)
+    const dept = departmentMap[courseInfo?.deptId];
+    departmentInput.value = dept ? dept.code : '';
+
+    // Club names (from doc IDs -> codes)
+    const clubNames = courseInfo?.clubIds.map(id => clubsMap[id]?.code).filter(Boolean);
+    clubsInput.value = clubNames.length > 0 ? clubNames.join(', ') : '';
   });
 
-  // Message display
+  // -----------------------
+  // Message display helper
   const showMessage = (message, isError = false) => {
     messageBox.textContent = message;
     messageBox.style.display = 'block';
     messageBox.className = 'message-box mt-4 text-sm text-center font-medium';
     messageBox.classList.add(isError ? 'text-red-600' : 'text-green-600');
-    setTimeout(() => {
-      messageBox.style.display = 'none';
-    }, 4000);
+    setTimeout(() => { messageBox.style.display = 'none'; }, 4000);
   };
 
-  // Password validation function
+  // Password validation
   const isPasswordValid = (password) => {
     const regex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
     return regex.test(password);
   };
 
-  // Form Submit
+  // -----------------------
+  // Form submission
   registrationForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
@@ -110,9 +157,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const confirmPassword = confirmPasswordInput.value;
 
     const courseInfo = courseDataMap[course];
-    const deptCodeName = courseInfo?.deptCodeName || '';
-    const clubCodeName = courseInfo?.clubCodeName || '';
+    const deptId = courseInfo?.deptId || '';
+    const clubIds = courseInfo?.clubIds || [];
 
+    // -----------------------
     // Validation
     if (!schoolId || !firstName || !lastName || !course || !yearLevel || !semester || !institutionalEmail || !password || !confirmPassword) {
       showMessage("Please fill in all required fields.", true);
@@ -128,7 +176,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!isPasswordValid(password)) {
-      showMessage("Password must be at least 8 characters long, include one uppercase letter, one number, and one special character.", true);
+      showMessage("Password must be at least 8 characters, include uppercase, number, special char.", true);
       passwordInput.value = '';
       confirmPasswordInput.value = '';
       passwordInput.focus();
@@ -136,55 +184,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-      // Check if schoolId already exists
-      const existing = await db.collection("Students").doc(schoolId).get();
+      // Check if student already exists
+      const existing = await db.collection("User")
+        .doc("Students")
+        .collection("StudentsDocs")
+        .doc(schoolId)
+        .get();
       if (existing.exists) {
         showMessage("This School ID is already registered.", true);
         return;
       }
 
-      // Get department ID
-      const deptSnap = await db.collection("departmentTable").where("code", "==", deptCodeName).limit(1).get();
-      const department = deptSnap.empty ? "N/A" : deptSnap.docs[0].id;
-
-      // Get club ID(s)
-      let clubs = [];
-      if (clubCodeName.includes(',')) {
-        const clubCodeList = clubCodeName.split(',').map(name => name.trim());
-        for (const code of clubCodeList) {
-          const snap = await db.collection("acadClubTable").where("codeName", "==", code).limit(1).get();
-          if (!snap.empty) clubs.push(snap.docs[0].id);
-        }
-      } else if (clubCodeName.trim() !== "") {
-        const singleSnap = await db.collection("acadClubTable").where("codeName", "==", clubCodeName.trim()).limit(1).get();
-        if (!singleSnap.empty) clubs.push(singleSnap.docs[0].id);
-      }
-
-      // Prepare data
+      // -----------------------
+      // Save student data
       const studentData = {
         schoolId,
         firstName,
         lastName,
-        course,
+        course,       // course doc ID
         yearLevel,
         semester,
-        department,
-        clubs,
+        department: deptId, // department doc ID
+        clubs: clubIds,     // array of club doc IDs
         institutionalEmail,
-        password, // ⚠️ NOTE: In production, store hashed passwords (e.g., Firebase Auth), not plain text!
+        password,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
 
-      // Save to Firestore
-      await db.collection("Students").doc(schoolId).set(studentData);
-      showMessage("Registration successful! Redirecting...");
+      await db.collection("User")
+        .doc("Students")
+        .collection("StudentsDocs")
+        .doc(schoolId)
+        .set(studentData);
 
-      setTimeout(() => {
-        window.location.href = "../login/student_login.html";
-      }, 1500);
+      showMessage("Registration successful! Redirecting...");
+      setTimeout(() => { window.location.href = "../login/student_login.html"; }, 1500);
 
     } catch (error) {
-      console.error("Error saving data:", error);
+      console.error("Error saving student:", error);
       showMessage("Failed to register. Please try again.", true);
     }
   });

@@ -14,7 +14,13 @@ async function getCurrentUserData() {
   }
 
   try {
-    const designeeSnap = await db.collection("Designees").doc(currentUser.id).get();
+    // 🔹 Updated Designees path
+    const designeeSnap = await db.collection("User")
+      .doc("Designees")
+      .collection("DesigneesDocs")
+      .doc(currentUser.id)
+      .get();
+
     let userData;
 
     if (designeeSnap.exists) {
@@ -22,7 +28,13 @@ async function getCurrentUserData() {
       userData = designeeSnap.data();
       createdByDesigneeID = currentUser.id;
     } else {
-      const staffQuery = await db.collection("staffTable").where("id", "==", currentUser.id).get();
+      // 🔹 Updated Staff path
+      const staffQuery = await db.collection("User")
+        .doc("Designees")
+        .collection("StaffDocs")
+        .where("id", "==", currentUser.id)
+        .get();
+
       if (staffQuery.empty) throw new Error("User not found");
 
       const staffDoc = staffQuery.docs[0];
@@ -44,43 +56,87 @@ async function getCurrentUserData() {
 }
 
 async function loadUserRoleDisplay() {
-  const userData = JSON.parse(localStorage.getItem("userData"));
-  if (!userData) return;
-
-  const emailDiv = document.getElementById("userRoleDisplay");
-  let displayText = "Designee";
-
   try {
-    const userDoc = await db.collection("Designees").doc(userData.id).get();
-    if (!userDoc.exists) return;
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    if (!userData) return;
 
-    let { category, department, office } = userDoc.data();
+    // 🔹 Determine designee ID
+    const designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
+    if (!designeeId) return;
 
+    const emailDiv = document.getElementById("userRoleDisplay");
+
+    // 🔹 Get designee document
+    const userDoc = await db.collection("User")
+      .doc("Designees")
+      .collection("DesigneesDocs")
+      .doc(designeeId)
+      .get();
+
+    if (!userDoc.exists) {
+      emailDiv.textContent = "Designee";
+      return;
+    }
+
+    const data = userDoc.data();
+    let category = data.category || "";
+    let department = data.department || "";
+    let office = data.office || "";
+
+    // 🔹 Convert category code to readable name
     if (category) {
-      let catDoc = await db.collection("acadClubTable").doc(category).get();
-      if (!catDoc.exists) catDoc = await db.collection("groupTable").doc(category).get();
-      if (!catDoc.exists) catDoc = await db.collection("labTable").doc(category).get();
-      category = catDoc.exists ? (catDoc.data().club || catDoc.data().group || catDoc.data().lab) : category;
+      const catDoc = await db.collection("DataTable")
+        .doc("Clubs")
+        .collection("ClubsDocs")
+        .doc(category)
+        .get();
+      if (catDoc.exists) {
+        category = catDoc.data().club || category;
+      }
     }
 
+    // 🔹 Convert department code to readable name
     if (department) {
-      const deptDoc = await db.collection("departmentTable").doc(department).get();
-      department = deptDoc.exists ? deptDoc.data().department : department;
+      const deptDoc = await db.collection("DataTable")
+        .doc("Department")
+        .collection("DepartmentDocs")
+        .doc(department)
+        .get();
+      if (deptDoc.exists) {
+        department = deptDoc.data().code || department;
+      }
     }
 
+    // 🔹 Convert office code to readable name
     if (office) {
-      const officeDoc = await db.collection("officeTable").doc(office).get();
-      office = officeDoc.exists ? officeDoc.data().office : office;
+      const officeDoc = await db.collection("DataTable")
+        .doc("Office")
+        .collection("OfficeDocs")
+        .doc(office)
+        .get();
+      if (officeDoc.exists) {
+        office = officeDoc.data().office || office;
+      }
     }
 
-    if (category) displayText = category;
-    else if (department) displayText = `${department} - ${office || ""}`;
-    else displayText = office || "";
+    // 🔹 Build display string
+    let displayText = "";
+    if (category) {
+      displayText = category;
+    } else if (department) {
+      displayText = `${department} - ${office}`;
+    } else if (office) {
+      displayText = office;
+    } else {
+      displayText = "Designee";
+    }
 
     emailDiv.textContent = displayText;
 
   } catch (err) {
-    console.error(err);
-    emailDiv.textContent = "Designee";
+    console.error("Error loading user role:", err);
+    const emailDiv = document.getElementById("userRoleDisplay");
+    if (emailDiv) emailDiv.textContent = "Designee";
   }
 }
+

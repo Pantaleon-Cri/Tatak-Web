@@ -1,114 +1,81 @@
-// -------------------- Helper Functions --------------------
+// ================= Helper Functions =================
+
+// Collection paths configuration
+const COLLECTIONS = {
+  clubs: "DataTable/Clubs/ClubsDocs",
+  lab: "DataTable/Lab/LabDocs",
+  office: "DataTable/Office/OfficeDocs",
+  department: "DataTable/Department/DepartmentDocs",
+  designees: "User/Designees/DesigneesDocs",
+  semester: "DataTable/Semester/SemesterDocs",
+  students: "User/Students/StudentsDocs",
+};
 
 // Normalize strings for comparison
 function normalizeString(str) {
   return String(str || "").trim().toLowerCase();
 }
 
-// Fetch readable category/club name from ID
-async function getCategoryName(db, id) {
-  if (!id || id.toLowerCase() === "n/a") return null;
-
-  let doc = await db.collection("acadClubTable").doc(id).get();
-  if (doc.exists) return doc.data().club || doc.data().clubName || doc.data().name || id;
-
-  doc = await db.collection("groupTable").doc(id).get();
-  if (doc.exists) return doc.data().club || doc.data().clubName || doc.data().name || id;
-
-  return id;
-}
-
-// Fetch lab name from ID
-async function getLabName(db, id) {
-  if (!id || id.toLowerCase() === "n/a") return null;
-  try {
-    const doc = await db.collection("labTable").doc(id).get();
-    return doc.exists ? doc.data().lab || doc.data().name || id : id;
-  } catch (err) {
-    console.error("Error fetching lab name:", err);
-    return id;
-  }
-}
-
-// Fetch office name from ID
-async function getOfficeName(db, id) {
-  if (!id || id.toLowerCase() === "n/a") return null;
-  try {
-    const doc = await db.collection("officeTable").doc(id).get();
-    return doc.exists ? doc.data().office || doc.data().name || id : id;
-  } catch (err) {
-    console.error("Error fetching office name:", err);
-    return id;
-  }
-}
-
-// Fetch department name from ID
-async function getDepartmentName(db, id) {
-  if (!id || id.toLowerCase() === "n/a") return null;
-  try {
-    const doc = await db.collection("departmentTable").doc(id).get();
-    return doc.exists ? doc.data().department || doc.data().name || id : id;
-  } catch (err) {
-    console.error("Error fetching department name:", err);
-    return id;
-  }
-}
-
 // Resolve designee/office name and image
 async function resolveOfficeNameWithImage(db, designeeId) {
   try {
-    const snap = await db.collection("Designees")
-      .where("userID", "==", String(designeeId))
-      .limit(1)
-      .get();
-
-    if (snap.empty) return { officeName: designeeId, imageId: "default" };
-
-    const designee = snap.docs[0].data();
     let officeName = null;
-    let imageId = designee.category || designee.office || "default";
+    let imageId = "default";
 
-    // ------------------ Try category via multiple tables ------------------
-    if (designee.category) {
-      const tables = ["acadClubTable", "labTable", "groupTable"];
-      for (const table of tables) {
-        const catDoc = await db.collection(table).doc(designee.category).get();
-        if (catDoc.exists) {
-          const data = catDoc.data();
-          officeName = data.club || data.clubName || data.lab || data.name || data.title;
-          if (officeName) break; // stop at first found name
-        }
-      }
-    }
-
-    // ------------------ If no name from category, try office ------------------
-    if (!officeName && designee.office) {
-      const officeDoc = await db.collection("officeTable").doc(designee.office).get();
+    if (/^\d+$/.test(designeeId)) {
+      // Single number → fetch OfficeDocs
+      const officeDoc = await db.collection(COLLECTIONS.office).doc(designeeId).get();
       if (officeDoc.exists) officeName = officeDoc.data().office || officeDoc.data().name;
-    }
 
-    // ------------------ If still no name, fallback to department ------------------
-    if (!officeName && designee.department) {
-      const depDoc = await db.collection("departmentTable").doc(designee.department).get();
-      const depName = depDoc.exists ? depDoc.data().department || depDoc.data().name : null;
-      if (depName && designee.office) {
-        const officeDoc = await db.collection("officeTable").doc(designee.office).get();
-        const offName = officeDoc.exists ? officeDoc.data().office : null;
-        officeName = offName ? `${depName} - ${offName}` : depName;
+      // Special rule: 7 uses "001" as ImageID
+      imageId = designeeId === "7" ? "001" : designeeId;
+    } else if (/^\d+-\d+$/.test(designeeId)) {
+      const [firstNum, secondNum] = designeeId.split("-").map(Number);
+
+      if ([2, 3, 5, 6, 9, 10, 12].includes(firstNum)) {
+        // Starts with 2,3,5,6,9,10,12 → Office only
+        const officeDoc = await db.collection(COLLECTIONS.office).doc(String(firstNum)).get();
+        officeName = officeDoc.exists ? officeDoc.data().office || officeDoc.data().name : designeeId;
+      } else if ([4, 7, 11].includes(firstNum)) {
+        // Starts with 4,7,11 → Office + Department
+        const officeDoc = await db.collection(COLLECTIONS.office).doc(String(firstNum)).get();
+        const deptDoc = await db.collection(COLLECTIONS.department).doc(String(secondNum)).get();
+        const officeNamePart = officeDoc.exists ? officeDoc.data().office || officeDoc.data().name : null;
+        const deptNamePart = deptDoc.exists ? deptDoc.data().code : null; // use "code" field
+        officeName = deptNamePart && officeNamePart ? `${officeNamePart} - ${deptNamePart}` : deptNamePart || officeNamePart;
+      } else if ([1, 8, 13, 14, 15, 16].includes(firstNum)) {
+        // Starts with 1,8,13,14,15,16 → Clubs → fallback Lab
+        let clubDoc = await db.collection(COLLECTIONS.clubs).doc(String(secondNum)).get();
+        if (clubDoc.exists) {
+          officeName = clubDoc.data().code || clubDoc.data().name; // use "code"
+        } else {
+          const labDoc = await db.collection(COLLECTIONS.lab).doc(String(secondNum)).get();
+          officeName = labDoc.exists ? labDoc.data().lab || labDoc.data().name : designeeId;
+        }
       } else {
-        officeName = department || designee.firstName || designee.lastName || designeeId;
+        // fallback
+        officeName = designeeId;
       }
+
+      // Concatenate numbers for imageId, except if firstNum is 7
+      imageId = firstNum === 7 ? "001" : `${firstNum}${secondNum}`;
+    } else {
+      // fallback if not a number or number-number format
+      officeName = designeeId;
+      imageId = designeeId;
     }
 
-    // ------------------ Final fallback ------------------
-    if (!officeName) officeName = designee.firstName || designee.lastName || designeeId;
-
-    return { officeName, imageId };
+    return { officeName: officeName || designeeId, imageId: imageId || "default" };
   } catch (err) {
     console.error("Error resolving office name:", err);
     return { officeName: designeeId, imageId: "default" };
   }
 }
+
+
+
+
+
 
 
 // -------------------- Modal Handling --------------------
@@ -121,13 +88,14 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // -------------------- Main Clearance Loader --------------------
-window.openViewClearanceCard = async function(studentID, db) {
+window.openViewClearanceCard = async function(studentID, db, schoolId = studentID) {
   const modal = document.getElementById("clearanceModal");
   modal.style.display = "block";
 
   const containerEl = document.getElementById("officeSectionsGrid");
   const statusEl = document.getElementById("status");
   const container = document.querySelector(".clearance-container");
+
   containerEl.innerHTML = "";
   statusEl.textContent = "Loading...";
   document.getElementById("studentId").textContent = studentID;
@@ -139,7 +107,7 @@ window.openViewClearanceCard = async function(studentID, db) {
     let currentSemesterId = null;
     let currentSemesterName = "Unknown Semester";
 
-    const semesterSnap = await db.collection("semesterTable")
+    const semesterSnap = await db.collection(COLLECTIONS.semester)
       .where("currentSemester", "==", true)
       .limit(1)
       .get();
@@ -147,96 +115,93 @@ window.openViewClearanceCard = async function(studentID, db) {
     if (!semesterSnap.empty) {
       const semesterDoc = semesterSnap.docs[0];
       currentSemesterId = semesterDoc.id;
-      currentSemesterName = semesterDoc.data().semester;
+      currentSemesterName = semesterDoc.data().semester || "Unknown Semester";
     }
 
     // ================= Fetch student =================
-    const studentDoc = await db.collection("Students").doc(studentID).get();
+    const studentDoc = await db.collection(COLLECTIONS.students).doc(studentID).get();
     if (!studentDoc.exists) throw new Error("Student not found");
-    const student = studentDoc.data();
 
+    const student = studentDoc.data();
     document.getElementById("studentName").textContent =
       [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" ");
     document.getElementById("semesterText").textContent = currentSemesterName;
 
-    // ================= Fetch validation data =================
-    const valDoc = await db.collection("ValidateRequirementsTable").doc(studentID).get();
-    const officesData = valDoc?.exists ? valDoc.data().offices || {} : {};
+    // ================= Fetch all designees =================
+    const designeesSnap = await db.collection(COLLECTIONS.designees).get();
+    const designeeIds = designeesSnap.docs.map(doc => doc.id);
 
-    // ------------------ Filter validation by semester ------------------
-    for (const officeId in officesData) {
-      officesData[officeId] = officesData[officeId].filter(item => {
-        if (!item.semester) return true;
-        return item.semester === currentSemesterId || item.semester === currentSemesterName;
-      });
+    const officeStatusList = [];
+
+    // ================= Gather office validation status =================
+    for (const designeeId of designeeIds) {
+      const semDocRef = db
+        .collection("Validation")
+        .doc(designeeId)
+        .collection(schoolId) // student ID
+        .doc(currentSemesterId);
+
+      const semDoc = await semDocRef.get();
+      if (!semDoc.exists) continue;
+
+      const reqs = semDoc.data().requirements || [];
+      const allCleared = reqs.every(r => r.status === true); // all requirements cleared by this office
+
+      const { officeName, imageId } = await resolveOfficeNameWithImage(db, designeeId);
+      officeStatusList.push({ officeName, imageId, cleared: allCleared });
     }
 
-    // ================= Render office cards =================
+    if (officeStatusList.length === 0) {
+      containerEl.innerHTML = `<div class="section-item">
+        <label class="section-header">No Offices Found</label>
+        <p>No validation data available for this student.</p>
+      </div>`;
+      statusEl.innerHTML = `<span style="color:red">Pending</span>`;
+      container.style.border = "5px solid red";
+      return;
+    }
+
+    // ================= Render offices =================
     let overallCleared = true;
 
-    for (const designeeId in officesData) {
-      const validations = officesData[designeeId];
-      const allChecked = validations.length > 0 && validations.every(v => v.status === true);
-      if (!allChecked) overallCleared = false;
+    for (const office of officeStatusList) {
+      if (!office.cleared) overallCleared = false;
 
-      // Most recent approval
-      const lastValidation = validations
-        .filter(v => v.status === true && v.checkedBy)
-        .sort((a, b) => b.checkedAt - a.checkedAt)[0] || {};
-
-      const lastCheckedBy = lastValidation.checkedBy || "Unknown";
-      const checkedAt = lastValidation.checkedAt
-        ? new Date(lastValidation.checkedAt).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: 'numeric',
-            hour12: true
-          })
-        : "N/A";
-
-      // Resolve office/designee name and image
-      const { officeName, imageId } = await resolveOfficeNameWithImage(db, designeeId);
-
-      // Build UI card
       const sectionGroupDiv = document.createElement("div");
       sectionGroupDiv.classList.add("section-group");
 
       const headerLabel = document.createElement("label");
       headerLabel.classList.add("section-header");
-      headerLabel.textContent = officeName || designeeId;
+      headerLabel.textContent = office.officeName;
       sectionGroupDiv.appendChild(headerLabel);
 
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");
 
-      approvalDiv.innerHTML = allChecked
-        ? `<img src="../../logo/${imageId || "default"}.png" 
+      approvalDiv.innerHTML = office.cleared
+        ? `<img src="../../logo/${office.imageId || "default"}.png" 
                  alt="Approved Icon" 
                  style="width:50px; height:50px;" 
                  onerror="this.onerror=null;this.src='../../Tatak.png';" /><br />
-           <label><i>Approved By: ${lastCheckedBy}<br />Checked At: ${checkedAt}</i><hr /></label>`
-        : `<label><i>Not Cleared</i><hr /></label>`;
+           <label><i>Cleared</i><hr /></label>`
+        : `<label><i>Pending</i><hr /></label>`;
 
       sectionGroupDiv.appendChild(approvalDiv);
       containerEl.appendChild(sectionGroupDiv);
     }
 
-    // ================= Status Display =================
+    // ================= Overall Clearance Status =================
     statusEl.innerHTML = overallCleared
-      ? `<span style="color:green">Completed</span>`
+      ? `<span style="color:green">All Offices Cleared</span>`
       : `<span style="color:red">Pending</span>`;
     container.style.border = overallCleared ? "5px solid #a6d96a" : "5px solid red";
-
-    if (Object.keys(officesData).length === 0) {
-      containerEl.innerHTML = `<div class="section-item"><label class="section-header">No Offices Found</label><p>You currently have no offices in validation.</p></div>`;
-      statusEl.innerHTML = `<span style="color:red">Pending</span>`;
-    }
 
   } catch (err) {
     console.error("Error loading clearance:", err);
     containerEl.innerHTML = "<p>Failed to load clearance. Student is not yet registered</p>";
     statusEl.innerHTML = `<span style="color:red">Pending</span>`;
+    container.style.border = "5px solid red";
   }
 };
+
+

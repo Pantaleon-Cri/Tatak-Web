@@ -1,7 +1,8 @@
 const usernameDisplay = document.getElementById("usernameDisplay");
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
 
+  // -------------------- Firebase Initialization --------------------
   const firebaseConfig = {
     apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
     authDomain: "tatak-mobile-web.firebaseapp.com",
@@ -14,24 +15,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  window.db = db; // make db globally accessible for flag.js
+  window.db = db; // make db globally accessible
 
-  // Expose modal elements globally
-  window.validateRequirementsData = {
-    checklistModal: document.getElementById("checklistModal"),
-    modalBody: document.getElementById("checklistModal").querySelector(".modal-body"),
-    cancelBtn: document.getElementById("cancelBtn"),
-    saveBtn: document.getElementById("saveBtn"),
-    approveBtn: document.getElementById("approveBtn")
-  };
-
+  // -------------------- DOM Elements --------------------
   const logoutBtn = document.getElementById("logoutBtn");
   const studentsTableBody = document.getElementById("studentsTableBody");
   const searchInput = document.getElementById("searchInput");
   const toggle = document.getElementById('userDropdownToggle');
   const menu = document.getElementById('dropdownMenu');
 
-  // Dropdown toggle
+  // -------------------- Dropdown Toggle --------------------
   if (toggle && menu) {
     toggle.addEventListener('click', () => {
       toggle.classList.toggle('active');
@@ -44,312 +37,243 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Logout
+  // -------------------- Logout --------------------
   if (logoutBtn) {
     logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      ["userData","studentName","schoolID","studentID","staffID","designeeID","category","office","department","createdByDesigneeID"]
-        .forEach(key => localStorage.removeItem(key));
+      [
+        "userData", "studentName", "schoolID", "studentID", "staffID",
+        "designeeID", "category", "office", "department", "createdByDesigneeID"
+      ].forEach(key => localStorage.removeItem(key));
       window.location.href = "../../../logout.html";
     });
   }
 
-  // Designee info
+  // -------------------- Designee Info --------------------
   let designeeName = "Designee";
-  let designeeFirstName = "";
-  let designeeLastName = "";
-  let designeeCategory = "";
-  let designeeDepartment = "";
-  let designeeOffice = "";
-  let designeeUserID = null;
   let designeeFullName = "";
+  let designeeID = null;
 
   const userDataString = localStorage.getItem("userData");
+  let userDataObj = null;
   if (userDataString) {
     try {
-      const userDataObj = JSON.parse(userDataString);
+      userDataObj = JSON.parse(userDataString);
       designeeName = userDataObj.userID || userDataObj.id || designeeName;
-      designeeFirstName = userDataObj.firstName || "";
-      designeeLastName = userDataObj.lastName || "";
-      designeeCategory = (userDataObj.category || "").trim();
-      designeeDepartment = (userDataObj.department || "").trim();
-      designeeOffice = (userDataObj.office || "").trim();
-      designeeUserID = userDataObj.createdByDesigneeID;
-      localStorage.setItem("createdByDesigneeID", designeeUserID); // store for flag.js
+      designeeFullName = [userDataObj.firstName, userDataObj.lastName].filter(Boolean).join(" ");
+      designeeID = userDataObj.role === "designee" ? userDataObj.id : userDataObj.createdByDesigneeID || null;
     } catch (err) {
-      console.error(err);
+      console.error("Failed to parse userData:", err);
     }
-  } else {
-    designeeCategory = (localStorage.getItem("category") || "").trim();
-    designeeDepartment = (localStorage.getItem("department") || "").trim();
-    designeeOffice = (localStorage.getItem("office") || "").trim();
   }
+  if (usernameDisplay) usernameDisplay.textContent = designeeFullName || designeeName;
 
-  designeeFullName = `${designeeFirstName} ${designeeLastName}`.trim();
+  // -------------------- Department & YearLevel Mappings --------------------
+  const departmentMap = {};
+  const yearLevelMap = {};
 
-  if (usernameDisplay) {
-    usernameDisplay.textContent = designeeFullName || designeeName;
-  }
-
-  // Load user role display
-  async function loadUserRoleDisplay() {
-    const userData = JSON.parse(localStorage.getItem("userData"));
-    if (!userData) return;
-
-    const userId = userData.id || userData.userID;
-    const emailDiv = document.getElementById("userRoleDisplay");
-
+  async function loadMappings() {
     try {
-      const userDoc = await db.collection("Designees").doc(userId).get();
-      if (!userDoc.exists) return;
+      const depSnapshot = await db.collection("DataTable").doc("Department").collection("DepartmentDocs").get();
+      depSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        departmentMap[doc.id] = data.name || data.code || doc.id;
+      });
 
-      const data = userDoc.data();
-      let category = data.category || null;
-      let department = data.department || null;
-      let office = data.office || null;
-
-      if (category) {
-        let catDoc = await db.collection("acadClubTable").doc(category).get();
-        if (!catDoc.exists) catDoc = await db.collection("groupTable").doc(category).get();
-        if (!catDoc.exists) catDoc = await db.collection("labTable").doc(category).get();
-        category = catDoc.exists ? (catDoc.data().club || catDoc.data().group || catDoc.data().lab) : category;
-      }
-
-      if (department) {
-        const deptDoc = await db.collection("departmentTable").doc(department).get();
-        department = deptDoc.exists ? deptDoc.data().department : department;
-      }
-
-      if (office) {
-        const officeDoc = await db.collection("officeTable").doc(office).get();
-        office = officeDoc.exists ? officeDoc.data().office : office;
-      }
-
-      let displayText = "";
-      if (category) displayText = category;
-      else if (department) displayText = `${department} - ${office || ""}`;
-      else displayText = office || "";
-
-      emailDiv.textContent = displayText;
-
+      const ylSnapshot = await db.collection("DataTable").doc("YearLevel").collection("YearLevelDocs").get();
+      ylSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        yearLevelMap[doc.id] = data.yearLevel || data.name || doc.id;
+      });
     } catch (err) {
-      console.error("Error loading user role:", err);
-      emailDiv.textContent = "Designee";
+      console.error("Failed to load mappings", err);
     }
   }
 
-  loadUserRoleDisplay();
-
-  // Create table row HTML
+  // -------------------- Create Student Row --------------------
   function createStudentRow(student) {
+    const isViolationChecked = Array.isArray(student.violations) && student.violations.includes(designeeID);
+    const isOfficerChecked = Array.isArray(student.officers) && student.officers.includes(designeeID);
+
     return `
       <tr data-id="${student.schoolID}">
+        <td><input type="checkbox" class="role-checkbox violation-checkbox" data-studentid="${student.schoolID}" ${isViolationChecked ? "checked" : ""} /></td>
+        <td><input type="checkbox" class="role-checkbox officer-checkbox" data-studentid="${student.schoolID}" ${isOfficerChecked ? "checked" : ""} /></td>
         <td>${student.schoolID || ""}</td>
         <td>${student.fullName || ""}</td>
-        <td>${student.departmentDisplay || ""}</td>
+        <td>${student.department || ""}</td>
         <td>${student.yearLevel || ""}</td>
         <td class="prereq-cell" data-studentid="${student.schoolID}">Loading...</td>
-        <td>
-          <button class="status-button validate-button" data-studentid="${student.schoolID}">
-            VALIDATE
-          </button>
-        </td>
-        <td>
-          <button class="action-button view-button" data-studentid="${student.schoolID}">
-            VIEW
-          </button>
-        </td>
+        <td><button class="status-button validate-button" data-studentid="${student.schoolID}">VALIDATE</button></td>
+        <td><button class="action-button view-button" data-studentid="${student.schoolID}">VIEW</button></td>
       </tr>
     `;
   }
 
-  // Populate prerequisite column
-  async function populatePrerequisites(students) {
-
-    const cells = document.querySelectorAll(".prereq-cell");
-
-    for (const cell of cells) {
-      const studentID = cell.getAttribute("data-studentid");
-      const student = students.find(s => s.schoolID === studentID);
-      if (!student) continue;
-
-      try {
-        const prereqHTML = await getStudentPrereqs(student, {
-          office: designeeOffice,
-          department: designeeDepartment,
-          category: designeeCategory
-        });
-        cell.innerHTML = prereqHTML;
-      } catch (err) {
-        console.error("Error loading prerequisites for", studentID, err);
-        cell.textContent = "Error";
-      }
-    }
-  }
-
-  // Render students
-  function renderStudents(students, collectionName) {
+  // -------------------- Render Students --------------------
+  function renderStudents(students) {
     if (!students || students.length === 0) {
-      studentsTableBody.innerHTML = "<tr><td colspan='8'>No students found.</td></tr>";
+      studentsTableBody.innerHTML = "<tr><td colspan='9'>No students found.</td></tr>";
       return;
     }
-
     studentsTableBody.innerHTML = students.map(createStudentRow).join("");
 
-    if (typeof window.attachFlagButtons === "function" && collectionName) {
-      window.attachFlagButtons(collectionName);
+    // Call external prereq.js function to populate prerequisites
+    if (typeof populatePrerequisites === "function") {
+      populatePrerequisites(students, userDataObj);
     }
 
-    populatePrerequisites(students);
-
-    // ✅ Auto-run validation for ALL students (without opening modal)
+    // Auto-validate Firestore for each student
     if (typeof openRequirementsModal === "function") {
-      students.forEach(stu => {
-        openRequirementsModal(stu.schoolID, designeeUserID, db, { autoRun: true });
-      });
+      students.forEach(stu => openRequirementsModal(stu.schoolID, designeeID, db, { autoRun: true }));
     }
   }
 
-  // Search handler
-  function attachSearchHandler(students, collectionName) {
+  // -------------------- Search Handler --------------------
+  function attachSearchHandler(students) {
+    if (!searchInput) return;
     searchInput.addEventListener("input", () => {
       const searchTerm = searchInput.value.toLowerCase();
       const filtered = students.filter(s =>
         s.schoolID.toLowerCase().includes(searchTerm) || s.fullName.toLowerCase().includes(searchTerm)
       );
-      renderStudents(filtered, collectionName);
+      renderStudents(filtered);
     });
   }
 
-  // Load students
+  // -------------------- Load Students --------------------
   async function loadStudents() {
-    studentsTableBody.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
+  studentsTableBody.innerHTML = "<tr><td colspan='9'>Loading...</td></tr>";
 
-    try {
-      const semesterSnapshot = await db.collection("semesterTable")
-        .where("currentSemester", "==", true)
-        .limit(1)
-        .get();
+  try {
+    // 🔹 Get current semester
+    const semesterSnapshot = await db
+      .collection("DataTable")
+      .doc("Semester")
+      .collection("SemesterDocs")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
 
-      if (semesterSnapshot.empty) {
-        studentsTableBody.innerHTML = "<tr><td colspan='8'>No active semester found.</td></tr>";
-        return;
-      }
+    if (semesterSnapshot.empty) {
+      studentsTableBody.innerHTML = "<tr><td colspan='9'>No current semester found.</td></tr>";
+      return;
+    }
 
-      const semesterDoc = semesterSnapshot.docs[0];
-      const currentSemesterId = semesterDoc.id;
-      const currentSemesterName = semesterDoc.data().semester;
+    const currentSemesterId = semesterSnapshot.docs[0].id;
+    const snapshot = await db
+      .collection("User")
+      .doc("Students")
+      .collection("StudentsDocs")
+      .get();
 
-      const deptSnapshot = await db.collection("departmentTable").get();
-      const departmentMap = {};
-      deptSnapshot.forEach(doc => {
-        const data = doc.data();
-        departmentMap[doc.id] = data.code || doc.id;
-      });
+    let office, currentCategory, currentDepartment;
+    if (userDataObj) {
+      office = userDataObj.office;
+      currentCategory = userDataObj.category?.toLowerCase();
+      currentDepartment = userDataObj.department;
+    }
 
-      let allStudents = [];
-      let collectionName = "Students";
+    let students = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
+      return {
+        schoolID: doc.id,
+        fullName,
+        department: departmentMap[data.department] || data.department || "",
+        yearLevel: yearLevelMap[data.yearLevel] || data.yearLevel || "",
+        email: data.institutionalEmail || data.gmail || "",
+        clubs: Array.isArray(data.clubs) ? data.clubs.map((c) => String(c).toLowerCase()) : [],
+        semester: data.semester,
+        originalDepartmentId: data.department,
+        violations: Array.isArray(data.violations) ? data.violations : [],
+        officers: Array.isArray(data.officers) ? data.officers : []
+      };
+    });
 
-      const showAllCategories = ["401", "403"];
-      const showAllOffices = ["302", "303", "304", "305", "306"];
-      let useMembership = true;
-
-      if (showAllCategories.includes(designeeCategory) || showAllOffices.includes(designeeOffice)) {
-        const querySnapshot = await db.collection("Students").get();
-        querySnapshot.forEach(doc => {
-          const data = doc.data();
-          const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
-          let deptDisplay = data.department || "";
-          if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
-          allStudents.push({ ...data, schoolID: doc.id, fullName, departmentDisplay: deptDisplay });
-        });
-        useMembership = false;
-
-      } else if (designeeOffice === "307" || designeeOffice === "308") {
-        const querySnapshot = await db.collection("Students").where("department", "==", designeeDepartment).get();
-        querySnapshot.forEach(doc => {
-          const data = doc.data();
-          const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
-          let deptDisplay = data.department || "";
-          if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
-          allStudents.push({ ...data, schoolID: doc.id, fullName, departmentDisplay: deptDisplay });
-        });
-        useMembership = false;
-
-      } else if (designeeOffice === "309") {
-        const designeeClubs = designeeCategory.split(",").map(c => c.trim().toLowerCase());
-        const querySnapshot = await db.collection("Students").get();
-        querySnapshot.forEach(doc => {
-          const data = doc.data();
-          const clubs = Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [];
-          if (clubs.some(club => designeeClubs.includes(club))) {
-            const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
-            let deptDisplay = data.department || "";
-            if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
-            allStudents.push({ ...data, schoolID: doc.id, fullName, departmentDisplay: deptDisplay });
-          }
-        });
-        useMembership = false;
-      }
-
-      if (useMembership) {
-        const membersRef = db.collection("Membership").doc(designeeCategory).collection("Members");
-        const membersSnapshot = await membersRef.get();
-
-        for (const memberDoc of membersSnapshot.docs) {
-          const studentId = memberDoc.id;
-          const studentDoc = await db.collection("Students").doc(studentId).get();
-          if (!studentDoc.exists) continue;
-
-          const data = studentDoc.data();
-          const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
-          let deptDisplay = data.department || "";
-          if (deptDisplay && departmentMap[deptDisplay]) deptDisplay = departmentMap[deptDisplay];
-
-          allStudents.push({
-            schoolID: studentDoc.id,
-            fullName,
-            course: data.course || "",
-            department: data.department || "",
-            departmentDisplay: deptDisplay,
-            yearLevel: data.yearLevel || "",
-            email: data.institutionalEmail || data.gmail || "",
-            clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
-            semester: data.semester
-          });
-        }
-
-        collectionName = `Membership/${designeeCategory}/Members`;
-
-        const filteredBySemester = allStudents.filter(s =>
-          s.semester === currentSemesterId || s.semester === currentSemesterName
-        );
-
-        renderStudents(filteredBySemester, collectionName);
-        attachSearchHandler(filteredBySemester, collectionName);
-        return;
-      }
-
-      const filteredBySemester = allStudents.filter(s =>
-        s.semester === currentSemesterId || s.semester === currentSemesterName
+    // ---------------- Filtering Logic ----------------
+    if (currentCategory === "39" || currentCategory === "41") {
+      students = students.filter((student) => student.semester === currentSemesterId);
+    } 
+    else if (["2", "3", "5", "6", "9", "10", "12"].includes(office)) {
+      students = students.filter((student) => student.semester === currentSemesterId);
+    } 
+    else if (["4", "7", "11"].includes(office)) {
+      students = students.filter(
+        (student) =>
+          currentDepartment &&
+          student.originalDepartmentId === currentDepartment &&
+          student.semester === currentSemesterId
       );
+    } 
+    else if (["16", "15", "14", "13", "8"].includes(office)) {
+      if (!currentCategory) students = [];
+      else {
+        const membershipRef = db
+          .collection("Membership")
+          .doc(currentCategory)
+          .collection("Members");
+        const membershipSnapshot = await membershipRef.where("semester", "==", currentSemesterId).get();
+        const allowedIDs = membershipSnapshot.docs.map((doc) => doc.id);
+        students = students.filter((student) => allowedIDs.includes(student.schoolID));
+      }
+    } 
+    // 🔹 NEW: Generic Category Filter (1–38)
+    else if (!isNaN(currentCategory) && Number(currentCategory) >= 1 && Number(currentCategory) <= 38) {
+      students = students.filter(
+        (student) =>
+          Array.isArray(student.clubs) &&
+          student.clubs.includes(currentCategory) &&
+          student.semester === currentSemesterId
+      );
+    } 
+    else {
+      students = [];
+    }
 
-      renderStudents(filteredBySemester, collectionName);
-      attachSearchHandler(filteredBySemester, collectionName);
+    // ---------------- Auto Validate ----------------
+    if (designeeID && typeof autoValidateRequirements === "function") {
+      for (const student of students) {
+        await autoValidateRequirements(designeeID, student.schoolID);
+      }
+    }
 
+    // ---------------- Render ----------------
+    renderStudents(students);
+    attachSearchHandler(students);
+  } catch (err) {
+    console.error(err);
+    studentsTableBody.innerHTML = "<tr><td colspan='9'>Failed to load students.</td></tr>";
+  }
+}
+
+
+
+  // -------------------- Update Student Role --------------------
+  async function updateStudentRole(studentID, role, checked) {
+    if (!designeeID) {
+      console.error("Designee ID not found for role update!");
+      return;
+    }
+    const docRef = db.collection("User").doc("Students").collection("StudentsDocs").doc(studentID);
+    try {
+      if (checked) {
+        await docRef.set({ [role.toLowerCase() + "s"]: firebase.firestore.FieldValue.arrayUnion(designeeID) }, { merge: true });
+      } else {
+        await docRef.set({ [role.toLowerCase() + "s"]: firebase.firestore.FieldValue.arrayRemove(designeeID) }, { merge: true });
+      }
     } catch (err) {
-      console.error(err);
-      studentsTableBody.innerHTML = "<tr><td colspan='8'>Failed to load students.</td></tr>";
+      console.error(`Failed to update ${role} for ${studentID}`, err);
     }
   }
 
-  // Event delegation (manual clicks still open modal)
+  // -------------------- Event Delegation --------------------
   studentsTableBody.addEventListener("click", async (e) => {
     const validateBtn = e.target.closest(".validate-button");
     if (validateBtn) {
       const studentID = validateBtn.getAttribute("data-studentid");
       if (typeof openRequirementsModal === "function") {
-        openRequirementsModal(studentID, designeeUserID, db);
+        await openRequirementsModal(studentID, designeeID, db, { autoRun: false });
       } else console.error("openRequirementsModal not found");
       return;
     }
@@ -357,14 +281,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewBtn = e.target.closest(".view-button");
     if (viewBtn) {
       const studentID = viewBtn.getAttribute("data-studentid");
-      if (typeof openViewClearanceCard === "function") {
-        openViewClearanceCard(studentID, db);
-      } else console.error("openViewClearanceCard not found");
+      if (typeof openViewClearanceCard === "function") openViewClearanceCard(studentID, db);
+      else console.error("openViewClearanceCard not found");
       return;
+    }
+
+    const checkbox = e.target.closest(".role-checkbox");
+    if (checkbox) {
+      const studentID = checkbox.getAttribute("data-studentid");
+      const role = checkbox.classList.contains("violation-checkbox") ? "Violation" : "Officer";
+      await updateStudentRole(studentID, role, checkbox.checked);
     }
   });
 
-  // Initial load
-  loadStudents();
+  // -------------------- Initialize --------------------
+  await loadMappings();
+  await loadStudents();
+  if (typeof loadUserRoleDisplay === "function") await loadUserRoleDisplay();
 
 });

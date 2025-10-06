@@ -1,23 +1,17 @@
-// ✅ Toggle sub menu (for side navs with chevron)
-function toggleSubMenu(id) {
-  const submenu = document.getElementById(id);
-  submenu.style.display = submenu.style.display === "block" ? "none" : "block";
+// ================= Firestore Collections =================
+const COLLECTIONS = {
+  semester: "/DataTable/Semester/SemesterDocs",
+  clubs: "/DataTable/Clubs/ClubsDocs",
+  office: "/DataTable/Office/OfficeDocs",
+  department: "/DataTable/Department/DepartmentDocs",
+  lab: "/DataTable/Lab/LabDocs",
+  course: "/DataTable/Course/CourseDocs",
+  yearLevel: "/DataTable/YearLevel/YearLevelDocs",
+  designees: "/User/Designees/DesigneesDocs",
+  students: "/User/Students/StudentsDocs"
+};
 
-  const chevron = document.getElementById("accountsChevron");
-  if (chevron) chevron.classList.toggle("rotated");
-}
-
-function displayFullName() {
-  const usernameDisplay = document.getElementById("usernameDisplay");
-  if (!usernameDisplay) return;
-
-  const studentName = localStorage.getItem("studentName");
-  if (!studentName) return;
-
-  // Display full name
-  usernameDisplay.textContent = studentName;
-}
-
+// ================= DOMContentLoaded =================
 document.addEventListener("DOMContentLoaded", async () => {
   // ------------------ 🔹 Firebase Init ------------------ //
   const firebaseConfig = {
@@ -30,65 +24,49 @@ document.addEventListener("DOMContentLoaded", async () => {
     measurementId: "G-CENPP29LKQ",
   };
 
-  if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-  }
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  displayFullName();
 
-  // ------------------ 🔹 Logout Logic ------------------ //
+  // ------------------ 🔹 Display Student Name ------------------ //
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  const studentName = localStorage.getItem("studentName") || "Unknown";
+  if (usernameDisplay) usernameDisplay.textContent = studentName;
+
+  // ------------------ 🔹 Logout ------------------ //
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
-    logoutBtn.addEventListener("click", function (e) {
+    logoutBtn.addEventListener("click", e => {
       e.preventDefault();
-
-      const keysToRemove = [
-        "userData",
-        "studentName",
-        "schoolID",
-        "studentID",
-        "staffID",
-        "designeeID",
-        "category",
-        "office",
-        "department",
-      ];
-
-      keysToRemove.forEach((key) => localStorage.removeItem(key));
-      window.location.href = "../../logout.html"; // ✅ two levels up
+      [
+        "userData","studentName","schoolID","studentID","staffID",
+        "designeeID","category","office","department"
+      ].forEach(key => localStorage.removeItem(key));
+      window.location.href = "../../logout.html";
     });
-  } else {
-    console.warn("logoutBtn not found");
   }
 
   // ------------------ 🔹 User Dropdown ------------------ //
   const toggle = document.getElementById("userDropdownToggle");
   const menu = document.getElementById("dropdownMenu");
-
   if (toggle && menu) {
     toggle.addEventListener("click", () => {
       toggle.classList.toggle("active");
       menu.style.display = menu.style.display === "block" ? "none" : "block";
     });
-
-    // Hide menu when clicking outside
-    document.addEventListener("click", (e) => {
-      if (!toggle.contains(e.target) && !menu.contains(e.target)) {
-        menu.style.display = "none";
-      }
+    document.addEventListener("click", e => {
+      if (!toggle.contains(e.target) && !menu.contains(e.target)) menu.style.display = "none";
     });
   }
 
   // ------------------ 🔹 Submenu Toggle ------------------ //
-  document.querySelectorAll(".dropdown-toggle").forEach((toggle) => {
-    toggle.addEventListener("click", function (e) {
+  document.querySelectorAll(".dropdown-toggle").forEach(tg => {
+    tg.addEventListener("click", e => {
       e.preventDefault();
-      const parentLi = this.parentElement;
-      parentLi.classList.toggle("open");
+      tg.parentElement.classList.toggle("open");
     });
   });
 
-  // ------------------ 🔹 Clearance Logs Logic ------------------ //
+  // ------------------ 🔹 Clearance Logs ------------------ //
   const studentId = localStorage.getItem("schoolID");
   if (!studentId) {
     alert("Session expired. Please log in again.");
@@ -103,176 +81,156 @@ document.addEventListener("DOMContentLoaded", async () => {
   const studentIdSpan = document.getElementById("studentId");
   const statusSpan = document.getElementById("status");
 
-  // Populate student basic info
   studentIdSpan.textContent = studentId;
-  studentNameSpan.textContent = localStorage.getItem("studentName") || "Unknown";
+  studentNameSpan.textContent = studentName;
 
-  // 🔹 Step 1: Fetch from History collection
-  const historyDoc = await db.collection("History").doc(studentId).get();
-  if (!historyDoc.exists) {
-    officesContainer.innerHTML = `<p>No history records found.</p>`;
-    return;
-  }
-
-  const historyData = historyDoc.data();
-  const semestersData = historyData.semesters || {};
-
-  const semesters = Object.keys(semestersData);
-  semesters.sort();
-
-  // Populate dropdown
-  semesters.forEach((sem) => {
-    const option = document.createElement("option");
-    option.value = sem;
-    option.textContent = sem;
-    semesterSelect.appendChild(option);
+  // ------------------ 🔹 Step 1: Populate Semesters ------------------ //
+  const semesterDocsSnap = await db.collection(COLLECTIONS.semester).get();
+  const semestersMap = {};
+  semesterDocsSnap.forEach(doc => {
+    const data = doc.data();
+    if (data.semester) semestersMap[doc.id] = data.semester;
   });
 
-  // ---------------- Helper: Get readable office/club name with image ----------------
-  async function getReadableNameWithImage(designeeId) {
+  if (semesterSelect) {
+    semesterSelect.innerHTML = "";
+    Object.entries(semestersMap).forEach(([id, name]) => {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = name;
+      semesterSelect.appendChild(option);
+    });
+  }
+
+  // ------------------ 🔹 Step 2: Fetch Student History ------------------ //
+  const historyDoc = await db.collection("/History").doc(studentId).get();
+  if (!historyDoc.exists) {
+    officesContainer.innerHTML = "<p>No history records found.</p>";
+    statusSpan.textContent = "Pending";
+    return;
+  }
+  const semestersData = historyDoc.data();
+
+  // ------------------ 🔹 Helper: Get Office Display Name & Image ------------------ //
+  async function getOfficeDisplay(designeeId, fallbackName) {
+    let officeName = fallbackName || designeeId;
+    let imageId = null;
+
     try {
-      const designeeDoc = await db.collection("Designees").doc(designeeId).get();
-      if (!designeeDoc.exists) return { officeName: designeeId, imageId: null };
+      const designeeDoc = await db.collection(COLLECTIONS.designees).doc(designeeId).get();
+      if (designeeDoc.exists) {
+        const designee = designeeDoc.data();
+        imageId = designee.category || designee.office;
 
-      const designee = designeeDoc.data();
-      let officeName = null;
-      let imageId = designee.category || null;
-
-      // Category tables first
-      if (imageId) {
-        const catTables = ["acadClubTable", "groupTable", "labTable"];
-        for (const table of catTables) {
-          const doc = await db.collection(table).doc(imageId).get();
+        const catCollections = [
+          COLLECTIONS.clubs,
+          COLLECTIONS.lab,
+          COLLECTIONS.office,
+          COLLECTIONS.department
+        ];
+        for (const col of catCollections) {
+          if (!imageId) break;
+          const doc = await db.collection(col).doc(imageId).get();
           if (doc.exists) {
             const data = doc.data();
-            officeName = data.club || data.lab || officeName;
-            if (officeName) break;
+            officeName = data.club || data.lab || data.office || data.department || officeName;
+            break;
           }
         }
       }
-
-      // Fallback to office ID if no category image
-      if (!officeName && designee.office) {
-        const officeDoc = await db.collection("officeTable").doc(designee.office).get();
-        if (officeDoc.exists) officeName = officeDoc.data().office;
-        imageId = imageId || designee.office;
-      }
-
-      // Fallback to department + office
-      if (!officeName && designee.department) {
-        const depDoc = await db.collection("departmentTable").doc(designee.department).get();
-        const depName = depDoc.exists ? depDoc.data().department : "";
-        if (designee.office) {
-          const offDoc = await db.collection("officeTable").doc(designee.office).get();
-          const offName = offDoc.exists ? offDoc.data().office : "";
-          officeName = depName && offName ? `${depName} - ${offName}` : depName || offName;
-          imageId = imageId || designee.office;
-        } else {
-          officeName = depName;
-        }
-      }
-
-      // Fallback to full name
-      if (!officeName && (designee.firstName || designee.lastName)) {
-        officeName = `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
-      }
-
-      return { officeName, imageId };
-    } catch (err) {
-      console.error("Error fetching readable name:", err);
-      return { officeName: designeeId, imageId: null };
+    } catch (e) {
+      console.error("Error fetching office info:", e);
     }
+
+    return { officeName, imageId };
   }
 
-  // 🔹 Step 2: Render clearance logs by semester
-  async function renderClearance(selectedSemester) {
-    officesContainer.innerHTML = "";
+  // ------------------ 🔹 Step 3: Render Clearance Cards ------------------ //
+  // ------------------ Render Clearance Cards ------------------ //
+async function renderClearance(semesterId) {
+  officesContainer.innerHTML = "";
+  semesterLabel.textContent = semestersMap[semesterId] || "Select Semester";
 
-    if (!selectedSemester || !semestersData[selectedSemester]) {
-      semesterLabel.textContent = "Select a semester";
-      statusSpan.textContent = "";
-      return;
-    }
+  const semesterInfoArray = semestersData[semesterId];
+  if (!semesterInfoArray || !semesterInfoArray.length) return;
 
-    semesterLabel.textContent = selectedSemester;
+  const semesterInfo = semesterInfoArray[0];
+  const offices = semesterInfo.offices || [];
+  let allCleared = true;
 
-    const semesterInfo = semestersData[selectedSemester];
-    const snapshot = semesterInfo.snapshot || {};
-    const offices = snapshot.offices || {};
-    const overallStatus = semesterInfo.overallStatus || "Pending";
+  for (const office of offices) {
+    const officeCleared = office.allCleared || false;
+    if (!officeCleared) allCleared = false;
 
-    statusSpan.textContent = overallStatus;
-    statusSpan.style.color = overallStatus === "Pending" ? "red" :
-                            overallStatus === "Cleared" ? "green" : "black";
+    const officeDiv = document.createElement("div");
+    officeDiv.classList.add("office-section");
 
-    for (const [officeId, requirementsArray] of Object.entries(offices)) {
-      if (!Array.isArray(requirementsArray)) continue;
+    // Office Name (always displayed)
+    const officeHeader = document.createElement("h3");
+    officeHeader.textContent = office.officeName || office.designeeId;
+    officeDiv.appendChild(officeHeader);
 
-      // Determine if ALL requirements cleared
-      const allOfficeCleared = requirementsArray.every((req) => req.status === true);
+    // Status / Details
+    const contentDiv = document.createElement("div");
+    contentDiv.classList.add("office-status");
 
-      // Get the latest approver (last checkedBy)
-      let lastCheckedBy = "N/A";
-      let lastCheckedAt = null;
-      requirementsArray.forEach((req) => {
-        if (req.checkedAt) {
-          const time = new Date(req.checkedAt);
-          if (!lastCheckedAt || time > lastCheckedAt) {
-            lastCheckedAt = time;
-            lastCheckedBy = req.checkedBy || "N/A";
-          }
-        }
-      });
+    if (officeCleared) {
+      const lastReq = office.requirements?.length
+        ? office.requirements[office.requirements.length - 1]
+        : null;
+      const lastCheckedBy = lastReq?.checkedBy || office.lastCheckedBy || "N/A";
+      const lastCheckedAtRaw = lastReq?.checkedAt || office.checkedAt || null;
+      const lastCheckedAt = lastCheckedAtRaw
+        ? new Date(lastCheckedAtRaw).toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "numeric",
+            minute: "numeric",
+            hour12: true
+          })
+        : "Unknown";
 
-      // Get readable name and image
-      const { officeName, imageId } = await getReadableNameWithImage(officeId);
-
-      // Build office section
-      const officeDiv = document.createElement("div");
-      officeDiv.classList.add("office-section");
-
-      const officeHeader = document.createElement("h3");
-      officeHeader.textContent = officeName || officeId;
-      officeDiv.appendChild(officeHeader);
-
-      const contentDiv = document.createElement("div");
-      contentDiv.classList.add("office-status");
-
-      if (allOfficeCleared) {
-        const checkedDateStr = lastCheckedAt
-          ? new Date(lastCheckedAt).toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-              hour: 'numeric',
-              minute: 'numeric',
-              hour12: true
-            })
-          : "N/A";
-
-        const imgSrc = `../../logo/${imageId || officeId || "default"}.png`;
-
-        contentDiv.innerHTML = `
-          <img src="${imgSrc}" 
-               alt="Cleared" 
-               style="width:50px; height:50px;" 
-               onerror="this.onerror=null;this.src='../../Tatak.png';" /><br />
-          <i>Approved By: ${lastCheckedBy}<br />
-          ${checkedDateStr}<hr /></i>
-        `;
-      } else {
-        contentDiv.innerHTML = `
-          <p>Not Cleared <hr /></p>
-        `;
+      // Image
+      if (office.imageId) {
+        const img = document.createElement("img");
+        img.src = `../../logo/${office.imageId}.png`;
+        img.alt = office.officeName;
+        img.style.width = "50px";
+        img.style.height = "50px";
+        img.onerror = function() { this.src = "../../Tatak.png"; };
+        contentDiv.appendChild(img);
       }
 
-      officeDiv.appendChild(contentDiv);
-      officesContainer.appendChild(officeDiv);
+      // Last Checked By
+      const checkedByLabel = document.createElement("p");
+      checkedByLabel.textContent = `Approved By:${lastCheckedBy}`;
+      contentDiv.appendChild(checkedByLabel);
+
+      // Checked At
+      const checkedAtLabel = document.createElement("p");
+      checkedAtLabel.textContent = `${lastCheckedAt}`;
+      contentDiv.appendChild(checkedAtLabel);
+    } else {
+      contentDiv.innerHTML = `<span style="color:red">Pending</span>`;
     }
+
+    officeDiv.appendChild(contentDiv);
+    officesContainer.appendChild(officeDiv);
   }
 
-  // 🔹 Step 3: Listen for semester change
-  semesterSelect.addEventListener("change", (e) => {
+  statusSpan.textContent = allCleared ? "All Offices Cleared" : "Pending";
+  statusSpan.style.color = allCleared ? "green" : "red";
+}
+
+
+
+
+  // ------------------ 🔹 Step 4: Initial Render ------------------ //
+  const firstSemesterId = semesterSelect.value || Object.keys(semestersMap)[0];
+  if (firstSemesterId) await renderClearance(firstSemesterId);
+
+  semesterSelect.addEventListener("change", e => {
     renderClearance(e.target.value);
   });
 });

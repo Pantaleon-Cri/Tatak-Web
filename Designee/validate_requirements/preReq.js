@@ -1,244 +1,425 @@
-async function getStudentPrereqs(studentData, currentDesignee) {
-  const prereqChecks = [];
+// ===================== prereq.js =====================
 
-  // --- Helper: Check if all requirements in an office are cleared ---
-  async function isOfficeReqCleared(studentID, officeKey) {
-    try {
-      const officeDoc = await db.collection("ValidateRequirementsTable").doc(studentID).get();
-      if (!officeDoc.exists) return false;
+// -------------------- Populate Student Prerequisites --------------------
+async function getStudentPrereqs(student, userData) {
+  if (!student || !userData || !window.db) return "N/A";
 
-      const data = officeDoc.data();
-      if (!data.offices || !data.offices[officeKey]) return false;
+  const db = window.db;
+  const office = userData.office;
+  const category = String(userData.category || "");
+  const department = String(student.department || ""); // use student's actual department
 
-      const officeArray = data.offices[officeKey];
-      if (!Array.isArray(officeArray) || officeArray.length === 0) return false;
+  try {
+    // 🔹 Get current semester
+    const semesterSnapshot = await db
+      .collection("DataTable")
+      .doc("Semester")
+      .collection("SemesterDocs")
+      .where("currentSemester", "==", true)
+      .limit(1)
+      .get();
 
-      const studentDoc = await db.collection("Students").doc(studentID).get();
-      const currentSemester = studentDoc.exists ? String(studentDoc.data().semester || "").trim() : null;
+    if (semesterSnapshot.empty)
+      return "<span style='color:gray;'>No semester</span>";
 
-      let filteredReqs = currentSemester
-        ? officeArray.filter(req => String(req.semester || "").trim() === currentSemester)
-        : [];
+    const semesterID = semesterSnapshot.docs[0].id;
 
-      if (filteredReqs.length === 0) {
-        filteredReqs = officeArray.filter(req => req.status === true);
+    // ============================================================
+    // 🔹 CATEGORY-BASED PREREQS (1, 11, 18, 28, 36)
+    // ============================================================
+    const clubCategories = ["1", "11", "18", "28", "36"];
+    if (clubCategories.includes(category)) {
+      const studentClubs = Array.isArray(student.clubs) ? student.clubs : [];
+      if (studentClubs.length === 0) {
+        return "<span style='color:gray;'>No clubs</span>";
       }
 
-      if (filteredReqs.length === 0) return false;
-      return filteredReqs.every(req => req.status === true);
-    } catch (err) {
-      console.error("Error checking office requirements:", err);
-      return false;
-    }
-  }
+      const clubsSnapshot = await db
+        .collection("DataTable")
+        .doc("Clubs")
+        .collection("ClubsDocs")
+        .get();
 
-  // --- Helper: Get lab display names ---
-  async function getLabName(labId) {
-    try {
-      const doc = await db.collection("labTable").doc(labId).get();
-      return doc.exists ? doc.data().lab || labId : labId;
-    } catch (err) {
-      console.error(`Error fetching lab name for ${labId}:`, err);
-      return labId;
-    }
-  }
-
-  // --- Helper: Get club display names ---
-  async function getClubName(clubId) {
-    try {
-      const snap = await db.collection("acadClubTable").where("id", "==", clubId).limit(1).get();
-      return !snap.empty ? snap.docs[0].data().codeName || clubId : clubId;
-    } catch (err) {
-      console.error(`Error fetching club name for ${clubId}:`, err);
-      return clubId;
-    }
-  }
-
-  // --- 1️⃣ DSA / NSTP (Office 305) ---
-  if (currentDesignee.office === "305") {
-    try {
-      const ssgSnapshot = await db.collection("Designees").where("category", "==", "401").limit(1).get();
-      let cleared = false;
-      if (!ssgSnapshot.empty) {
-        const ssgUserID = ssgSnapshot.docs[0].data().userID?.trim();
-        cleared = ssgUserID ? await isOfficeReqCleared(studentData.schoolID, ssgUserID) : false;
-      }
-      prereqChecks.push({ name: "SSG", cleared });
-    } catch (err) {
-      console.error("Error fetching SSG prerequisite:", err);
-      prereqChecks.push({ name: "SSG", cleared: false });
-    }
-
-    try {
-      const departmentCouncilMap = { "01": "1018", "02": "1011", "03": "1028", "04": "1036", "05": "101" };
-      const studentDept = String(studentData.department || "").trim();
-      const councilCategory = departmentCouncilMap[studentDept];
-
-      let cleared = false;
-      if (councilCategory) {
-        const councilSnapshot = await db.collection("Designees").where("category", "==", councilCategory).limit(1).get();
-        if (!councilSnapshot.empty) {
-          const councilUserID = councilSnapshot.docs[0].data().userID?.trim();
-          cleared = councilUserID ? await isOfficeReqCleared(studentData.schoolID, councilUserID) : false;
-        }
-      }
-      prereqChecks.push({ name: "Council", cleared });
-    } catch (err) {
-      console.error("Error fetching Council prerequisite:", err);
-      prereqChecks.push({ name: "Council", cleared: false });
-    }
-  }
-
-  // --- 2️⃣ Dean Offices (Office 308) ---
-  if (currentDesignee.office === "308") {
-    const dept = currentDesignee.department;
-    let councilCategory;
-    let includeProgramCoordinator = false;
-
-    if (dept === "04") councilCategory = "1036";
-    else if (dept === "05") councilCategory = "101";
-    else if (dept === "02") { councilCategory = "1011"; includeProgramCoordinator = true; }
-    else if (dept === "03") { councilCategory = "1028"; includeProgramCoordinator = true; }
-
-    // Program Coordinator
-    if (includeProgramCoordinator) {
-      try {
-        const progSnap = await db.collection("Designees").where("office", "==", "317").limit(1).get();
-        let cleared = false;
-        if (!progSnap.empty) {
-          const progUserID = progSnap.docs[0].data().userID?.trim();
-          cleared = progUserID ? await isOfficeReqCleared(studentData.schoolID, progUserID) : false;
-        }
-        prereqChecks.push({ name: "Program Coordinator", cleared });
-      } catch (err) {
-        console.error("Error fetching Program Coordinator:", err);
-        prereqChecks.push({ name: "Program Coordinator", cleared: false });
-      }
-    }
-
-    // --- Labs ---
-    try {
-      const labCategories = [];
-      const labStatusMap = {};
-      const labNamesMap = {};
-      const validLabIds = ["201", "202", "203", "204", "205"]; // Only these labs
-
-      const labTablesSnap = await db.collection("labTable").get();
-      const allLabs = {};
-      labTablesSnap.forEach(doc => {
+      const clubsMap = {};
+      clubsSnapshot.docs.forEach(doc => {
         const data = doc.data();
-        if (data && data.lab) allLabs[doc.id] = data.lab;
+        clubsMap[doc.id] = data.code || doc.id;
       });
 
-      // Membership for valid labs only
-      for (const labId of validLabIds) {
-        const memberDoc = await db.collection("Membership").doc(labId).collection("Members").doc(studentData.schoolID).get();
-        if (memberDoc.exists) {
-          labCategories.push(labId);
-          labNamesMap[labId] = allLabs[labId] || labId;
-          labStatusMap[labId] = false;
-        }
-      }
-
-      // Check if cleared
-      for (const labId of labCategories) {
-        const labSnapshot = await db.collection("Designees").where("category", "==", labId).limit(1).get();
+      const results = [];
+      for (const clubID of studentClubs) {
         let cleared = false;
-        if (!labSnapshot.empty) {
-          const labUserID = labSnapshot.docs[0].data().userID?.trim();
-          cleared = labUserID ? await isOfficeReqCleared(studentData.schoolID, labUserID) : false;
+        const validationDoc = await db
+          .collection("Validation")
+          .doc(`13-${clubID}`)
+          .collection(student.schoolID)
+          .doc(semesterID)
+          .get();
+
+        if (validationDoc.exists) {
+          const requirements = validationDoc.data()?.requirements || [];
+          cleared = requirements.length > 0 && requirements.every(r => r.status === true);
         }
-        labStatusMap[labId] = cleared;
+
+        const displayName = clubsMap[clubID] || `Club ${clubID}`;
+        results.push(`<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`);
       }
 
-      const allLabsCleared = Object.values(labStatusMap).every(val => val === true);
-      prereqChecks.push({
-        name: labCategories.length > 0 ? labCategories.map(id => labNamesMap[id]).join(", ") : "No Lab",
-        cleared: allLabsCleared
-      });
-
-    } catch (err) {
-      console.error("Error fetching labs for Dean:", err);
-      prereqChecks.push({ name: "Lab", cleared: false });
+      return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
     }
 
-    // Council
-    try {
-      const councilSnap = await db.collection("Designees").where("category", "==", councilCategory).limit(1).get();
+    // ============================================================
+    // 🔹 OFFICE 12 — Combined prereqs with memberships
+    // ============================================================
+    // ============================================================
+// 🔹 OFFICE 12 — Combined prereqs with memberships
+// ============================================================
+if (office === "12") {
+  const baseOffices = ["2", "3", "5", "6", "7", "9", "10"];
+  const offices = [...baseOffices];
+  if (department) offices.unshift(`4-${department}`); // Office 4 depends on student department
+
+  const results = [];
+
+  // ------------------ Check Office prereqs ------------------
+  for (const off of offices) {
+    let cleared = false;
+
+    const validationDoc = await db
+      .collection("Validation")
+      .doc(off)
+      .collection(student.schoolID)
+      .doc(semesterID)
+      .get();
+
+    if (validationDoc.exists) {
+      const requirements = validationDoc.data()?.requirements || [];
+      cleared = requirements.length > 0 && requirements.every(r => r.status === true);
+    }
+
+    // ------------------ Get readable office name ------------------
+    let displayName = "";
+    if (off.startsWith("4-")) {
+      const [officeNum, deptNum] = off.split("-");
+      const officeDoc = await db
+        .collection("DataTable")
+        .doc("Office")
+        .collection("OfficeDocs")
+        .doc(officeNum)
+        .get();
+      const deptDoc = await db
+        .collection("DataTable")
+        .doc("Department")
+        .collection("DepartmentDocs")
+        .doc(deptNum)
+        .get();
+
+      const officeName = officeDoc.exists && officeDoc.data().office
+        ? officeDoc.data().office
+        : `Office ${officeNum}`;
+      const deptName = deptDoc.exists && deptDoc.data().department
+        ? deptDoc.data().department
+        : `${deptNum}`;
+
+      displayName = `${officeName} – ${deptName}`;
+    } else {
+      const officeDoc = await db
+        .collection("DataTable")
+        .doc("Office")
+        .collection("OfficeDocs")
+        .doc(off)
+        .get();
+      displayName = officeDoc.exists
+        ? officeDoc.data().office || `Office ${off}`
+        : `Office ${off}`;
+    }
+
+    results.push(
+      `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
+    );
+  }
+
+  // ------------------ Check Memberships ------------------
+  const membershipSnapshot = await db.collection("Membership").get();
+
+  // Preload Clubs names
+  const clubsSnapshot = await db
+    .collection("DataTable")
+    .doc("Clubs")
+    .collection("ClubsDocs")
+    .get();
+  const clubsMap = {};
+  clubsSnapshot.docs.forEach(doc => {
+    const data = doc.data();
+    clubsMap[doc.id] = data.code || data.name || doc.id;
+  });
+
+  for (const categoryDoc of membershipSnapshot.docs) {
+    const categoryID = categoryDoc.id;
+
+    // 🔹 Skip categories 1–6 entirely
+    if (Number(categoryID) >= 1 && Number(categoryID) <= 6) continue;
+
+    const memberDoc = await db
+      .collection("Membership")
+      .doc(categoryID)
+      .collection("Members")
+      .doc(student.schoolID)
+      .get();
+
+    if (memberDoc.exists) {
       let cleared = false;
-      if (!councilSnap.empty) {
-        const councilUserID = councilSnap.docs[0].data().userID?.trim();
-        cleared = councilUserID ? await isOfficeReqCleared(studentData.schoolID, councilUserID) : false;
+
+      const validationDoc = await db
+        .collection("Validation")
+        .doc(`8-${categoryID}`)
+        .collection(student.schoolID)
+        .doc(semesterID)
+        .get();
+
+      if (validationDoc.exists) {
+        const requirements = validationDoc.data()?.requirements || [];
+        cleared = requirements.length > 0 && requirements.every(r => r.status === true);
       }
-      prereqChecks.push({ name: "Council", cleared });
-    } catch (err) {
-      console.error("Error fetching Council prerequisite:", err);
-      prereqChecks.push({ name: "Council", cleared: false });
+
+      const displayName = clubsMap[categoryID] || `Membership ${categoryID}`;
+
+      results.push(
+        `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
+      );
     }
   }
 
-  // --- 3️⃣ Office 316 Special Prerequisites ---
-  if (currentDesignee.office === "316") {
-    const studentDoc = await db.collection("Students").doc(studentData.schoolID).get();
-    const studentDept = studentDoc.exists ? String(studentDoc.data().department || "").trim() : null;
+  return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
+}
 
-    const officeList = [];
-    if (studentDept) officeList.push(`307${studentDept}`);
-    if (studentDept) officeList.push(`308${studentDept}`);
-    officeList.push("305", "306", "304", "303", "302");
 
-    for (const officeKey of officeList) {
-      try {
-        let cleared = false;
-        let userID = null;
 
-        if (officeKey.startsWith("308") || officeKey.startsWith("307")) {
-          const officeNum = officeKey.slice(0, 3);
-          const deptCode = officeKey.slice(3);
-          const desSnap = await db.collection("Designees").where("office", "==", officeNum).where("department", "==", deptCode).limit(1).get();
-          if (!desSnap.empty) userID = desSnap.docs[0].data().userID?.trim();
-        } else {
-          const desSnap = await db.collection("Designees").where("office", "==", officeKey).limit(1).get();
-          if (!desSnap.empty) userID = desSnap.docs[0].data().userID?.trim();
-        }
+    // ============================================================
+    // 🔹 OFFICE 4 — Dean
+    // ============================================================
+    if (office === "4") {
+      const results = [];
 
-        cleared = userID ? await isOfficeReqCleared(studentData.schoolID, userID) : false;
-        prereqChecks.push({ name: officeKey, cleared });
-      } catch (err) {
-        console.error(`Error fetching prerequisite for office ${officeKey}:`, err);
-        prereqChecks.push({ name: officeKey, cleared: false });
-      }
-    }
-  }
+      // LAB prerequisite
+      const labSnapshot = await db
+        .collection("DataTable")
+        .doc("Lab")
+        .collection("LabDocs")
+        .get();
+      const labMap = {};
+      labSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        labMap[doc.id] = data.code || data.lab || doc.id;
+      });
 
-  // --- 4️⃣ Council Category Club Prerequisites ---
-  const councilCategories = ["101", "1011", "1018", "1028", "1036"];
-  if (councilCategories.includes(currentDesignee.category)) {
-    try {
-      const studentDoc = await db.collection("Students").doc(studentData.schoolID).get();
-      const clubs = studentDoc.exists ? studentDoc.data().clubs || [] : [];
+      let labCleared = false;
+      let labName = "No Lab";
+      let isMember = false;
 
-      const filteredClubs = clubs.filter(club => !councilCategories.includes(club));
-      for (const clubId of filteredClubs) {
-        try {
-          let cleared = false;
-          const desSnap = await db.collection("Designees").where("category", "==", clubId).limit(1).get();
-          if (!desSnap.empty) {
-            const userID = desSnap.docs[0].data().userID?.trim();
-            cleared = userID ? await isOfficeReqCleared(studentData.schoolID, userID) : false;
+      for (const categoryID of Object.keys(labMap)) {
+        const memberDoc = await db
+          .collection("Membership")
+          .doc(categoryID)
+          .collection("Members")
+          .doc(student.schoolID)
+          .get();
+
+        if (memberDoc.exists) {
+          isMember = true;
+          labName = labMap[categoryID];
+
+          const validationDoc = await db
+            .collection("Validation")
+            .doc(`8-${categoryID}`)
+            .collection(student.schoolID)
+            .doc(semesterID)
+            .get();
+
+          if (validationDoc.exists) {
+            const requirements = validationDoc.data()?.requirements || [];
+            labCleared = requirements.length > 0 && requirements.every(r => r.status === true);
           }
-          const clubName = await getClubName(clubId);
-          prereqChecks.push({ name: clubName, cleared });
-        } catch (err) {
-          console.error(`Error fetching club prerequisite for ${clubId}:`, err);
-          prereqChecks.push({ name: clubId, cleared: false });
+          break;
         }
       }
+
+      results.push(`<span style="color:${isMember ? (labCleared ? "green" : "red") : "green"}">${labName}</span>`);
+
+      // DEPARTMENT-SPECIFIC COUNCIL + PROGRAM COORDINATOR
+      if (department === "2") await handleCouncilAndPC("11", "11-2");
+      if (department === "3") await handleCouncilAndPC("28", "11-3");
+      if (department === "4") await handleCouncilAndPC("36", null);
+      if (department === "5") await handleCouncilAndPC("1", null);
+
+      async function handleCouncilAndPC(clubID, pcID) {
+        if ((student.clubs || []).includes(clubID)) {
+          let councilCleared = false;
+          const councilDoc = await db
+            .collection("Validation")
+            .doc(`13-${clubID}`)
+            .collection(student.schoolID)
+            .doc(semesterID)
+            .get();
+
+          if (councilDoc.exists) {
+            const requirements = councilDoc.data()?.requirements || [];
+            councilCleared = requirements.length > 0 && requirements.every(r => r.status === true);
+          }
+
+          const councilData = await db
+            .collection("DataTable")
+            .doc("Clubs")
+            .collection("ClubsDocs")
+            .doc(clubID)
+            .get();
+          const councilName = councilData.exists ? councilData.data().code || "Council" : "Council";
+
+          results.push(`<span style="color:${councilCleared ? "green" : "red"}">${councilName}</span>`);
+        }
+
+        if (pcID) {
+          let pcCleared = false;
+          const pcDoc = await db
+            .collection("Validation")
+            .doc(pcID)
+            .collection(student.schoolID)
+            .doc(semesterID)
+            .get();
+
+          if (pcDoc.exists) {
+            const requirements = pcDoc.data()?.requirements || [];
+            pcCleared = requirements.length > 0 && requirements.every(r => r.status === true);
+          }
+
+          results.push(`<span style="color:${pcCleared ? "green" : "red"}">Program Coordinator</span>`);
+        }
+      }
+
+      return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
+    }
+
+    // ============================================================
+    // 🔹 OFFICE 5 — Student Org prerequisites
+    // ============================================================
+    if (office === "5") {
+      const mainPrereqs = ["13-39", "13-40"];
+      const clubCheckIDs = ["1", "11", "18", "28", "36"];
+      const matchedClubs = (student.clubs || []).filter(c => clubCheckIDs.includes(c));
+      const allPrereqs = [...mainPrereqs, ...matchedClubs];
+
+      const clubsSnapshot = await db
+        .collection("DataTable")
+        .doc("Clubs")
+        .collection("ClubsDocs")
+        .get();
+      const clubsMap = {};
+      clubsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        clubsMap[doc.id] = data.code || doc.id;
+      });
+
+      const results = [];
+      for (const prID of allPrereqs) {
+        let cleared = false;
+        const prereqDoc = await db
+          .collection("Validation")
+          .doc(prID)
+          .collection(student.schoolID)
+          .doc(semesterID)
+          .get();
+
+        if (prereqDoc.exists) {
+          const requirements = prereqDoc.data()?.requirements || [];
+          cleared = requirements.length > 0 && requirements.every(r => r.status === true);
+        }
+
+        const displayName = clubsMap[prID.replace("13-", "")] || prID;
+        results.push(`<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`);
+      }
+
+      return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
+    }
+
+    // ============================================================
+    // 🔹 OFFICE 8 — Lab membership
+    // ============================================================
+    if (office === "8") {
+      const labSnapshot = await db
+        .collection("DataTable")
+        .doc("Lab")
+        .collection("LabDocs")
+        .get();
+
+      const labMap = {};
+      labSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        labMap[doc.id] = data.lab || doc.id;
+      });
+
+      const results = [];
+      for (const categoryID of Object.keys(labMap)) {
+        const memberDoc = await db
+          .collection("Membership")
+          .doc(categoryID)
+          .collection("Members")
+          .doc(student.schoolID)
+          .get();
+
+        let cleared = false;
+        let isMember = false;
+
+        if (memberDoc.exists) {
+          isMember = true;
+
+          const validationDoc = await db
+            .collection("Validation")
+            .doc(`8-${categoryID}`)
+            .collection(student.schoolID)
+            .doc(semesterID)
+            .get();
+
+          if (validationDoc.exists) {
+            const data = validationDoc.data();
+            const requirements = data.requirements || [];
+            cleared = requirements.length > 0 && requirements.every(r => r.status === true);
+          }
+        }
+
+        const displayName = isMember ? labMap[categoryID] : "No Lab";
+        results.push(`<span style="color:${isMember ? (cleared ? "green" : "red") : "green"}">${displayName}</span>`);
+      }
+
+      const unique = [...new Set(results)];
+      return unique.join(", ") || "<span style='color:gray;'>No prereqs</span>";
+    }
+
+    // 🔹 Default
+    return "N/A";
+
+  } catch (err) {
+    console.error("Error fetching prerequisites:", err);
+    return "<span style='color:gray;'>Error</span>";
+  }
+}
+
+// -------------------- Populate Prereq Cells in Table --------------------
+async function populatePrerequisites(students, userDataObj) {
+  if (!students || !userDataObj) return;
+
+  const cells = document.querySelectorAll(".prereq-cell");
+
+  for (const cell of cells) {
+    const studentID = cell.getAttribute("data-studentid");
+    const student = students.find((s) => s.schoolID === studentID);
+    if (!student) continue;
+
+    try {
+      const prereqHTML = await getStudentPrereqs(student, userDataObj);
+      cell.innerHTML = prereqHTML;
     } catch (err) {
-      console.error("Error fetching student's clubs for council prerequisite:", err);
+      console.error("Error loading prerequisites for", studentID, err);
+      cell.innerHTML = "<span style='color:gray;'>Error</span>";
     }
   }
-
-  // --- Return HTML ---
-  return prereqChecks.map(pr => `<span style="color:${pr.cleared ? "green" : "red"}">${pr.name}</span>`).join(", ");
 }

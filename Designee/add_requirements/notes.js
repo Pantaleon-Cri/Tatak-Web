@@ -11,8 +11,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   let existingDocId = null;
   let currentSemesterId = null;
   let currentSemesterName = null;
+  let userData = null;
+  let designeeId = null;
 
-  // Utility: Place caret at end of contenteditable div
+  // Utility: Place caret at end
   function placeCaretAtEnd(el) {
     el.focus();
     if (typeof window.getSelection !== "undefined" && typeof document.createRange !== "undefined") {
@@ -31,9 +33,31 @@ document.addEventListener("DOMContentLoaded", async () => {
   cancelBtn.style.display = "none";
   editBtn.style.display = "inline-block";
 
+  // --- Step 0: Load userData ---
+  try {
+    const storedUserData = localStorage.getItem("userData");
+    if (!storedUserData) throw new Error("No userData in localStorage");
+    userData = JSON.parse(storedUserData);
+    if (!userData.id) throw new Error("userData missing id field");
+
+    // Determine designeeId
+    designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
+    if (!designeeId) throw new Error("Missing createdByDesigneeID for staff");
+  } catch (err) {
+    console.error("Error loading user data:", err);
+    notesContent.innerText = "Failed to load note: user data missing.";
+    editBtn.disabled = true;
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+    charCountDisplay.innerText = "0 / 150";
+    return;
+  }
+
   // --- Step 1: Load current semester ---
   try {
-    const semesterSnapshot = await db.collection("semesterTable")
+    const semesterSnapshot = await db.collection("DataTable")
+      .doc("Semester")
+      .collection("SemesterDocs")
       .where("currentSemester", "==", true)
       .limit(1)
       .get();
@@ -41,9 +65,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (semesterSnapshot.empty) throw new Error("No active semester found.");
 
     const semesterDoc = semesterSnapshot.docs[0].data();
-    currentSemesterId = semesterDoc.id;
+    currentSemesterId = semesterSnapshot.docs[0].id; // 🔹 Use ID
     currentSemesterName = semesterDoc.semester;
-    console.log("Current semester:", currentSemesterName);
   } catch (err) {
     console.error("Error fetching current semester:", err);
     notesContent.innerText = "Failed to load semester info.";
@@ -51,38 +74,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  // --- Step 2: Load user data and fetch note ---
+  // --- Step 2: Load note based on designeeId & semester ID ---
   try {
-    await getCurrentUserData();
+    const normalizedOffice = (userData.office || "").trim();
+    const normalizedCategory = (userData.category || "").trim();
+    const normalizedDepartment = (userData.department || "").trim();
 
-    if (!db) throw new Error("Firestore (db) not initialized.");
-    if (!currentUser || !currentUser.id) throw new Error("User not logged in.");
-
-    const normalizedOffice = (userOffice || "").trim();
-    const normalizedCategory = (userCategory || "").trim();
-    const normalizedDepartment = (userDepartment || "").trim();
-
-    console.log("Loading notes for:", {
-      office: normalizedOffice,
-      category: normalizedCategory,
-      department: normalizedDepartment,
-      semester: currentSemesterName
-    });
-
-    // Query Firestore for latest note matching filters AND current semester
-    const querySnapshot = await db.collection("notesTable")
+    const querySnapshot = await db.collection("RequirementsAndNotes")
+      .doc("NotesList")
+      .collection(designeeId)
       .where("office", "==", normalizedOffice)
       .where("category", "==", normalizedCategory)
       .where("department", "==", normalizedDepartment)
-      .where("semester", "==", currentSemesterName)
-      .orderBy("createdAt", "desc")
+      .where("semesterId", "==", currentSemesterId) // 🔹 Use semesterId instead of name
       .limit(1)
       .get();
 
     if (!querySnapshot.empty) {
       const noteDoc = querySnapshot.docs[0];
       const noteData = noteDoc.data();
-
       existingDocId = noteDoc.id;
       originalNotes = noteData.note || "";
       notesContent.innerText = originalNotes;
@@ -95,8 +105,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       charCountDisplay.innerText = `0 / 150`;
       notesContent.setAttribute("data-placeholder", "No note yet. Click Edit to add.");
     }
-  } catch (error) {
-    console.error("Error loading note:", error);
+  } catch (err) {
+    console.error("Error loading note:", err);
     notesContent.innerText = "Failed to load note.";
     notesContent.contentEditable = false;
     editBtn.disabled = true;
@@ -106,7 +116,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  // Character counter and enforce max length 150
+  // Character counter
   notesContent.addEventListener("input", () => {
     let text = notesContent.innerText;
     if (text.length > 150) {
@@ -117,23 +127,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     charCountDisplay.innerText = `${text.length} / 150`;
   });
 
-  // Edit button click: enable editing
+  // Edit
   editBtn.addEventListener("click", () => {
     originalNotes = notesContent.innerText.trim();
-    if (originalNotes === "No note yet." || originalNotes === "") {
-      notesContent.innerText = "";
-    }
+    if (originalNotes === "No note yet." || originalNotes === "") notesContent.innerText = "";
     notesContent.contentEditable = true;
     notesContent.focus();
     placeCaretAtEnd(notesContent);
-
     saveBtn.style.display = "inline-block";
     cancelBtn.style.display = "inline-block";
     editBtn.style.display = "none";
     notesContent.removeAttribute("data-placeholder");
   });
 
-  // Cancel button: revert changes
+  // Cancel
   cancelBtn.addEventListener("click", () => {
     notesContent.innerText = originalNotes;
     notesContent.contentEditable = false;
@@ -144,42 +151,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!originalNotes) notesContent.setAttribute("data-placeholder", "No note yet. Click Edit to add.");
   });
 
-  // Save button: save or update Firestore document
+  // Save
   saveBtn.addEventListener("click", async () => {
     const noteText = notesContent.innerText.trim();
-
-    if (noteText.length > 150) {
-      alert(`Note cannot exceed 150 characters.\nCurrent length: ${noteText.length}`);
-      return;
-    }
-
-    if (!noteText) {
-      alert("Note cannot be empty.");
-      return;
-    }
+    if (!noteText) return alert("Note cannot be empty.");
+    if (noteText.length > 150) return alert(`Note cannot exceed 150 characters.\nCurrent length: ${noteText.length}`);
 
     try {
-      const normalizedOffice = (userOffice || "").trim();
-      const normalizedCategory = (userCategory || "").trim();
-      const normalizedDepartment = (userDepartment || "").trim();
+      const normalizedOffice = (userData.office || "").trim();
+      const normalizedCategory = (userData.category || "").trim();
+      const normalizedDepartment = (userData.department || "").trim();
+
+      const notesRef = db.collection("RequirementsAndNotes")
+        .doc("NotesList")
+        .collection(designeeId);
+
+      const noteDataPayload = {
+        note: noteText,
+        addedBy: userData.id,
+        addedByRole: userData.role,
+        office: normalizedOffice,
+        category: normalizedCategory,
+        department: normalizedDepartment,
+        semesterId: currentSemesterId,   // 🔹 Use ID
+        semesterName: currentSemesterName,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
 
       if (existingDocId) {
-        await db.collection("notesTable").doc(existingDocId).update({
-          note: noteText,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          semester: currentSemesterName
-        });
+        await notesRef.doc(existingDocId).update(noteDataPayload);
         alert("Note updated successfully.");
       } else {
-        const docRef = await db.collection("notesTable").add({
-          note: noteText,
-          addedBy: currentUser.id,
-          office: normalizedOffice,
-          category: normalizedCategory,
-          department: normalizedDepartment,
-          semester: currentSemesterName,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        noteDataPayload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        const docRef = await notesRef.add(noteDataPayload);
         existingDocId = docRef.id;
         alert("Note created successfully.");
       }
@@ -190,8 +194,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       cancelBtn.style.display = "none";
       editBtn.style.display = "inline-block";
       charCountDisplay.innerText = `${noteText.length} / 150`;
-    } catch (error) {
-      console.error("Failed to save note:", error);
+    } catch (err) {
+      console.error("Failed to save note:", err);
       alert("Failed to save note.");
     }
   });
