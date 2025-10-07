@@ -30,7 +30,11 @@ async function getStudentPrereqs(student, userData) {
     const clubCategories = ["1", "11", "18", "28", "36"];
     if (clubCategories.includes(category)) {
       const studentClubs = Array.isArray(student.clubs) ? student.clubs : [];
-      if (studentClubs.length === 0) {
+
+      // ✅ Exclude themselves from prereqs (don't show same category as the user)
+      const filteredClubs = studentClubs.filter(clubID => clubID !== category);
+
+      if (filteredClubs.length === 0) {
         return "<span style='color:gray;'>No clubs</span>";
       }
 
@@ -47,7 +51,7 @@ async function getStudentPrereqs(student, userData) {
       });
 
       const results = [];
-      for (const clubID of studentClubs) {
+      for (const clubID of filteredClubs) {
         let cleared = false;
         const validationDoc = await db
           .collection("Validation")
@@ -71,129 +75,124 @@ async function getStudentPrereqs(student, userData) {
     // ============================================================
     // 🔹 OFFICE 12 — Combined prereqs with memberships
     // ============================================================
-    // ============================================================
-// 🔹 OFFICE 12 — Combined prereqs with memberships
-// ============================================================
-if (office === "12") {
-  const baseOffices = ["2", "3", "5", "6", "7", "9", "10"];
-  const offices = [...baseOffices];
-  if (department) offices.unshift(`4-${department}`); // Office 4 depends on student department
+    if (office === "12") {
+      const baseOffices = ["2", "3", "5", "6", "7", "9", "10"];
+      const offices = [...baseOffices];
+      if (department) offices.unshift(`4-${department}`); // Office 4 depends on student department
 
-  const results = [];
+      const results = [];
 
-  // ------------------ Check Office prereqs ------------------
-  for (const off of offices) {
-    let cleared = false;
+      // ------------------ Check Office prereqs ------------------
+      for (const off of offices) {
+        let cleared = false;
 
-    const validationDoc = await db
-      .collection("Validation")
-      .doc(off)
-      .collection(student.schoolID)
-      .doc(semesterID)
-      .get();
+        const validationDoc = await db
+          .collection("Validation")
+          .doc(off)
+          .collection(student.schoolID)
+          .doc(semesterID)
+          .get();
 
-    if (validationDoc.exists) {
-      const requirements = validationDoc.data()?.requirements || [];
-      cleared = requirements.length > 0 && requirements.every(r => r.status === true);
-    }
+        if (validationDoc.exists) {
+          const requirements = validationDoc.data()?.requirements || [];
+          cleared = requirements.length > 0 && requirements.every(r => r.status === true);
+        }
 
-    // ------------------ Get readable office name ------------------
-    let displayName = "";
-    if (off.startsWith("4-")) {
-      const [officeNum, deptNum] = off.split("-");
-      const officeDoc = await db
-        .collection("DataTable")
-        .doc("Office")
-        .collection("OfficeDocs")
-        .doc(officeNum)
-        .get();
-      const deptDoc = await db
-        .collection("DataTable")
-        .doc("Department")
-        .collection("DepartmentDocs")
-        .doc(deptNum)
-        .get();
+        // ------------------ Get readable office name ------------------
+        let displayName = "";
+        if (off.startsWith("4-")) {
+          const [officeNum, deptNum] = off.split("-");
+          const officeDoc = await db
+            .collection("DataTable")
+            .doc("Office")
+            .collection("OfficeDocs")
+            .doc(officeNum)
+            .get();
+          const deptDoc = await db
+            .collection("DataTable")
+            .doc("Department")
+            .collection("DepartmentDocs")
+            .doc(deptNum)
+            .get();
 
-      const officeName = officeDoc.exists && officeDoc.data().office
-        ? officeDoc.data().office
-        : `Office ${officeNum}`;
-      const deptName = deptDoc.exists && deptDoc.data().department
-        ? deptDoc.data().department
-        : `${deptNum}`;
+          const officeName = officeDoc.exists && officeDoc.data().office
+            ? officeDoc.data().office
+            : `Office ${officeNum}`;
+          const deptName = deptDoc.exists && deptDoc.data().department
+            ? deptDoc.data().department
+            : `${deptNum}`;
 
-      displayName = `${officeName} – ${deptName}`;
-    } else {
-      const officeDoc = await db
-        .collection("DataTable")
-        .doc("Office")
-        .collection("OfficeDocs")
-        .doc(off)
-        .get();
-      displayName = officeDoc.exists
-        ? officeDoc.data().office || `Office ${off}`
-        : `Office ${off}`;
-    }
+          displayName = `${officeName} – ${deptName}`;
+        } else {
+          const officeDoc = await db
+            .collection("DataTable")
+            .doc("Office")
+            .collection("OfficeDocs")
+            .doc(off)
+            .get();
+          displayName = officeDoc.exists
+            ? officeDoc.data().office || `Office ${off}`
+            : `Office ${off}`;
+        }
 
-    results.push(
-      `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
-    );
-  }
-
-  // ------------------ Check Memberships ------------------
-  const membershipSnapshot = await db.collection("Membership").get();
-
-  // Preload Clubs names
-  const clubsSnapshot = await db
-    .collection("DataTable")
-    .doc("Clubs")
-    .collection("ClubsDocs")
-    .get();
-  const clubsMap = {};
-  clubsSnapshot.docs.forEach(doc => {
-    const data = doc.data();
-    clubsMap[doc.id] = data.code || data.name || doc.id;
-  });
-
-  for (const categoryDoc of membershipSnapshot.docs) {
-    const categoryID = categoryDoc.id;
-
-    // 🔹 Skip categories 1–6 entirely
-    if (Number(categoryID) >= 1 && Number(categoryID) <= 6) continue;
-
-    const memberDoc = await db
-      .collection("Membership")
-      .doc(categoryID)
-      .collection("Members")
-      .doc(student.schoolID)
-      .get();
-
-    if (memberDoc.exists) {
-      let cleared = false;
-
-      const validationDoc = await db
-        .collection("Validation")
-        .doc(`8-${categoryID}`)
-        .collection(student.schoolID)
-        .doc(semesterID)
-        .get();
-
-      if (validationDoc.exists) {
-        const requirements = validationDoc.data()?.requirements || [];
-        cleared = requirements.length > 0 && requirements.every(r => r.status === true);
+        results.push(
+          `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
+        );
       }
 
-      const displayName = clubsMap[categoryID] || `Membership ${categoryID}`;
+      // ------------------ Check Memberships ------------------
+      const membershipSnapshot = await db.collection("Membership").get();
 
-      results.push(
-        `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
-      );
+      // Preload Clubs names
+      const clubsSnapshot = await db
+        .collection("DataTable")
+        .doc("Clubs")
+        .collection("ClubsDocs")
+        .get();
+      const clubsMap = {};
+      clubsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        clubsMap[doc.id] = data.code || data.name || doc.id;
+      });
+
+      for (const categoryDoc of membershipSnapshot.docs) {
+        const categoryID = categoryDoc.id;
+
+        // 🔹 Skip categories 1–6 entirely
+        if (Number(categoryID) >= 1 && Number(categoryID) <= 6) continue;
+
+        const memberDoc = await db
+          .collection("Membership")
+          .doc(categoryID)
+          .collection("Members")
+          .doc(student.schoolID)
+          .get();
+
+        if (memberDoc.exists) {
+          let cleared = false;
+
+          const validationDoc = await db
+            .collection("Validation")
+            .doc(`8-${categoryID}`)
+            .collection(student.schoolID)
+            .doc(semesterID)
+            .get();
+
+          if (validationDoc.exists) {
+            const requirements = validationDoc.data()?.requirements || [];
+            cleared = requirements.length > 0 && requirements.every(r => r.status === true);
+          }
+
+          const displayName = clubsMap[categoryID] || `Membership ${categoryID}`;
+
+          results.push(
+            `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
+          );
+        }
+      }
+
+      return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
     }
-  }
-
-  return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
-}
-
-
 
     // ============================================================
     // 🔹 OFFICE 4 — Dean
@@ -344,7 +343,6 @@ if (office === "12") {
     // ============================================================
     // 🔹 OFFICE 8 — Lab membership
     // ============================================================
-    
 
     // 🔹 Default
     return "N/A";
