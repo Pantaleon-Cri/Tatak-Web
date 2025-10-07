@@ -11,43 +11,109 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+// ========================== Cache ==========================
+const dataCache = {
+  designees: {},
+  clubs: {},
+  labs: {},
+  departments: {},
+  offices: {}
+};
+
 // ========================== Utilities ==========================
 function normalizeString(str) {
   return String(str || "").trim().toLowerCase();
 }
 
-// Resolve office name from designee
-async function resolveOfficeName(designeeID) {
-  try {
-    const snap = await db.collection("/User/Designees/DesigneesDocs").doc(designeeID).get();
-    if (!snap.exists) return designeeID;
-    const designee = snap.data();
+// Batch fetch documents
+async function batchFetchDocuments(collection, ids) {
+  const results = {};
+  const uniqueIds = [...new Set(ids)].filter(id => id);
+  
+  // Firestore 'in' query limit is 10, so batch them
+  const batches = [];
+  for (let i = 0; i < uniqueIds.length; i += 10) {
+    batches.push(uniqueIds.slice(i, i + 10));
+  }
+  
+  for (const batch of batches) {
+    const snapshot = await db.collection(collection)
+      .where(firebase.firestore.FieldPath.documentId(), 'in', batch)
+      .get();
+    
+    snapshot.docs.forEach(doc => {
+      results[doc.id] = doc.data();
+    });
+  }
+  
+  return results;
+}
 
+// Optimized office name resolver with caching
+async function resolveOfficeName(designeeID, designeeData) {
+  try {
+    // Use provided designeeData if available
+    const designee = designeeData || dataCache.designees[designeeID];
+    if (!designee) return designeeID;
+
+    // Try category (club/lab)
     if (designee.category) {
+      // Check cache first
+      if (dataCache.clubs[designee.category]) {
+        return dataCache.clubs[designee.category].club;
+      }
+      if (dataCache.labs[designee.category]) {
+        return dataCache.labs[designee.category].lab;
+      }
+      
+      // Fetch if not cached
       let catDoc = await db.collection("/DataTable/Clubs/ClubsDocs").doc(designee.category).get();
-      if (catDoc.exists && catDoc.data().club) return catDoc.data().club;
+      if (catDoc.exists && catDoc.data().club) {
+        dataCache.clubs[designee.category] = catDoc.data();
+        return catDoc.data().club;
+      }
 
       catDoc = await db.collection("/DataTable/Lab/LabDocs").doc(designee.category).get();
-      if (catDoc.exists && catDoc.data().lab) return catDoc.data().lab;
-    }
-
-    if (designee.department) {
-      const depDoc = await db.collection("/DataTable/Department/DepartmentDocs").doc(designee.department).get();
-      const depName = depDoc.exists ? depDoc.data().department : "";
-
-      if (designee.office) {
-        const officeDoc = await db.collection("/DataTable/Office/OfficeDocs").doc(designee.office).get();
-        const officeName = officeDoc.exists ? officeDoc.data().office : "";
-        return depName && officeName ? `${depName} - ${officeName}` : depName || officeName;
+      if (catDoc.exists && catDoc.data().lab) {
+        dataCache.labs[designee.category] = catDoc.data();
+        return catDoc.data().lab;
       }
-      return depName;
     }
 
+    // Try department + office
+    let depName = "";
+    if (designee.department) {
+      if (dataCache.departments[designee.department]) {
+        depName = dataCache.departments[designee.department].department;
+      } else {
+        const depDoc = await db.collection("/DataTable/Department/DepartmentDocs")
+          .doc(designee.department).get();
+        if (depDoc.exists) {
+          dataCache.departments[designee.department] = depDoc.data();
+          depName = depDoc.data().department;
+        }
+      }
+    }
+
+    let officeName = "";
     if (designee.office) {
-      const officeDoc = await db.collection("/DataTable/Office/OfficeDocs").doc(designee.office).get();
-      if (officeDoc.exists) return officeDoc.data().office;
+      if (dataCache.offices[designee.office]) {
+        officeName = dataCache.offices[designee.office].office;
+      } else {
+        const officeDoc = await db.collection("/DataTable/Office/OfficeDocs")
+          .doc(designee.office).get();
+        if (officeDoc.exists) {
+          dataCache.offices[designee.office] = officeDoc.data();
+          officeName = officeDoc.data().office;
+        }
+      }
     }
 
+    if (depName && officeName) return `${depName} - ${officeName}`;
+    if (depName) return depName;
+    if (officeName) return officeName;
+
+    // Fallback to name
     if (designee.firstName || designee.lastName) {
       return `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
     }
@@ -79,7 +145,7 @@ async function getCurrentSemester() {
   return null;
 }
 
-// ========================== Main ==========================
+// ========================== Main (OPTIMIZED) ==========================
 document.addEventListener("DOMContentLoaded", async () => {
   const semester = await getCurrentSemester();
   if (!semester) {
@@ -96,9 +162,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const container = document.querySelector(".student-main-content");
-  container.innerHTML = "";
+  container.innerHTML = "<p>Loading requirements...</p>";
 
   try {
+    // ==================== STEP 1: Fetch all designees once ====================
     const designeeSnap = await db.collection("/User/Designees/DesigneesDocs").get();
     if (designeeSnap.empty) {
       container.innerHTML = "<p>No offices found in Validation</p>";
@@ -106,13 +173,24 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    let anyRequirementsFound = false;
+    // Cache all designees
+    designeeSnap.docs.forEach(doc => {
+      dataCache.designees[doc.id] = doc.data();
+    });
 
-    for (const designeeDoc of designeeSnap.docs) {
-      const designeeID = designeeDoc.id;
-      console.log("Processing designee:", designeeID);
+    // ==================== STEP 2: Query validation for THIS student ====================
+    // Instead of checking each designee one-by-one, use collectionGroup query
+    const validationQuery = db.collectionGroup('Validation')
+      .where('studentID', '==', studentId)
+      .where('semester', '==', semester.id);
 
-      // Check if student exists under this designee
+    // This won't work directly because Validation is not the subcollection name
+    // We need to check all designees, but in PARALLEL
+
+    const designeeIds = designeeSnap.docs.map(doc => doc.id);
+    
+    // Fetch validation documents in parallel
+    const validationPromises = designeeIds.map(async (designeeID) => {
       const semesterDoc = await db
         .collection("Validation")
         .doc(designeeID)
@@ -120,23 +198,85 @@ document.addEventListener("DOMContentLoaded", async () => {
         .doc(semester.id)
         .get();
 
-      if (!semesterDoc.exists) {
-        console.log(`No validation document for student ${studentId} in designee ${designeeID}`);
-        continue;
-      }
+      if (!semesterDoc.exists) return null;
 
       const requirements = semesterDoc.data().requirements || [];
-      console.log(`Requirements found for ${designeeID}:`, requirements);
+      if (requirements.length === 0) return null;
 
-      if (requirements.length === 0) continue;
-      anyRequirementsFound = true;
+      return {
+        designeeID,
+        requirements
+      };
+    });
 
-      const officeName = await resolveOfficeName(designeeID);
+    // Wait for all validation checks in parallel
+    const validationResults = (await Promise.all(validationPromises))
+      .filter(result => result !== null);
+
+    console.log(`Found ${validationResults.length} offices with requirements`);
+
+    if (validationResults.length === 0) {
+      container.innerHTML = `<div class="clearance-section-card">
+                               <div class="section-header">No Requirements Found</div>
+                             </div>`;
+      return;
+    }
+
+    // ==================== STEP 3: Fetch notes for all relevant designees ====================
+    const notesPromises = validationResults.map(async (result) => {
+      try {
+        const notesSnap = await db
+          .collection("RequirementsAndNotes")
+          .doc("NotesList")
+          .collection(result.designeeID)
+          .where("semesterId", "==", semester.id)
+          .get();
+
+        const notes = [];
+        notesSnap.forEach(doc => {
+          const noteData = doc.data();
+          if (noteData.addedBy === result.designeeID) {
+            notes.push(noteData.note);
+          }
+        });
+
+        return {
+          designeeID: result.designeeID,
+          notes
+        };
+      } catch (e) {
+        console.warn(`Error fetching notes for ${result.designeeID}:`, e);
+        return {
+          designeeID: result.designeeID,
+          notes: []
+        };
+      }
+    });
+
+    const notesResults = await Promise.all(notesPromises);
+    const notesMap = {};
+    notesResults.forEach(result => {
+      notesMap[result.designeeID] = result.notes;
+    });
+
+    // ==================== STEP 4: Resolve office names in parallel ====================
+    const officeNamePromises = validationResults.map(result => 
+      resolveOfficeName(result.designeeID, dataCache.designees[result.designeeID])
+    );
+    const officeNames = await Promise.all(officeNamePromises);
+
+    // ==================== STEP 5: Render all sections ====================
+    container.innerHTML = "";
+
+    validationResults.forEach((result, index) => {
+      const officeName = officeNames[index];
+      const requirements = result.requirements;
+      const notes = notesMap[result.designeeID] || [];
 
       // Build requirements HTML
       let reqHTML = "<ul class='requirements-list'>";
       for (const req of requirements) {
-        const safeId = req.requirement.replace(/\s+/g, "-").toLowerCase();
+        const safeId = `${result.designeeID}-${req.requirement.replace(/\s+/g, "-").toLowerCase()}`;
         const checked = req.status ? "checked" : "";
         reqHTML += `<li class="requirement-item">
                       <input type="checkbox" id="${safeId}" ${checked} onclick="return false;">
@@ -145,34 +285,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       reqHTML += "</ul>";
 
-      // ========================== Fetch Notes ==========================
-      let notesHTML = "<p>No Notes Yet</p>";
-try {
-  const notesSnap = await db
-    .collection("RequirementsAndNotes") // collection
-    .doc("NotesList")                  // doc
-    .collection(designeeID)            // subcollection for designee
-    .get();
-
-  if (!notesSnap.empty) {
-    notesHTML = "";
-    notesSnap.forEach(doc => {
-      const noteData = doc.data();
-      
-      console.log(`Note found for ${designeeID}:`, noteData);
-
-      // Only show notes for this designee and current semester
-      if (noteData.addedBy === designeeID && noteData.semesterId === semester.id) {
-        notesHTML += `<p>${noteData.note}</p>`;
-      }
-    });
-  } else {
-    console.log(`No notes found for designeeID ${designeeID}`);
-  }
-} catch (e) {
-  console.warn("Error fetching notes:", e);
-}
-
+      // Build notes HTML
+      let notesHTML = notes.length > 0 
+        ? notes.map(note => `<p>${note}</p>`).join('')
+        : "<p>No Notes Yet</p>";
 
       // Render section
       const section = document.createElement("div");
@@ -182,18 +298,11 @@ try {
         ${reqHTML}
         <div class="notes-section">
           <h4>Notes</h4>
-          
           ${notesHTML}
         </div>
       `;
       container.appendChild(section);
-    }
-
-    if (!anyRequirementsFound) {
-      container.innerHTML = `<div class="clearance-section-card">
-                               <div class="section-header">No Requirements Found</div>
-                             </div>`;
-    }
+    });
 
   } catch (err) {
     console.error("Error loading requirements:", err);

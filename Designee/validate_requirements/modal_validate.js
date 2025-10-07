@@ -1,4 +1,4 @@
-// ================= validate_modal.js =================
+// ================= validate_modal.js (OPTIMIZED) =================
 
 let checklistModal, modalBody, cancelBtn, saveBtn, approveBtn;
 let currentStudentID = null;
@@ -42,38 +42,44 @@ async function getStudentData(studentID) {
   return doc.exists ? doc.data() : null;
 }
 
-// -------------------- Firestore Sync --------------------
+// -------------------- Optimized Auto-Validation --------------------
 
-async function autoValidateRequirements(designeeID, studentID) {
+async function autoValidateRequirements(designeeID, studentID, cachedData = {}) {
   if (!dbInstance || !designeeID) return;
 
   try {
-    const currentSemesterData = await getCurrentSemester();
+    // Use cached data when available
+    const currentSemesterData = cachedData.semester || await getCurrentSemester();
     if (!currentSemesterData) return;
     const currentSemesterId = currentSemesterData.id;
 
-    const studentData = await getStudentData(studentID);
+    const studentData = cachedData.students?.[studentID] || await getStudentData(studentID);
     if (!studentData) return;
 
-    const hasOfficer =
-      Array.isArray(studentData?.officers) && studentData.officers.includes(designeeID);
-    const hasViolation =
-      Array.isArray(studentData?.violations) && studentData.violations.includes(designeeID);
+    const hasOfficer = Array.isArray(studentData?.officers) && 
+                       studentData.officers.includes(designeeID);
+    const hasViolation = Array.isArray(studentData?.violations) && 
+                         studentData.violations.includes(designeeID);
+    const hasIncomplete = Array.isArray(studentData?.incompletes) && 
+                          studentData.incompletes.includes(designeeID);
 
-    const reqSnapshot = await dbInstance
-      .collection("RequirementsAndNotes")
-      .doc("RequirementsList")
-      .collection(designeeID)
-      .get();
+    // Use cached requirements
+    const masterRequirements = cachedData.requirements || 
+      (await dbInstance
+        .collection("RequirementsAndNotes")
+        .doc("RequirementsList")
+        .collection(designeeID)
+        .get()
+      ).docs.map((doc) => doc.data());
 
     const studentYear = studentData?.yearLevel?.toString().trim().toLowerCase() || "";
 
-    const masterRequirements = reqSnapshot.docs
-      .map((doc) => doc.data())
+    const filteredRequirements = masterRequirements
       .filter((d) => {
         if (d.semester && d.semester !== currentSemesterId) return false;
         if (d.officer && !hasOfficer) return false;
         if (d.violation && !hasViolation) return false;
+        if (d.incomplete && !hasIncomplete) return false;
 
         const reqYear = d.yearLevel ? d.yearLevel.toString().trim().toLowerCase() : "all";
         if (reqYear !== "all" && reqYear !== studentYear) return false;
@@ -89,6 +95,7 @@ async function autoValidateRequirements(designeeID, studentID) {
         yearLevel: d.yearLevel || "All",
         officer: d.officer || false,
         violation: d.violation || false,
+        incomplete: d.incomplete || false,
       }));
 
     const valDocRef = dbInstance
@@ -100,23 +107,84 @@ async function autoValidateRequirements(designeeID, studentID) {
     const valDoc = await valDocRef.get();
     const existingRequirements = valDoc.exists ? valDoc.data().requirements || [] : [];
 
-    // Merge existing checked states with master requirements
-    const mergedRequirements = masterRequirements.map((masterReq) => {
+    // Merge existing checked states
+    const mergedRequirements = filteredRequirements.map((masterReq) => {
       const savedReq = existingRequirements.find(
         (r) => r.requirement?.toLowerCase() === masterReq.requirement?.toLowerCase()
       );
       return savedReq ? { ...masterReq, ...savedReq } : masterReq;
     });
 
-    // Always write the document
-    await valDocRef.set({
-      studentID,
-      semester: currentSemesterId,
-      requirements: mergedRequirements,
-    });
+    // ONLY WRITE IF CHANGED - this is critical for performance
+    const hasChanges = JSON.stringify(mergedRequirements) !== 
+                       JSON.stringify(existingRequirements);
+    
+    if (hasChanges || !valDoc.exists) {
+      await valDocRef.set({
+        studentID,
+        semester: currentSemesterId,
+        requirements: mergedRequirements,
+      });
+      return true; // Return true if updated
+    }
+    return false; // Return false if no changes
   } catch (err) {
     console.error("Error in autoValidateRequirements:", err);
+    return false;
   }
+}
+
+// -------------------- Batch Processing --------------------
+
+async function batchAutoValidate(students, designeeID) {
+  if (!students.length) return;
+
+  console.log(`Starting validation for ${students.length} students...`);
+
+  // Fetch shared data once
+  const currentSemesterData = await getCurrentSemester();
+  if (!currentSemesterData) return;
+
+  // Fetch all requirements once
+  const reqSnapshot = await dbInstance
+    .collection("RequirementsAndNotes")
+    .doc("RequirementsList")
+    .collection(designeeID)
+    .get();
+  const masterRequirements = reqSnapshot.docs.map((doc) => doc.data());
+
+  // Build student data map
+  const studentDataMap = {};
+  for (const student of students) {
+    studentDataMap[student.schoolID] = student;
+  }
+
+  // Prepare cached data
+  const cachedData = {
+    semester: currentSemesterData,
+    requirements: masterRequirements,
+    students: studentDataMap
+  };
+
+  // Process in parallel batches
+  const batchSize = 10;
+  let processed = 0;
+  let updated = 0;
+
+  for (let i = 0; i < students.length; i += batchSize) {
+    const batch = students.slice(i, i + batchSize);
+    const results = await Promise.all(
+      batch.map(student => 
+        autoValidateRequirements(designeeID, student.schoolID, cachedData)
+      )
+    );
+    
+    processed += batch.length;
+    updated += results.filter(r => r).length;
+    console.log(`Progress: ${processed}/${students.length} students processed, ${updated} updated`);
+  }
+
+  console.log(`Validation complete: ${updated} students updated out of ${students.length}`);
 }
 
 // -------------------- Modal Initialization --------------------
@@ -180,17 +248,23 @@ document.addEventListener("DOMContentLoaded", async () => {
       students = students.filter(student => student.semester === currentSemesterId);
     } else {
       if (office === "1") {
-        students = students.filter(student => currentCategory && student.clubs?.map(c => c.toLowerCase()).includes(currentCategory) && student.semester === currentSemesterId);
+        students = students.filter(student => currentCategory && 
+          student.clubs?.map(c => c.toLowerCase()).includes(currentCategory) && 
+          student.semester === currentSemesterId);
       } else if (["2","3","5","6","9","10","12"].includes(office)) {
         students = students.filter(student => student.semester === currentSemesterId);
       } else if (["4","7","11"].includes(office)) {
-        students = students.filter(student => currentDepartment && student.department === currentDepartment && student.semester === currentSemesterId);
+        students = students.filter(student => currentDepartment && 
+          student.department === currentDepartment && 
+          student.semester === currentSemesterId);
       } else if (["16","15","14","13","8"].includes(office)) {
         if (!currentCategory) {
           students = [];
         } else {
-          const membershipRef = dbInstance.collection("Membership").doc(currentCategory).collection("Members");
-          const membershipSnapshot = await membershipRef.where("semester", "==", currentSemesterId).get();
+          const membershipRef = dbInstance.collection("Membership")
+            .doc(currentCategory).collection("Members");
+          const membershipSnapshot = await membershipRef
+            .where("semester", "==", currentSemesterId).get();
           const allowedIDs = membershipSnapshot.docs.map(doc => doc.id);
           students = students.filter(student => allowedIDs.includes(student.schoolID));
         }
@@ -199,13 +273,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
 
-    // ---------------- AUTO-VALIDATE FILTERED STUDENTS ----------------
-    for (const student of students) {
-      await autoValidateRequirements(currentDesigneeID, student.schoolID);
+    // ---------------- OPTIMIZED AUTO-VALIDATION ----------------
+    // Run in background without blocking
+    if (students.length > 0) {
+      batchAutoValidate(students, currentDesigneeID).catch(err => {
+        console.error("Background validation failed:", err);
+      });
     }
 
   } catch (err) {
-    console.error("Auto-validation failed:", err);
+    console.error("Initialization failed:", err);
   }
 });
 
@@ -243,10 +320,12 @@ window.openRequirementsModal = async function (studentID, designeeIDParam, db, o
     currentDesigneeID = linkedDesigneeID;
 
     const studentData = await getStudentData(studentID);
-    const hasOfficer =
-      Array.isArray(studentData?.officers) && studentData.officers.includes(currentDesigneeID);
-    const hasViolation =
-      Array.isArray(studentData?.violations) && studentData.violations.includes(currentDesigneeID);
+    const hasOfficer = Array.isArray(studentData?.officers) && 
+                       studentData.officers.includes(currentDesigneeID);
+    const hasViolation = Array.isArray(studentData?.violations) && 
+                         studentData.violations.includes(currentDesigneeID);
+    const hasIncomplete = Array.isArray(studentData?.incompletes) && 
+                          studentData.incompletes.includes(currentDesigneeID);
 
     // Auto-validate the selected student before rendering modal
     await autoValidateRequirements(currentDesigneeID, studentID);
@@ -266,10 +345,11 @@ window.openRequirementsModal = async function (studentID, designeeIDParam, db, o
 
     const studentYear = studentData?.yearLevel?.toString().trim().toLowerCase() || "";
 
-    // Filter based on officer/violation roles and yearLevel
+    // Filter based on officer/violation/incomplete roles and yearLevel
     requirements = requirements.filter((r) => {
       if (r.officer && !hasOfficer) return false;
       if (r.violation && !hasViolation) return false;
+      if (r.incomplete && !hasIncomplete) return false;
 
       const reqYear = r.yearLevel ? r.yearLevel.toString().trim().toLowerCase() : "all";
       if (reqYear !== "all" && reqYear !== studentYear) return false;
@@ -380,6 +460,7 @@ async function saveRequirements() {
         yearLevel: existingReq?.yearLevel?.toLowerCase() === "all" ? studentData.yearLevel : existingReq?.yearLevel || "All",
         officer: existingReq?.officer || false,
         violation: existingReq?.violation || false,
+        incomplete: existingReq?.incomplete || false,
       };
     });
 

@@ -11,6 +11,104 @@ const COLLECTIONS = {
   students: "/User/Students/StudentsDocs"
 };
 
+// ================= Cache =================
+const cache = {
+  designees: {},
+  clubs: {},
+  labs: {},
+  offices: {},
+  departments: {}
+};
+
+// ================= Optimized Office Name Resolver =================
+async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
+  try {
+    // Use cached or provided designee data
+    let designee = designeeData || cache.designees[designeeId];
+    
+    if (!designee) {
+      const snap = await db.collection(COLLECTIONS.designees).doc(designeeId).get();
+      if (!snap.exists) return { officeName: designeeId, imageId: "default" };
+      designee = snap.data();
+      cache.designees[designeeId] = designee;
+    }
+
+    let officeName = null;
+    let imageId = designee.category || "default";
+
+    // Try category (club/lab) - with early return
+    if (imageId) {
+      // Check club
+      if (!cache.clubs[imageId]) {
+        const clubDoc = await db.collection(COLLECTIONS.clubs).doc(imageId).get();
+        if (clubDoc.exists) cache.clubs[imageId] = clubDoc.data();
+      }
+      if (cache.clubs[imageId]?.code) {
+        officeName = cache.clubs[imageId].code;
+      }
+
+      // Only check lab if club didn't match
+      if (!officeName) {
+        if (!cache.labs[imageId]) {
+          const labDoc = await db.collection(COLLECTIONS.lab).doc(imageId).get();
+          if (labDoc.exists) cache.labs[imageId] = labDoc.data();
+        }
+        if (cache.labs[imageId]?.lab) {
+          officeName = cache.labs[imageId].lab;
+        }
+      }
+    }
+
+    // Try office
+    if (!officeName && designee.office) {
+      if (!cache.offices[designee.office]) {
+        const officeDoc = await db.collection(COLLECTIONS.office).doc(designee.office).get();
+        if (officeDoc.exists) cache.offices[designee.office] = officeDoc.data();
+      }
+      if (cache.offices[designee.office]) {
+        officeName = cache.offices[designee.office].office;
+      }
+    }
+
+    // Try department + office
+    if (!officeName && designee.department) {
+      if (!cache.departments[designee.department]) {
+        const depDoc = await db.collection(COLLECTIONS.department).doc(designee.department).get();
+        if (depDoc.exists) cache.departments[designee.department] = depDoc.data();
+      }
+      
+      const depName = cache.departments[designee.department]?.code || 
+                      cache.departments[designee.department]?.department || "";
+
+      if (designee.office && cache.offices[designee.office]) {
+        const offName = cache.offices[designee.office].office || "";
+        officeName = depName && offName ? `${depName} - ${offName}` : depName || offName;
+      } else {
+        officeName = depName;
+      }
+    }
+
+    // Fallback to name
+    if (!officeName && (designee.firstName || designee.lastName)) {
+      officeName = `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
+    }
+
+    // Resolve imageId
+    if (/^\d+$/.test(designeeId)) {
+      imageId = designeeId === "7" ? "001" : designeeId;
+    } else if (/^\d+-\d+$/.test(designeeId)) {
+      const [firstNum, secondNum] = designeeId.split("-").map(Number);
+      imageId = firstNum === 7 ? "001" : `${firstNum}${secondNum}`;
+    }
+
+    return { officeName: officeName || designeeId, imageId: imageId || "default" };
+
+  } catch (err) {
+    console.error("Error resolving office name:", err);
+    return { officeName: designeeId, imageId: "default" };
+  }
+}
+
 // ================= DOMContentLoaded =================
 document.addEventListener("DOMContentLoaded", async () => {
   const studentId = localStorage.getItem("schoolID");
@@ -55,15 +153,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.error("Error fetching current semester:", err);
     }
 
-    // ================= Fetch all designees =================
+    // ================= Fetch all designees and cache them =================
     const designeeSnap = await db.collection(COLLECTIONS.designees).get();
+    designeeSnap.docs.forEach(doc => {
+      cache.designees[doc.id] = doc.data();
+    });
     const designeeIds = designeeSnap.docs.map(doc => doc.id);
 
-    let overallCleared = true;
-    const officeDataArray = []; // <-- store office info for this semester
-
-    // ================= Process each designee/office =================
-    for (const designeeId of designeeIds) {
+    // ================= Fetch validation data in PARALLEL =================
+    const validationPromises = designeeIds.map(async (designeeId) => {
       const semDocRef = db
         .collection("Validation")
         .doc(designeeId)
@@ -71,11 +169,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         .doc(currentSemesterId);
 
       const semDoc = await semDocRef.get();
-      if (!semDoc.exists) continue;
+      if (!semDoc.exists) return null;
 
       const reqs = semDoc.data().requirements || [];
-      const allCleared = reqs.length > 0 && reqs.every(r => r.status === true);
-      if (!allCleared) overallCleared = false;
+      if (reqs.length === 0) return null;
+
+      const allCleared = reqs.every(r => r.status === true);
 
       const lastValidation = reqs
         .filter(r => r.status === true && r.checkedBy)
@@ -93,72 +192,105 @@ document.addEventListener("DOMContentLoaded", async () => {
           })
         : "Unknown";
 
-      const { officeName, imageId } = await resolveOfficeNameWithImage(designeeId);
+      return {
+        designeeId,
+        reqs,
+        allCleared,
+        lastCheckedBy,
+        checkedAt
+      };
+    });
 
-      // ---------------- Build UI ----------------
+    // Wait for all validation checks
+    const validationResults = (await Promise.all(validationPromises))
+      .filter(result => result !== null);
+
+    console.log(`Found ${validationResults.length} offices with requirements`);
+
+    if (validationResults.length === 0) {
+      container.innerHTML = `<div class="section-item"><label class="section-header">No Offices Found</label><p>No offices found for this student.</p></div>`;
+      statusElement.innerHTML = `<span style="color:red">Pending</span>`;
+      return;
+    }
+
+    // ================= Resolve office names in PARALLEL =================
+    const officeInfoPromises = validationResults.map(result => 
+      resolveOfficeNameWithImage(result.designeeId, cache.designees[result.designeeId])
+    );
+    const officeInfos = await Promise.all(officeInfoPromises);
+
+    // ================= Build all UI elements first, then append once =================
+    let overallCleared = true;
+    const officeDataArray = [];
+    const fragment = document.createDocumentFragment();
+
+    validationResults.forEach((result, index) => {
+      const { officeName, imageId } = officeInfos[index];
+
+      if (!result.allCleared) overallCleared = false;
+
+      // Build UI
       const sectionGroupDiv = document.createElement("div");
       sectionGroupDiv.classList.add("section-group");
 
       const headerLabel = document.createElement("label");
       headerLabel.classList.add("section-header");
-      headerLabel.textContent = officeName || designeeId;
+      headerLabel.textContent = officeName || result.designeeId;
       sectionGroupDiv.appendChild(headerLabel);
 
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");
 
-      approvalDiv.innerHTML = allCleared
+      approvalDiv.innerHTML = result.allCleared
         ? `<img src="../../logo/${imageId || "default"}.png" 
                 alt="Approved Icon" 
                 style="width:50px; height:50px;" 
                 onerror="this.onerror=null;this.src='../../Tatak.png';" /><br />
            <label>
-             <i>Approved by: ${lastCheckedBy}</i><br />
-             <i>${checkedAt}</i>
+             <i>Approved by: ${result.lastCheckedBy}</i><br />
+             <i>${result.checkedAt}</i>
              <hr />
            </label>`
         : `<label><i>Pending</i><hr /></label>`;
 
       sectionGroupDiv.appendChild(approvalDiv);
-      container.appendChild(sectionGroupDiv);
+      fragment.appendChild(sectionGroupDiv);
 
-      // ---------------- Store info for History ----------------
+      // Store for history
       officeDataArray.push({
-        designeeId,
+        designeeId: result.designeeId,
         officeName,
         imageId,
-        allCleared,
-        lastCheckedBy,
-        checkedAt,
-        requirements: reqs
+        allCleared: result.allCleared,
+        lastCheckedBy: result.lastCheckedBy,
+        checkedAt: result.checkedAt,
+        requirements: result.reqs
       });
-    }
+    });
+
+    // Single DOM append - much faster!
+    container.appendChild(fragment);
 
     // ================= Status Display =================
     statusElement.innerHTML = overallCleared
       ? `<span style="color:green">All Offices Cleared</span>`
       : `<span style="color:red">Pending</span>`;
 
-    if (designeeIds.length === 0) {
-      container.innerHTML = `<div class="section-item"><label class="section-header">No Offices Found</label><p>No offices found for this student.</p></div>`;
-      statusElement.innerHTML = `<span style="color:red">Pending</span>`;
-    }
-
-    // ================= Save to History =================
+    // ================= Save to History (non-blocking) =================
     if (currentSemesterId && studentId && officeDataArray.length > 0) {
-      const historyRef = db.collection("History").doc(studentId);
-
-      // Use Firestore's arrayUnion to append new semester info
-      await historyRef.set({
+      // Don't await - let it run in background
+      db.collection("History").doc(studentId).set({
         [currentSemesterId]: [
           {
             offices: officeDataArray,
             timestamp: Date.now()
           }
         ]
-      }, { merge: true });
-
-      console.log("History updated successfully for student:", studentId);
+      }, { merge: true }).then(() => {
+        console.log("History updated successfully for student:", studentId);
+      }).catch(err => {
+        console.error("Error updating history:", err);
+      });
     }
 
   } catch (err) {
@@ -167,58 +299,3 @@ document.addEventListener("DOMContentLoaded", async () => {
     statusElement.innerHTML = `<span style="color:red">Pending</span>`;
   }
 });
-
-// ================= Utility Function =================
-async function resolveOfficeNameWithImage(designeeId) {
-  try {
-    const snap = await db.collection(COLLECTIONS.designees).doc(designeeId).get();
-    if (!snap.exists) return { officeName: designeeId, imageId: "default" };
-    const designee = snap.data();
-
-    let officeName = null;
-    let imageId = designee.category || "default";
-
-    if (imageId) {
-      const clubDoc = await db.collection(COLLECTIONS.clubs).doc(imageId).get();
-      if (clubDoc.exists && clubDoc.data().code) officeName = clubDoc.data().code;
-
-      const labDoc = await db.collection(COLLECTIONS.lab).doc(imageId).get();
-      if (labDoc.exists && labDoc.data().lab) officeName = labDoc.data().lab;
-    }
-
-    if (!officeName && designee.office) {
-      const officeDoc = await db.collection(COLLECTIONS.office).doc(designee.office).get();
-      if (officeDoc.exists) officeName = officeDoc.data().office;
-    }
-
-    if (!officeName && designee.department) {
-      const depDoc = await db.collection(COLLECTIONS.department).doc(designee.department).get();
-      const depName = depDoc.exists ? depDoc.data().code || depDoc.data().department : "";
-
-      if (designee.office) {
-        const officeDoc = await db.collection(COLLECTIONS.office).doc(designee.office).get();
-        const offName = officeDoc.exists ? officeDoc.data().office : "";
-        officeName = depName && offName ? `${depName} - ${offName}` : depName || offName;
-      } else {
-        officeName = depName;
-      }
-    }
-
-    if (!officeName && (designee.firstName || designee.lastName)) {
-      officeName = `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
-    }
-
-    if (/^\d+$/.test(designeeId)) {
-      imageId = designeeId === "7" ? "001" : designeeId;
-    } else if (/^\d+-\d+$/.test(designeeId)) {
-      const [firstNum, secondNum] = designeeId.split("-").map(Number);
-      imageId = firstNum === 7 ? "001" : `${firstNum}${secondNum}`;
-    }
-
-    return { officeName: officeName || designeeId, imageId: imageId || "default" };
-
-  } catch (err) {
-    console.error("Error resolving office name:", err);
-    return { officeName: designeeId, imageId: "default" };
-  }
-}

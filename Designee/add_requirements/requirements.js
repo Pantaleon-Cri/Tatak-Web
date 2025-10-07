@@ -1,7 +1,7 @@
 let currentEditingId = null;
 let currentEditingInput = null;
 let yearLevelOptions = []; // store year level options globally as { id, name }
-const roleOptions = ["None", "Violation", "Officer"]; // dropdown for role
+const roleOptions = ["None", "Violation", "Officer", "Incomplete"]; // 🔹 Added "Incomplete"
 
 function showModal(modal) { modal.style.display = "flex"; }
 function closeModal(modal) { modal.style.display = "none"; }
@@ -54,12 +54,14 @@ function addRequirementToUI(requirementText, docId, semesterId, yearLevelId, rol
     </select>
   `;
 
+  // 🔹 Role dropdown with "Incomplete"
   const roleDropdownHtml = `
     <select class="role-dropdown">
       ${roleOptions.map(opt => {
         if (opt === "None" && !roleField) return `<option value="None" selected>None</option>`;
         if (opt === "Violation" && roleField?.violation) return `<option value="Violation" selected>Violation</option>`;
         if (opt === "Officer" && roleField?.officer) return `<option value="Officer" selected>Officer</option>`;
+        if (opt === "Incomplete" && roleField?.incomplete) return `<option value="Incomplete" selected>Incomplete</option>`;
         return `<option value="${opt}">${opt}</option>`;
       }).join("")}
     </select>
@@ -103,21 +105,23 @@ function addRequirementToUI(requirementText, docId, semesterId, yearLevelId, rol
     try {
       const designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
       let updateData = {};
+
       if (selectedRole === "Violation") {
-        updateData.violation = true;
-        updateData.officer = false;
+        updateData = { violation: true, officer: false, incomplete: false };
       } else if (selectedRole === "Officer") {
-        updateData.officer = true;
-        updateData.violation = false;
+        updateData = { officer: true, violation: false, incomplete: false };
+      } else if (selectedRole === "Incomplete") {
+        updateData = { incomplete: true, violation: false, officer: false };
       } else {
-        updateData.officer = false;
-        updateData.violation = false;
+        updateData = { officer: false, violation: false, incomplete: false };
       }
+
       await db.collection("RequirementsAndNotes")
         .doc("RequirementsList")
         .collection(designeeId)
         .doc(docId)
         .update(updateData);
+
       console.log(`Requirement role updated for ${docId}:`, updateData);
     } catch (err) {
       console.error("Failed to update requirement role:", err);
@@ -163,10 +167,18 @@ async function loadRequirements() {
     snapshot.forEach(doc => {
       const data = doc.data();
       if (data.semester === semesterId) {
-        addRequirementToUI(data.requirement, doc.id, semesterId, data.yearLevel || "all", {
-          violation: !!data.violation,
-          officer: !!data.officer
-        }, userData);
+        addRequirementToUI(
+          data.requirement,
+          doc.id,
+          semesterId,
+          data.yearLevel || "all",
+          {
+            violation: !!data.violation,
+            officer: !!data.officer,
+            incomplete: !!data.incomplete // 🔹 Added Incomplete flag
+          },
+          userData
+        );
       }
     });
   } catch (err) {
@@ -212,6 +224,7 @@ async function addRequirement(requirementText) {
       yearLevel: defaultYearLevel,
       violation: false,
       officer: false,
+      incomplete: false, // 🔹 Added default incomplete field
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 

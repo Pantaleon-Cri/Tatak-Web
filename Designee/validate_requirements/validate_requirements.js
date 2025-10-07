@@ -144,11 +144,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // -------------------- Create Student Row --------------------
   function createStudentRow(student) {
+    const isIncompleteChecked = Array.isArray(student.incomplete) && student.incomplete.includes(designeeID);
     const isViolationChecked = Array.isArray(student.violations) && student.violations.includes(designeeID);
     const isOfficerChecked = Array.isArray(student.officers) && student.officers.includes(designeeID);
 
     return `
       <tr data-id="${student.schoolID}">
+        <td><input type="checkbox" class="role-checkbox incomplete-checkbox" data-studentid="${student.schoolID}" ${isIncompleteChecked ? "checked" : ""} /></td>
         <td><input type="checkbox" class="role-checkbox violation-checkbox" data-studentid="${student.schoolID}" ${isViolationChecked ? "checked" : ""} /></td>
         <td><input type="checkbox" class="role-checkbox officer-checkbox" data-studentid="${student.schoolID}" ${isOfficerChecked ? "checked" : ""} /></td>
         <td>${student.schoolID || ""}</td>
@@ -165,7 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // -------------------- Render Students --------------------
   function renderStudents(students) {
     if (!students || students.length === 0) {
-      studentsTableBody.innerHTML = "<tr><td colspan='9'>No students found.</td></tr>";
+      studentsTableBody.innerHTML = "<tr><td colspan='10'>No students found.</td></tr>";
       return;
     }
     studentsTableBody.innerHTML = students.map(createStudentRow).join("");
@@ -174,26 +176,56 @@ document.addEventListener('DOMContentLoaded', async () => {
       populatePrerequisites(students, userDataObj);
     }
 
+    // Run modal checks in parallel without blocking
     if (typeof openRequirementsModal === "function") {
-      students.forEach(stu => openRequirementsModal(stu.schoolID, designeeID, db, { autoRun: true }));
+      Promise.all(
+        students.map(stu => 
+          openRequirementsModal(stu.schoolID, designeeID, db, { autoRun: true })
+            .catch(err => console.error(`Modal check failed for ${stu.schoolID}:`, err))
+        )
+      );
     }
+  }
+
+  // -------------------- Batch Validation Helper --------------------
+  async function validateInBatches(students, batchSize = 20) {
+    console.log(`Starting validation for ${students.length} students in batches of ${batchSize}...`);
+    
+    for (let i = 0; i < students.length; i += batchSize) {
+      const batch = students.slice(i, i + batchSize);
+      
+      await Promise.all(
+        batch.map(student => 
+          autoValidateRequirements(designeeID, student.schoolID)
+            .catch(err => console.error(`Validation failed for ${student.schoolID}:`, err))
+        )
+      );
+      
+      const completed = Math.min(i + batchSize, students.length);
+      console.log(`Validated ${completed}/${students.length} students`);
+    }
+    
+    console.log("All validations complete!");
   }
 
   // -------------------- Load Students --------------------
   async function loadStudents() {
-    studentsTableBody.innerHTML = "<tr><td colspan='9'>Loading...</td></tr>";
+    studentsTableBody.innerHTML = "<tr><td colspan='10'>Loading...</td></tr>";
 
     try {
-      const semesterSnapshot = await db.collection("DataTable").doc("Semester").collection("SemesterDocs")
-        .where("currentSemester", "==", true).limit(1).get();
+      // Run queries in parallel
+      const [semesterSnapshot, snapshot] = await Promise.all([
+        db.collection("DataTable").doc("Semester").collection("SemesterDocs")
+          .where("currentSemester", "==", true).limit(1).get(),
+        db.collection("User").doc("Students").collection("StudentsDocs").get()
+      ]);
 
       if (semesterSnapshot.empty) {
-        studentsTableBody.innerHTML = "<tr><td colspan='9'>No current semester found.</td></tr>";
+        studentsTableBody.innerHTML = "<tr><td colspan='10'>No current semester found.</td></tr>";
         return;
       }
 
       const currentSemesterId = semesterSnapshot.docs[0].id;
-      const snapshot = await db.collection("User").doc("Students").collection("StudentsDocs").get();
 
       let office, currentCategory, currentDepartment;
       if (userDataObj) {
@@ -211,16 +243,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           department: departmentMap[data.department] || data.department || "",
           originalDepartmentId: data.department,
           yearLevel: yearLevelMap[data.yearLevel] || data.yearLevel || "",
-          yearLevelId: data.yearLevel || doc.id, // for filtering
+          yearLevelId: data.yearLevel || doc.id,
           email: data.institutionalEmail || data.gmail || "",
           clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
           semester: data.semester,
           violations: Array.isArray(data.violations) ? data.violations : [],
-          officers: Array.isArray(data.officers) ? data.officers : []
+          officers: Array.isArray(data.officers) ? data.officers : [],
+          incomplete: Array.isArray(data.incompletes) ? data.incompletes : []
         };
       });
 
-      // ---------------- Example Filtering per Office/Category ----------------
+      // Example Filtering per Office/Category
       if (currentCategory === "39" || currentCategory === "41") {
         students = students.filter(s => s.semester === currentSemesterId);
       } else if (["2","3","5","6","9","10","12"].includes(office)) {
@@ -228,8 +261,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else if (["4","7","11"].includes(office)) {
         students = students.filter(s => currentDepartment && s.originalDepartmentId === currentDepartment && s.semester === currentSemesterId);
       } else if (["16","15","14","13","8"].includes(office)) {
-        if (!currentCategory) students = [];
-        else {
+        if (!currentCategory) {
+          students = [];
+        } else {
           const membershipRef = db.collection("Membership").doc(currentCategory).collection("Members");
           const membershipSnapshot = await membershipRef.where("semester","==",currentSemesterId).get();
           const allowedIDs = membershipSnapshot.docs.map(doc => doc.id);
@@ -241,17 +275,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         students = [];
       }
 
-      // Auto-validate
+      // ✅ RENDER IMMEDIATELY - Show table without waiting for validation
+      renderStudents(students);
+      populateHeaderFilters(students);
+
+      // ✅ THEN run validation in background in batches
       if (designeeID && typeof autoValidateRequirements === "function") {
-        for (const student of students) await autoValidateRequirements(designeeID, student.schoolID);
+        validateInBatches(students).catch(err => {
+          console.error("Batch validation error:", err);
+        });
       }
 
-      // ---------------- Render + Filters ----------------
-      renderStudents(students);
-      populateHeaderFilters(students); // Department + Year filters + attach handlers
     } catch (err) {
       console.error(err);
-      studentsTableBody.innerHTML = "<tr><td colspan='9'>Failed to load students.</td></tr>";
+      studentsTableBody.innerHTML = "<tr><td colspan='10'>Failed to load students.</td></tr>";
     }
   }
 
@@ -263,10 +300,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     const docRef = db.collection("User").doc("Students").collection("StudentsDocs").doc(studentID);
     try {
+      const fieldName = role.toLowerCase() + (role.endsWith("s") ? "" : "s");
       if (checked) {
-        await docRef.set({ [role.toLowerCase() + "s"]: firebase.firestore.FieldValue.arrayUnion(designeeID) }, { merge: true });
+        await docRef.set({ [fieldName]: firebase.firestore.FieldValue.arrayUnion(designeeID) }, { merge: true });
       } else {
-        await docRef.set({ [role.toLowerCase() + "s"]: firebase.firestore.FieldValue.arrayRemove(designeeID) }, { merge: true });
+        await docRef.set({ [fieldName]: firebase.firestore.FieldValue.arrayRemove(designeeID) }, { merge: true });
       }
     } catch (err) {
       console.error(`Failed to update ${role} for ${studentID}`, err);
@@ -295,7 +333,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const checkbox = e.target.closest(".role-checkbox");
     if (checkbox) {
       const studentID = checkbox.getAttribute("data-studentid");
-      const role = checkbox.classList.contains("violation-checkbox") ? "Violation" : "Officer";
+      let role = "";
+      if (checkbox.classList.contains("incomplete-checkbox")) role = "incomplete";
+      else if (checkbox.classList.contains("violation-checkbox")) role = "violation";
+      else if (checkbox.classList.contains("officer-checkbox")) role = "officer";
       await updateStudentRole(studentID, role, checkbox.checked);
     }
   });

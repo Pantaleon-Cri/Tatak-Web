@@ -11,56 +11,106 @@ const COLLECTIONS = {
   students: "User/Students/StudentsDocs",
 };
 
+// ================= Global Caches =================
+let officeCache = null;
+let departmentCache = null;
+let clubCache = null;
+let labCache = null;
+
+// Load all office/department/club data once and cache it
+async function loadAllCaches(db) {
+  if (officeCache) return; // Already loaded
+
+  console.log("Loading cache data...");
+
+  try {
+    const [offices, departments, clubs, labs] = await Promise.all([
+      db.collection(COLLECTIONS.office).get(),
+      db.collection(COLLECTIONS.department).get(),
+      db.collection(COLLECTIONS.clubs).get(),
+      db.collection(COLLECTIONS.lab).get()
+    ]);
+
+    officeCache = {};
+    offices.docs.forEach(doc => {
+      officeCache[doc.id] = doc.data().office || doc.data().name;
+    });
+
+    departmentCache = {};
+    departments.docs.forEach(doc => {
+      departmentCache[doc.id] = doc.data().code || doc.data().name;
+    });
+
+    clubCache = {};
+    clubs.docs.forEach(doc => {
+      clubCache[doc.id] = doc.data().code || doc.data().name;
+    });
+
+    labCache = {};
+    labs.docs.forEach(doc => {
+      labCache[doc.id] = doc.data().lab || doc.data().name;
+    });
+
+    console.log("Cache loaded successfully");
+  } catch (err) {
+    console.error("Failed to load cache:", err);
+  }
+}
+
 // Normalize strings for comparison
 function normalizeString(str) {
   return String(str || "").trim().toLowerCase();
 }
 
-// Resolve designee/office name and image
-async function resolveOfficeNameWithImage(db, designeeId) {
+// Format ISO timestamp to "Month day, year, hh:mm AM/PM"
+function formatTimestampTo12Hr(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+
+  const options = {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  };
+
+  return date.toLocaleString("en-US", options);
+}
+
+// Resolve designee/office name and image using cached data (NO DATABASE CALLS)
+function resolveOfficeNameWithImageCached(designeeId) {
+  let officeName = null;
+  let imageId = "default";
+
   try {
-    let officeName = null;
-    let imageId = "default";
-
     if (/^\d+$/.test(designeeId)) {
-      // Single number → fetch OfficeDocs
-      const officeDoc = await db.collection(COLLECTIONS.office).doc(designeeId).get();
-      if (officeDoc.exists) officeName = officeDoc.data().office || officeDoc.data().name;
-
-      // Special rule: 7 uses "001" as ImageID
+      // Single number designee (e.g., "7")
+      officeName = officeCache?.[designeeId] || designeeId;
       imageId = designeeId === "7" ? "001" : designeeId;
     } else if (/^\d+-\d+$/.test(designeeId)) {
-      const [firstNum, secondNum] = designeeId.split("-").map(Number);
+      // Compound designee (e.g., "4-2")
+      const [firstNum, secondNum] = designeeId.split("-");
+      const first = Number(firstNum);
+      const second = Number(secondNum);
 
-      if ([2, 3, 5, 6, 9, 10, 12].includes(firstNum)) {
-        // Starts with 2,3,5,6,9,10,12 → Office only
-        const officeDoc = await db.collection(COLLECTIONS.office).doc(String(firstNum)).get();
-        officeName = officeDoc.exists ? officeDoc.data().office || officeDoc.data().name : designeeId;
-      } else if ([4, 7, 11].includes(firstNum)) {
-        // Starts with 4,7,11 → Office + Department
-        const officeDoc = await db.collection(COLLECTIONS.office).doc(String(firstNum)).get();
-        const deptDoc = await db.collection(COLLECTIONS.department).doc(String(secondNum)).get();
-        const officeNamePart = officeDoc.exists ? officeDoc.data().office || officeDoc.data().name : null;
-        const deptNamePart = deptDoc.exists ? deptDoc.data().code : null; // use "code" field
-        officeName = deptNamePart && officeNamePart ? `${officeNamePart} - ${deptNamePart}` : deptNamePart || officeNamePart;
-      } else if ([1, 8, 13, 14, 15, 16].includes(firstNum)) {
-        // Starts with 1,8,13,14,15,16 → Clubs → fallback Lab
-        let clubDoc = await db.collection(COLLECTIONS.clubs).doc(String(secondNum)).get();
-        if (clubDoc.exists) {
-          officeName = clubDoc.data().code || clubDoc.data().name; // use "code"
-        } else {
-          const labDoc = await db.collection(COLLECTIONS.lab).doc(String(secondNum)).get();
-          officeName = labDoc.exists ? labDoc.data().lab || labDoc.data().name : designeeId;
-        }
+      if ([2, 3, 5, 6, 9, 10, 12].includes(first)) {
+        officeName = officeCache?.[firstNum] || designeeId;
+      } else if ([4, 7, 11].includes(first)) {
+        const officeNamePart = officeCache?.[firstNum];
+        const deptNamePart = departmentCache?.[secondNum];
+        officeName = deptNamePart && officeNamePart 
+          ? `${officeNamePart} - ${deptNamePart}` 
+          : deptNamePart || officeNamePart || designeeId;
+      } else if ([1, 8, 13, 14, 15, 16].includes(first)) {
+        officeName = clubCache?.[secondNum] || labCache?.[secondNum] || designeeId;
       } else {
-        // fallback
         officeName = designeeId;
       }
 
-      // Concatenate numbers for imageId, except if firstNum is 7
-      imageId = firstNum === 7 ? "001" : `${firstNum}${secondNum}`;
+      imageId = first === 7 ? "001" : `${firstNum}${secondNum}`;
     } else {
-      // fallback if not a number or number-number format
       officeName = designeeId;
       imageId = designeeId;
     }
@@ -72,11 +122,58 @@ async function resolveOfficeNameWithImage(db, designeeId) {
   }
 }
 
+// Legacy async version for backwards compatibility (uses cache if available)
+async function resolveOfficeNameWithImage(db, designeeId) {
+  // If cache is loaded, use cached version
+  if (officeCache) {
+    return resolveOfficeNameWithImageCached(designeeId);
+  }
 
+  // Fallback to original database queries if cache not loaded
+  try {
+    let officeName = null;
+    let imageId = "default";
 
+    if (/^\d+$/.test(designeeId)) {
+      const officeDoc = await db.collection(COLLECTIONS.office).doc(designeeId).get();
+      if (officeDoc.exists) officeName = officeDoc.data().office || officeDoc.data().name;
+      imageId = designeeId === "7" ? "001" : designeeId;
+    } else if (/^\d+-\d+$/.test(designeeId)) {
+      const [firstNum, secondNum] = designeeId.split("-").map(Number);
 
+      if ([2, 3, 5, 6, 9, 10, 12].includes(firstNum)) {
+        const officeDoc = await db.collection(COLLECTIONS.office).doc(String(firstNum)).get();
+        officeName = officeDoc.exists ? officeDoc.data().office || officeDoc.data().name : designeeId;
+      } else if ([4, 7, 11].includes(firstNum)) {
+        const officeDoc = await db.collection(COLLECTIONS.office).doc(String(firstNum)).get();
+        const deptDoc = await db.collection(COLLECTIONS.department).doc(String(secondNum)).get();
+        const officeNamePart = officeDoc.exists ? officeDoc.data().office || officeDoc.data().name : null;
+        const deptNamePart = deptDoc.exists ? deptDoc.data().code : null;
+        officeName = deptNamePart && officeNamePart ? `${officeNamePart} - ${deptNamePart}` : deptNamePart || officeNamePart;
+      } else if ([1, 8, 13, 14, 15, 16].includes(firstNum)) {
+        let clubDoc = await db.collection(COLLECTIONS.clubs).doc(String(secondNum)).get();
+        if (clubDoc.exists) {
+          officeName = clubDoc.data().code || clubDoc.data().name;
+        } else {
+          const labDoc = await db.collection(COLLECTIONS.lab).doc(String(secondNum)).get();
+          officeName = labDoc.exists ? labDoc.data().lab || labDoc.data().name : designeeId;
+        }
+      } else {
+        officeName = designeeId;
+      }
 
+      imageId = firstNum === 7 ? "001" : `${firstNum}${secondNum}`;
+    } else {
+      officeName = designeeId;
+      imageId = designeeId;
+    }
 
+    return { officeName: officeName || designeeId, imageId: imageId || "default" };
+  } catch (err) {
+    console.error("Error resolving office name:", err);
+    return { officeName: designeeId, imageId: "default" };
+  }
+}
 
 // -------------------- Modal Handling --------------------
 document.addEventListener("DOMContentLoaded", () => {
@@ -85,6 +182,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (closeBtn) closeBtn.addEventListener("click", () => modal.style.display = "none");
   window.addEventListener("click", (e) => { if (e.target === modal) modal.style.display = "none"; });
+
+  // Initialize cache when page loads (get db from window if available)
+  if (window.db) {
+    loadAllCaches(window.db).catch(err => console.error("Cache initialization failed:", err));
+  }
 });
 
 // -------------------- Main Clearance Loader --------------------
@@ -103,14 +205,22 @@ window.openViewClearanceCard = async function(studentID, db, schoolId = studentI
   document.getElementById("semesterText").textContent = "";
 
   try {
-    // ================= Fetch current semester =================
+    // ================= Ensure cache is loaded =================
+    await loadAllCaches(db);
+
+    // ================= Fetch data in parallel =================
+    const [semesterSnap, studentDoc, designeesSnap] = await Promise.all([
+      db.collection(COLLECTIONS.semester)
+        .where("currentSemester", "==", true)
+        .limit(1)
+        .get(),
+      db.collection(COLLECTIONS.students).doc(studentID).get(),
+      db.collection(COLLECTIONS.designees).get()
+    ]);
+
+    // ================= Process semester =================
     let currentSemesterId = null;
     let currentSemesterName = "Unknown Semester";
-
-    const semesterSnap = await db.collection(COLLECTIONS.semester)
-      .where("currentSemester", "==", true)
-      .limit(1)
-      .get();
 
     if (!semesterSnap.empty) {
       const semesterDoc = semesterSnap.docs[0];
@@ -118,8 +228,7 @@ window.openViewClearanceCard = async function(studentID, db, schoolId = studentI
       currentSemesterName = semesterDoc.data().semester || "Unknown Semester";
     }
 
-    // ================= Fetch student =================
-    const studentDoc = await db.collection(COLLECTIONS.students).doc(studentID).get();
+    // ================= Process student =================
     if (!studentDoc.exists) throw new Error("Student not found");
 
     const student = studentDoc.data();
@@ -127,29 +236,31 @@ window.openViewClearanceCard = async function(studentID, db, schoolId = studentI
       [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" ");
     document.getElementById("semesterText").textContent = currentSemesterName;
 
-    // ================= Fetch all designees =================
-    const designeesSnap = await db.collection(COLLECTIONS.designees).get();
+    // ================= Process designees =================
     const designeeIds = designeesSnap.docs.map(doc => doc.id);
 
-    const officeStatusList = [];
-
-    // ================= Gather office validation status =================
-    for (const designeeId of designeeIds) {
+    // ================= Gather office validation status IN PARALLEL =================
+    const officeStatusPromises = designeeIds.map(async (designeeId) => {
       const semDocRef = db
         .collection("Validation")
         .doc(designeeId)
-        .collection(schoolId) // student ID
+        .collection(schoolId)
         .doc(currentSemesterId);
 
       const semDoc = await semDocRef.get();
-      if (!semDoc.exists) continue;
+      if (!semDoc.exists) return null;
 
       const reqs = semDoc.data().requirements || [];
-      const allCleared = reqs.every(r => r.status === true); // all requirements cleared by this office
+      const allCleared = reqs.every(r => r.status === true);
 
-      const { officeName, imageId } = await resolveOfficeNameWithImage(db, designeeId);
-      officeStatusList.push({ officeName, imageId, cleared: allCleared });
-    }
+      // Use cached version (no database queries)
+      const { officeName, imageId } = resolveOfficeNameWithImageCached(designeeId);
+      
+      return { officeName, imageId, cleared: allCleared, reqs };
+    });
+
+    const results = await Promise.all(officeStatusPromises);
+    const officeStatusList = results.filter(r => r !== null);
 
     if (officeStatusList.length === 0) {
       containerEl.innerHTML = `<div class="section-item">
@@ -178,13 +289,24 @@ window.openViewClearanceCard = async function(studentID, db, schoolId = studentI
       const approvalDiv = document.createElement("div");
       approvalDiv.classList.add("section-item");
 
-      approvalDiv.innerHTML = office.cleared
-        ? `<img src="../../logo/${office.imageId || "default"}.png" 
-                 alt="Approved Icon" 
-                 style="width:50px; height:50px;" 
-                 onerror="this.onerror=null;this.src='../../Tatak.png';" /><br />
-           <label><i>Cleared</i><hr /></label>`
-        : `<label><i>Pending</i><hr /></label>`;
+      if (office.cleared) {
+        const clearedReq = office.reqs.find(r => r.status === true) || {};
+        const checkedBy = clearedReq.checkedBy || "No Requirements for this Office";
+        const formattedTime = formatTimestampTo12Hr(clearedReq.checkedAt);
+
+        approvalDiv.innerHTML = `
+          <img src="../../logo/${office.imageId || "default"}.png" 
+               alt="Approved Icon" 
+               style="width:70px; height:70px;" 
+               onerror="this.onerror=null;this.src='../../Tatak.png';" /><br />
+          <label><i>Cleared</i></label><br />
+          <small>Approved by: ${checkedBy}</small><br />
+          <small>${formattedTime}</small>
+          <hr />
+        `;
+      } else {
+        approvalDiv.innerHTML = `<label><i>Pending</i><hr /></label>`;
+      }
 
       sectionGroupDiv.appendChild(approvalDiv);
       containerEl.appendChild(sectionGroupDiv);
@@ -203,5 +325,3 @@ window.openViewClearanceCard = async function(studentID, db, schoolId = studentI
     container.style.border = "5px solid red";
   }
 };
-
-

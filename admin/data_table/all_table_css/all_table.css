@@ -8,6 +8,31 @@
   margin-bottom: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
+#downloadTemplate {
+  text-decoration: none; /* removes underline */
+  display: inline-flex;  /* allows easy alignment with icon if needed */
+  align-items: center;   /* vertically centers text and icon */
+  color: #fff;           /* optional: match your button color */
+  padding: 6px 12px;
+
+  font-weight: 500;
+}
+.back-btn {
+  background-color: #28a745; /* gray color */
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 10px;
+}
+
+.back-btn:hover {
+  background-color: #5a6268;
+}
 
 /* -----------------------------------------
   Log Table Styling

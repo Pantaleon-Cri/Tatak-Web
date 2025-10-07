@@ -244,3 +244,21 @@ async function handleFileUpload(e) {
   };
   reader.readAsArrayBuffer(file);
 }
+
+// Download template CSV
+const downloadTemplateBtn = document.getElementById("downloadTemplate");
+
+downloadTemplateBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+
+  const csvContent = "ID no.,Laboratories\n";
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", "Lab_template.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+});

@@ -37,7 +37,6 @@ exports.sendApprovalEmail = onRequest(async (req, res) => {
       to: email,
       subject: "Your Designee Status Has Been Approved",
       html: `
-        <p>Hi ${firstName},</p>
         <p>Your account has been <b>Approved</b> by the admin.</p>
         <p>Please click the link below to log in and verify:</p>
         <a href="${link}">Login Now</a>
