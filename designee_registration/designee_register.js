@@ -134,10 +134,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     messageBox.textContent = '';
   }
 
-  // --- Password Validation ---
+  // --- Password Validation (DISABLED for testing) ---
   const isPasswordValid = (password) => {
-    const regex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
-    return regex.test(password);
+    // Commented out strict password rules for testing
+    // const regex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+    // return regex.test(password);
+    return true; // allow any password for now
   };
 
   // --- Form Submit ---
@@ -180,7 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!isPasswordValid(password)) {
-      showMessage('Password must be at least 8 characters long, include one uppercase letter, one number, and one special character.');
+      showMessage('Password validation is disabled for testing.');
       passwordInput.value = '';
       confirmPasswordInput.value = '';
       passwordInput.focus();

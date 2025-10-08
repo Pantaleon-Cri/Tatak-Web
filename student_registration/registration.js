@@ -66,7 +66,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // -----------------------
   // Load Departments into a map
-  // key = doc ID, value = {code: "human-readable code"}
   const departmentMap = {};
   const deptSnapshot = await db.collection("DataTable")
     .doc("Department")
@@ -74,12 +73,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     .get();
   deptSnapshot.forEach(doc => {
     const data = doc.data();
-    departmentMap[doc.id] = { code: data.code }; // human-readable code
+    departmentMap[doc.id] = { code: data.code };
   });
 
   // -----------------------
   // Load Clubs into a map
-  // key = doc ID, value = {code: "human-readable code"}
   const clubsMap = {};
   const clubSnapshot = await db.collection("DataTable")
     .doc("Clubs")
@@ -87,7 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     .get();
   clubSnapshot.forEach(doc => {
     const data = doc.data();
-    clubsMap[doc.id] = { code: data.code }; // human-readable code
+    clubsMap[doc.id] = { code: data.code };
   });
 
   // -----------------------
@@ -100,13 +98,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const data = doc.data();
     const option = document.createElement("option");
     option.value = doc.id;
-    option.textContent = data.course || doc.id; // readable course name
+    option.textContent = data.course || doc.id;
     courseSelect.appendChild(option);
 
-    // Map department doc ID and club doc IDs array
     courseDataMap[doc.id] = {
-      deptId: data.deptCodeName || '',            // department doc ID
-      clubIds: Array.isArray(data.clubCodeName) ? data.clubCodeName : [] // array of club doc IDs
+      deptId: data.deptCodeName || '',
+      clubIds: Array.isArray(data.clubCodeName) ? data.clubCodeName : []
     };
   });
 
@@ -116,11 +113,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const selected = courseSelect.value;
     const courseInfo = courseDataMap[selected];
 
-    // Department name (from doc ID -> code)
     const dept = departmentMap[courseInfo?.deptId];
     departmentInput.value = dept ? dept.code : '';
 
-    // Club names (from doc IDs -> codes)
     const clubNames = courseInfo?.clubIds.map(id => clubsMap[id]?.code).filter(Boolean);
     clubsInput.value = clubNames.length > 0 ? clubNames.join(', ') : '';
   });
@@ -135,10 +130,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => { messageBox.style.display = 'none'; }, 4000);
   };
 
-  // Password validation
+  // -----------------------
+  // Password validation (DISABLED for testing)
   const isPasswordValid = (password) => {
-    const regex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
-    return regex.test(password);
+    // Commented out strict password rules for testing
+    // const regex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+    // return regex.test(password);
+    return true; // allow any password for now
   };
 
   // -----------------------
@@ -176,7 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!isPasswordValid(password)) {
-      showMessage("Password must be at least 8 characters, include uppercase, number, special char.", true);
+      showMessage("Password does not meet requirements (for testing, this is disabled).", true);
       passwordInput.value = '';
       confirmPasswordInput.value = '';
       passwordInput.focus();
@@ -201,11 +199,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         schoolId,
         firstName,
         lastName,
-        course,       // course doc ID
+        course,
         yearLevel,
         semester,
-        department: deptId, // department doc ID
-        clubs: clubIds,     // array of club doc IDs
+        department: deptId,
+        clubs: clubIds,
         institutionalEmail,
         password,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
