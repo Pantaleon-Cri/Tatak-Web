@@ -80,6 +80,7 @@ function formatTimestampTo12Hr(dateString) {
 }
 
 // Resolve designee/office name and image using cached data (NO DATABASE CALLS)
+// ===================== Cached Version =====================
 function resolveOfficeNameWithImageCached(designeeId) {
   let officeName = null;
   let imageId = "default";
@@ -89,6 +90,10 @@ function resolveOfficeNameWithImageCached(designeeId) {
       // Single number designee (e.g., "7")
       officeName = officeCache?.[designeeId] || designeeId;
       imageId = designeeId === "7" ? "001" : designeeId;
+
+      // 🔹 Office 12 always uses default logo
+      if (designeeId === "12") imageId = "default";
+
     } else if (/^\d+-\d+$/.test(designeeId)) {
       // Compound designee (e.g., "4-2")
       const [firstNum, secondNum] = designeeId.split("-");
@@ -100,8 +105,8 @@ function resolveOfficeNameWithImageCached(designeeId) {
       } else if ([4, 7, 11].includes(first)) {
         const officeNamePart = officeCache?.[firstNum];
         const deptNamePart = departmentCache?.[secondNum];
-        officeName = deptNamePart && officeNamePart 
-          ? `${officeNamePart} - ${deptNamePart}` 
+        officeName = deptNamePart && officeNamePart
+          ? `${officeNamePart} - ${deptNamePart}`
           : deptNamePart || officeNamePart || designeeId;
       } else if ([1, 8, 13, 14, 15, 16].includes(first)) {
         officeName = clubCache?.[secondNum] || labCache?.[secondNum] || designeeId;
@@ -109,7 +114,15 @@ function resolveOfficeNameWithImageCached(designeeId) {
         officeName = designeeId;
       }
 
-      imageId = first === 7 ? "001" : `${firstNum}${secondNum}`;
+      // 🔹 Image selection rules
+      if (first === 7) {
+        imageId = "001";
+      } else if (first === 12) {
+        imageId = "default";
+      } else {
+        imageId = `${firstNum}${secondNum}`;
+      }
+
     } else {
       officeName = designeeId;
       imageId = designeeId;
@@ -122,14 +135,13 @@ function resolveOfficeNameWithImageCached(designeeId) {
   }
 }
 
-// Legacy async version for backwards compatibility (uses cache if available)
+// ===================== Async Fallback Version =====================
 async function resolveOfficeNameWithImage(db, designeeId) {
   // If cache is loaded, use cached version
   if (officeCache) {
     return resolveOfficeNameWithImageCached(designeeId);
   }
 
-  // Fallback to original database queries if cache not loaded
   try {
     let officeName = null;
     let imageId = "default";
@@ -137,7 +149,12 @@ async function resolveOfficeNameWithImage(db, designeeId) {
     if (/^\d+$/.test(designeeId)) {
       const officeDoc = await db.collection(COLLECTIONS.office).doc(designeeId).get();
       if (officeDoc.exists) officeName = officeDoc.data().office || officeDoc.data().name;
+
       imageId = designeeId === "7" ? "001" : designeeId;
+
+      // 🔹 Office 12 uses default logo
+      if (designeeId === "12") imageId = "default";
+
     } else if (/^\d+-\d+$/.test(designeeId)) {
       const [firstNum, secondNum] = designeeId.split("-").map(Number);
 
@@ -151,7 +168,7 @@ async function resolveOfficeNameWithImage(db, designeeId) {
         const deptNamePart = deptDoc.exists ? deptDoc.data().code : null;
         officeName = deptNamePart && officeNamePart ? `${officeNamePart} - ${deptNamePart}` : deptNamePart || officeNamePart;
       } else if ([1, 8, 13, 14, 15, 16].includes(firstNum)) {
-        let clubDoc = await db.collection(COLLECTIONS.clubs).doc(String(secondNum)).get();
+        const clubDoc = await db.collection(COLLECTIONS.clubs).doc(String(secondNum)).get();
         if (clubDoc.exists) {
           officeName = clubDoc.data().code || clubDoc.data().name;
         } else {
@@ -162,7 +179,15 @@ async function resolveOfficeNameWithImage(db, designeeId) {
         officeName = designeeId;
       }
 
-      imageId = firstNum === 7 ? "001" : `${firstNum}${secondNum}`;
+      // 🔹 Image selection rules
+      if (firstNum === 7) {
+        imageId = "001";
+      } else if (firstNum === 12) {
+        imageId = "default";
+      } else {
+        imageId = `${firstNum}${secondNum}`;
+      }
+
     } else {
       officeName = designeeId;
       imageId = designeeId;
@@ -174,6 +199,7 @@ async function resolveOfficeNameWithImage(db, designeeId) {
     return { officeName: designeeId, imageId: "default" };
   }
 }
+
 
 // -------------------- Modal Handling --------------------
 document.addEventListener("DOMContentLoaded", () => {

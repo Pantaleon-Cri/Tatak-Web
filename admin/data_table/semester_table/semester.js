@@ -179,7 +179,7 @@ async function handleCurrentSemester(e) {
 // Delete all staff helper
 async function deleteAllStaff() {
   try {
-    const staffSnap = await db.collection("staffTable").get();
+    const staffSnap = await db.collection("User").doc("Designees").collection("StaffDocs").get();
     if (staffSnap.empty) return;
     const batch = db.batch();
     staffSnap.forEach(doc => batch.delete(doc.ref));
@@ -330,4 +330,3 @@ downloadTemplateBtn.addEventListener("click", (e) => {
   link.click();
   document.body.removeChild(link);
 });
-
