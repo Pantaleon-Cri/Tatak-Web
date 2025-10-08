@@ -36,7 +36,7 @@ async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
     let officeName = null;
     let imageId = designee.category || "default";
 
-    // Try category (club/lab) - with early return
+    // Early return for club/lab based on category
     if (imageId) {
       // Check club
       if (!cache.clubs[imageId]) {
@@ -47,8 +47,8 @@ async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
         officeName = cache.clubs[imageId].code;
       }
 
-      // Only check lab if club didn't match
-      if (!officeName) {
+      // Only check lab if club didn't match or designeeId starts with 8
+      if (!officeName || designeeId.startsWith("8")) {
         if (!cache.labs[imageId]) {
           const labDoc = await db.collection(COLLECTIONS.lab).doc(imageId).get();
           if (labDoc.exists) cache.labs[imageId] = labDoc.data();
@@ -59,7 +59,7 @@ async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
       }
     }
 
-    // Try office
+    // Try office if still unresolved
     if (!officeName && designee.office) {
       if (!cache.offices[designee.office]) {
         const officeDoc = await db.collection(COLLECTIONS.office).doc(designee.office).get();
@@ -70,7 +70,7 @@ async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
       }
     }
 
-    // Try department + office
+    // Try department + office if still unresolved
     if (!officeName && designee.department) {
       if (!cache.departments[designee.department]) {
         const depDoc = await db.collection(COLLECTIONS.department).doc(designee.department).get();
@@ -88,17 +88,20 @@ async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
       }
     }
 
-    // Fallback to name
+    // Fallback to designee full name
     if (!officeName && (designee.firstName || designee.lastName)) {
       officeName = `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
     }
 
-    // Resolve imageId
+    // Resolve imageId rules
     if (/^\d+$/.test(designeeId)) {
       imageId = designeeId === "7" ? "001" : designeeId;
+      if (designeeId === "12") imageId = "default";
     } else if (/^\d+-\d+$/.test(designeeId)) {
       const [firstNum, secondNum] = designeeId.split("-").map(Number);
-      imageId = firstNum === 7 ? "001" : `${firstNum}${secondNum}`;
+      if (firstNum === 7) imageId = "001";
+      else if (firstNum === 12) imageId = "default";
+      else imageId = `${firstNum}${secondNum}`;
     }
 
     return { officeName: officeName || designeeId, imageId: imageId || "default" };
@@ -108,6 +111,7 @@ async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
     return { officeName: designeeId, imageId: "default" };
   }
 }
+
 
 // ================= DOMContentLoaded =================
 document.addEventListener("DOMContentLoaded", async () => {

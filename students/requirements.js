@@ -50,47 +50,51 @@ async function batchFetchDocuments(collection, ids) {
 }
 
 // Optimized office name resolver with caching
-async function resolveOfficeName(designeeID, designeeData) {
+async function resolveOfficeName(designeeID, designeeData = null) {
   try {
     // Use provided designeeData if available
     const designee = designeeData || dataCache.designees[designeeID];
     if (!designee) return designeeID;
 
-    // Try category (club/lab)
+    // -------------------- Category: club/lab --------------------
     if (designee.category) {
-      // Check cache first
-      if (dataCache.clubs[designee.category]) {
-        return dataCache.clubs[designee.category].club;
-      }
-      if (dataCache.labs[designee.category]) {
-        return dataCache.labs[designee.category].lab;
-      }
-      
-      // Fetch if not cached
-      let catDoc = await db.collection("/DataTable/Clubs/ClubsDocs").doc(designee.category).get();
-      if (catDoc.exists && catDoc.data().club) {
-        dataCache.clubs[designee.category] = catDoc.data();
-        return catDoc.data().club;
+      const catId = designee.category;
+
+      // If designeeID starts with 8, check lab first
+      if (designeeID.startsWith("8")) {
+        if (!dataCache.labs[catId]) {
+          const labDoc = await db.collection("/DataTable/Lab/LabDocs").doc(catId).get();
+          if (labDoc.exists) dataCache.labs[catId] = labDoc.data();
+        }
+        if (dataCache.labs[catId]?.lab) return dataCache.labs[catId].lab;
       }
 
-      catDoc = await db.collection("/DataTable/Lab/LabDocs").doc(designee.category).get();
-      if (catDoc.exists && catDoc.data().lab) {
-        dataCache.labs[designee.category] = catDoc.data();
-        return catDoc.data().lab;
+      // Check clubs first if not 8
+      if (!dataCache.clubs[catId]) {
+        const clubDoc = await db.collection("/DataTable/Clubs/ClubsDocs").doc(catId).get();
+        if (clubDoc.exists) dataCache.clubs[catId] = clubDoc.data();
       }
+      if (dataCache.clubs[catId]?.club) return dataCache.clubs[catId].club;
+
+      // Check labs if club didn't match
+      if (!dataCache.labs[catId]) {
+        const labDoc = await db.collection("/DataTable/Lab/LabDocs").doc(catId).get();
+        if (labDoc.exists) dataCache.labs[catId] = labDoc.data();
+      }
+      if (dataCache.labs[catId]?.lab) return dataCache.labs[catId].lab;
     }
 
-    // Try department + office
+    // -------------------- Department + Office --------------------
     let depName = "";
     if (designee.department) {
       if (dataCache.departments[designee.department]) {
-        depName = dataCache.departments[designee.department].department;
+        depName = dataCache.departments[designee.department].department || dataCache.departments[designee.department].code || "";
       } else {
         const depDoc = await db.collection("/DataTable/Department/DepartmentDocs")
           .doc(designee.department).get();
         if (depDoc.exists) {
           dataCache.departments[designee.department] = depDoc.data();
-          depName = depDoc.data().department;
+          depName = depDoc.data().department || depDoc.data().code || "";
         }
       }
     }
@@ -98,13 +102,13 @@ async function resolveOfficeName(designeeID, designeeData) {
     let officeName = "";
     if (designee.office) {
       if (dataCache.offices[designee.office]) {
-        officeName = dataCache.offices[designee.office].office;
+        officeName = dataCache.offices[designee.office].office || "";
       } else {
         const officeDoc = await db.collection("/DataTable/Office/OfficeDocs")
           .doc(designee.office).get();
         if (officeDoc.exists) {
           dataCache.offices[designee.office] = officeDoc.data();
-          officeName = officeDoc.data().office;
+          officeName = officeDoc.data().office || "";
         }
       }
     }
@@ -113,17 +117,20 @@ async function resolveOfficeName(designeeID, designeeData) {
     if (depName) return depName;
     if (officeName) return officeName;
 
-    // Fallback to name
+    // -------------------- Fallback to name --------------------
     if (designee.firstName || designee.lastName) {
       return `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
     }
 
+    // Final fallback
     return designeeID;
+
   } catch (err) {
     console.error("Error resolving office name:", err);
     return designeeID;
   }
 }
+
 
 // ========================== Load Current Semester ==========================
 async function getCurrentSemester() {
