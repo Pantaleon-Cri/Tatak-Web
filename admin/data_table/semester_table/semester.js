@@ -126,7 +126,7 @@ async function handleCurrentSemester(e) {
   const isChecked = e.target.checked;
   if (!isChecked) return;
 
-  if (!confirm("Changing the current semester will delete all staff and reset officers/violations. Continue?")) {
+  if (!confirm("Changing the current semester will delete all staff and reset officers/violations/Incomplete of Student. Continue?")) {
     e.target.checked = false;
     return;
   }
@@ -156,7 +156,8 @@ async function handleCurrentSemester(e) {
       batchStudents.update(studentRef, {
         semester: newCurrentId,    // update semester
         officers: [],               // clear officers array
-        violations: []              // clear violations array
+        violations: [],
+        incompletes: []             // clear violations array
       });
     });
 

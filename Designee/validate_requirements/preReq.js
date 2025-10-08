@@ -31,7 +31,7 @@ async function getStudentPrereqs(student, userData) {
     if (clubCategories.includes(category)) {
       const studentClubs = Array.isArray(student.clubs) ? student.clubs : [];
 
-      // ✅ Exclude themselves from prereqs (don't show same category as the user)
+      // ✅ Exclude themselves from prereqs
       const filteredClubs = studentClubs.filter(clubID => clubID !== category);
 
       if (filteredClubs.length === 0) {
@@ -78,7 +78,7 @@ async function getStudentPrereqs(student, userData) {
     if (office === "12") {
       const baseOffices = ["2", "3", "5", "6", "7", "9", "10"];
       const offices = [...baseOffices];
-      if (department) offices.unshift(`4-${department}`); // Office 4 depends on student department
+      if (department) offices.unshift(`4-${department}`);
 
       const results = [];
 
@@ -143,7 +143,6 @@ async function getStudentPrereqs(student, userData) {
       // ------------------ Check Memberships ------------------
       const membershipSnapshot = await db.collection("Membership").get();
 
-      // Preload Clubs names
       const clubsSnapshot = await db
         .collection("DataTable")
         .doc("Clubs")
@@ -158,7 +157,6 @@ async function getStudentPrereqs(student, userData) {
       for (const categoryDoc of membershipSnapshot.docs) {
         const categoryID = categoryDoc.id;
 
-        // 🔹 Skip categories 1–6 entirely
         if (Number(categoryID) >= 1 && Number(categoryID) <= 6) continue;
 
         const memberDoc = await db
@@ -299,10 +297,24 @@ async function getStudentPrereqs(student, userData) {
     }
 
     // ============================================================
-    // 🔹 OFFICE 5 — Student Org prerequisites
+    // 🔹 OFFICE 5 — Student Org prerequisites (UPDATED)
     // ============================================================
     if (office === "5") {
-      const mainPrereqs = ["13-39", "13-40"];
+      // Always include 13-39
+      const mainPrereqs = ["13-39"];
+
+      // ✅ Only include 13-40 if student is a member of Membership categoryID 40
+      const member40Doc = await db
+        .collection("Membership")
+        .doc("40")
+        .collection("Members")
+        .doc(student.schoolID)
+        .get();
+
+      if (member40Doc.exists) {
+        mainPrereqs.push("13-40");
+      }
+
       const clubCheckIDs = ["1", "11", "18", "28", "36"];
       const matchedClubs = (student.clubs || []).filter(c => clubCheckIDs.includes(c));
       const allPrereqs = [...mainPrereqs, ...matchedClubs];
