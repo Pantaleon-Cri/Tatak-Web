@@ -55,7 +55,7 @@ async function getStudentPrereqs(student, userData) {
         let cleared = false;
         const validationDoc = await db
           .collection("Validation")
-          .doc(`13-${clubID}`)
+          .doc(`1-${clubID}`)
           .collection(student.schoolID)
           .doc(semesterID)
           .get();
