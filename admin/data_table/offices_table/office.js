@@ -229,20 +229,37 @@ async function handleFileUpload(e) {
   reader.readAsArrayBuffer(file);
 }
 
-// Download template CSV
+// ======================= DOWNLOAD OFFICE TEMPLATE =======================
 const downloadTemplateBtn = document.getElementById("downloadTemplate");
 
-downloadTemplateBtn.addEventListener("click", (e) => {
-  e.preventDefault();
+if (downloadTemplateBtn) {
+  downloadTemplateBtn.addEventListener("click", (e) => {
+    e.preventDefault();
 
-  const csvContent = "ID no.,Office\n";
+    // 🔹 CSV header row
+    const header = "ID no.,Office\n";
 
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", "Office_template.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-});
+    // 🔹 Example data row for guidance
+    const exampleRow = "1,Business Office\n";
+
+    // 🔹 Combine header + example row
+    const csvContent = header + exampleRow;
+
+    // 🔹 Create CSV file as a Blob
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    // 🔹 Create a temporary link to trigger download
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Office_Template.csv";
+    document.body.appendChild(link);
+    link.click();
+
+    // 🔹 Cleanup
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    alert("📥 Office Template downloaded successfully!");
+  });
+}

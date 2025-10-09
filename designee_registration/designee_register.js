@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const departmentRef = db.collection("DataTable").doc("Department").collection("DepartmentDocs");
   const clubRef = db.collection("DataTable").doc("Clubs").collection("ClubsDocs");
   const pendingDesigneeRef = db.collection("User").doc("PendingDesignees").collection("PendingDocs");
-  const approvedDesigneeRef = db.collection("User").doc("Designees").collection("DesigneeDocs"); // optional: check approved users
+  const approvedDesigneeRef = db.collection("User").doc("Designees").collection("DesigneeDocs");
 
   // --- Load Offices ---
   const officeSnapshot = await officeRef.get();
@@ -50,7 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- Office IDs ---
   const clubOfficeIDs = ["1", "13", "14", "15", "16"]; // show clubs
-  const deptOfficeIDs = ["4", "7", "11"];             // show department
+  const deptOfficeIDs = ["4", "7"];                    // show department
+  const courseOfficeIDs = ["11"];                      // show course (NEW)
 
   // --- Office Change Logic ---
   officeSelect.addEventListener('change', async () => {
@@ -61,56 +62,104 @@ document.addEventListener('DOMContentLoaded', async () => {
     departmentGroup.style.display = 'none';
     categorySelect.innerHTML = '<option value="">Select Category</option>';
 
+    // Reset label to default
+    const categoryLabel = categoryGroup.querySelector('label');
+    if (categoryLabel) categoryLabel.textContent = 'Category';
+
     // --- Show Clubs Category (Offices 1, 13, 14, 15, 16) ---
     if (clubOfficeIDs.includes(selectedOfficeID)) {
-        categoryGroup.style.display = 'block';
-        categorySelect.innerHTML = '<option value="">Loading...</option>';
+      categoryGroup.style.display = 'block';
+      categorySelect.innerHTML = '<option value="">Loading...</option>';
 
-        try {
-            const clubsSnapshot = await clubRef.where("officeType", "==", selectedOfficeID).get();
-            if (!clubsSnapshot.empty) {
-                let options = '<option value="">Select Category</option>';
-                clubsSnapshot.forEach(doc => {
-                    const data = doc.data();
-                    options += `<option value="${doc.id}">${data.code || doc.id}</option>`;
-                });
-                categorySelect.innerHTML = options;
-            } else {
-                categorySelect.innerHTML = '<option value="">No categories available</option>';
-            }
-        } catch (err) {
-            console.error("Error loading clubs:", err);
-            categorySelect.innerHTML = '<option value="">Error loading categories</option>';
+      try {
+        const clubsSnapshot = await clubRef.where("officeType", "==", selectedOfficeID).get();
+        if (!clubsSnapshot.empty) {
+          let options = '<option value="">Select Category</option>';
+          clubsSnapshot.forEach(doc => {
+            const data = doc.data();
+            options += `<option value="${doc.id}">${data.code || doc.id}</option>`;
+          });
+          categorySelect.innerHTML = options;
+        } else {
+          categorySelect.innerHTML = '<option value="">No categories available</option>';
         }
+      } catch (err) {
+        console.error("Error loading clubs:", err);
+        categorySelect.innerHTML = '<option value="">Error loading categories</option>';
+      }
     }
 
-    // --- Show Department (Offices 4,7,11) ---
+    // --- Show Department (Offices 4, 7) ---
     if (deptOfficeIDs.includes(selectedOfficeID)) {
-        departmentGroup.style.display = 'block';
+      departmentGroup.style.display = 'block';
     }
 
     // --- Show Labs Category (Office 8) ---
     if (selectedOfficeID === "8") {
-        categoryGroup.style.display = 'block';
-        categorySelect.innerHTML = '<option value="">Loading...</option>';
+      categoryGroup.style.display = 'block';
+      categorySelect.innerHTML = '<option value="">Loading...</option>';
 
-        try {
-            const labsRef = db.collection("DataTable").doc("Lab").collection("LabDocs");
-            const labsSnapshot = await labsRef.get();
-            if (!labsSnapshot.empty) {
-                let options = '<option value="">Select Lab</option>';
-                labsSnapshot.forEach(doc => {
-                    const data = doc.data();
-                    options += `<option value="${doc.id}">${data.lab || doc.id}</option>`;
-                });
-                categorySelect.innerHTML = options;
-            } else {
-                categorySelect.innerHTML = '<option value="">No labs available</option>';
-            }
-        } catch (err) {
-            console.error("Error loading labs:", err);
-            categorySelect.innerHTML = '<option value="">Error loading labs</option>';
+      try {
+        const labsRef = db.collection("DataTable").doc("Lab").collection("LabDocs");
+        const labsSnapshot = await labsRef.get();
+        if (!labsSnapshot.empty) {
+          let options = '<option value="">Select Lab</option>';
+          labsSnapshot.forEach(doc => {
+            const data = doc.data();
+            options += `<option value="${doc.id}">${data.lab || doc.id}</option>`;
+          });
+          categorySelect.innerHTML = options;
+        } else {
+          categorySelect.innerHTML = '<option value="">No labs available</option>';
         }
+      } catch (err) {
+        console.error("Error loading labs:", err);
+        categorySelect.innerHTML = '<option value="">Error loading labs</option>';
+      }
+    }
+
+    // --- Show Courses (Office 11) ---
+    if (courseOfficeIDs.includes(selectedOfficeID)) {
+      categoryGroup.style.display = 'block';
+      categorySelect.innerHTML = '<option value="">Loading...</option>';
+
+      // Change label to "Course"
+      if (categoryLabel) categoryLabel.textContent = 'Course';
+
+      try {
+        const courseRef = db.collection("DataTable").doc("Course").collection("CourseDocs");
+        const courseSnapshot = await courseRef.get();
+
+        if (!courseSnapshot.empty) {
+          let courses = [];
+
+          courseSnapshot.forEach(doc => {
+            const numericID = parseInt(doc.id, 10);
+            if (numericID >= 21 && numericID <= 28) {
+              const data = doc.data();
+              const displayName =
+                data.course || `Course ${doc.id}`;
+              courses.push({ id: doc.id, name: displayName });
+            }
+          });
+
+          // ✅ Sort courses alphabetically by name
+          courses.sort((a, b) => a.name.localeCompare(b.name));
+
+          // Build options
+          let options = '<option value="">Select Course</option>';
+          courses.forEach(c => {
+            options += `<option value="${c.id}">${c.name}</option>`;
+          });
+
+          categorySelect.innerHTML = options || '<option value="">No courses available</option>';
+        } else {
+          categorySelect.innerHTML = '<option value="">No courses found</option>';
+        }
+      } catch (err) {
+        console.error("Error loading courses:", err);
+        categorySelect.innerHTML = '<option value="">Error loading courses</option>';
+      }
     }
   });
 
@@ -136,9 +185,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- Password Validation (DISABLED for testing) ---
   const isPasswordValid = (password) => {
-    // Commented out strict password rules for testing
-    // const regex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
-    // return regex.test(password);
     return true; // allow any password for now
   };
 
@@ -190,14 +236,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-      // --- Check if userID already exists in PendingDesignees ---
+      // --- Check if userID already exists ---
       const existingPendingSnap = await pendingDesigneeRef.where("userID", "==", userID).limit(1).get();
       if (!existingPendingSnap.empty) {
         showMessage("This User ID is already registered. Please use a different one.");
         return;
       }
 
-      // --- Optional: Check approved designees too ---
       const existingApprovedSnap = await approvedDesigneeRef.where("userID", "==", userID).limit(1).get();
       if (!existingApprovedSnap.empty) {
         showMessage("This User ID is already registered and approved. Please use a different one.");
@@ -224,7 +269,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         category: categoryID || '',
         department: departmentID || '',
         institutionalEmail,
-        password,   // ⚠️ hash in production
+        password, // ⚠️ hash in production
         role: "Designee",
         status: null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()

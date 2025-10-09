@@ -23,43 +23,59 @@ const cache = {
 // ================= Optimized Office Name Resolver =================
 async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
   try {
+    // 🟦 Special rule: If starts with 11 and second part is 21–28 → use OfficeDocs/11
+    if (designeeId.startsWith("11-")) {
+      const parts = designeeId.split("-");
+      const secondNum = parseInt(parts[1], 10);
+      if (secondNum >= 21 && secondNum <= 28) {
+        if (!cache.offices["11"]) {
+          const officeDoc = await db.collection(COLLECTIONS.office).doc("11").get();
+          if (officeDoc.exists) cache.offices["11"] = officeDoc.data();
+        }
+        const officeName = cache.offices["11"]?.office || "Office 11";
+        return { officeName, imageId: designeeId };
+      }
+    }
+
     // Use cached or provided designee data
     let designee = designeeData || cache.designees[designeeId];
     
     if (!designee) {
       const snap = await db.collection(COLLECTIONS.designees).doc(designeeId).get();
-      if (!snap.exists) return { officeName: designeeId, imageId: "default" };
+      if (!snap.exists) return { officeName: designeeId, imageId: designeeId };
       designee = snap.data();
       cache.designees[designeeId] = designee;
     }
 
     let officeName = null;
-    let imageId = designee.category || "default";
+    let imageId = designeeId; // ✅ Always same as designeeId
 
-    // Early return for club/lab based on category
-    if (imageId) {
+    // -------------------- Category: Club / Lab --------------------
+    if (designee.category) {
+      const categoryId = designee.category;
+
       // Check club
-      if (!cache.clubs[imageId]) {
-        const clubDoc = await db.collection(COLLECTIONS.clubs).doc(imageId).get();
-        if (clubDoc.exists) cache.clubs[imageId] = clubDoc.data();
+      if (!cache.clubs[categoryId]) {
+        const clubDoc = await db.collection(COLLECTIONS.clubs).doc(categoryId).get();
+        if (clubDoc.exists) cache.clubs[categoryId] = clubDoc.data();
       }
-      if (cache.clubs[imageId]?.code) {
-        officeName = cache.clubs[imageId].code;
+      if (cache.clubs[categoryId]?.code) {
+        officeName = cache.clubs[categoryId].code;
       }
 
       // Only check lab if club didn't match or designeeId starts with 8
       if (!officeName || designeeId.startsWith("8")) {
-        if (!cache.labs[imageId]) {
-          const labDoc = await db.collection(COLLECTIONS.lab).doc(imageId).get();
-          if (labDoc.exists) cache.labs[imageId] = labDoc.data();
+        if (!cache.labs[categoryId]) {
+          const labDoc = await db.collection(COLLECTIONS.lab).doc(categoryId).get();
+          if (labDoc.exists) cache.labs[categoryId] = labDoc.data();
         }
-        if (cache.labs[imageId]?.lab) {
-          officeName = cache.labs[imageId].lab;
+        if (cache.labs[categoryId]?.lab) {
+          officeName = cache.labs[categoryId].lab;
         }
       }
     }
 
-    // Try office if still unresolved
+    // -------------------- Office --------------------
     if (!officeName && designee.office) {
       if (!cache.offices[designee.office]) {
         const officeDoc = await db.collection(COLLECTIONS.office).doc(designee.office).get();
@@ -70,7 +86,7 @@ async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
       }
     }
 
-    // Try department + office if still unresolved
+    // -------------------- Department + Office --------------------
     if (!officeName && designee.department) {
       if (!cache.departments[designee.department]) {
         const depDoc = await db.collection(COLLECTIONS.department).doc(designee.department).get();
@@ -88,29 +104,23 @@ async function resolveOfficeNameWithImage(designeeId, designeeData = null) {
       }
     }
 
-    // Fallback to designee full name
+    // -------------------- Fallback to Designee Name --------------------
     if (!officeName && (designee.firstName || designee.lastName)) {
       officeName = `${designee.firstName || ""} ${designee.lastName || ""}`.trim();
     }
 
-    // Resolve imageId rules
-    if (/^\d+$/.test(designeeId)) {
-      imageId = designeeId === "7" ? "001" : designeeId;
-      if (designeeId === "12") imageId = "default";
-    } else if (/^\d+-\d+$/.test(designeeId)) {
-      const [firstNum, secondNum] = designeeId.split("-").map(Number);
-      if (firstNum === 7) imageId = "001";
-      else if (firstNum === 12) imageId = "default";
-      else imageId = `${firstNum}${secondNum}`;
-    }
+    // ✅ Image ID rule simplified: always same as designeeId
+    imageId = designeeId;
 
-    return { officeName: officeName || designeeId, imageId: imageId || "default" };
+    return { officeName: officeName || designeeId, imageId };
 
   } catch (err) {
     console.error("Error resolving office name:", err);
-    return { officeName: designeeId, imageId: "default" };
+    return { officeName: designeeId, imageId: designeeId };
   }
 }
+
+
 
 
 // ================= DOMContentLoaded =================

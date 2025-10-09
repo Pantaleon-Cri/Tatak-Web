@@ -1,4 +1,4 @@
-// user.js
+// ============================== user.js ==============================
 let currentUser = null;
 let userOffice = '';
 let userCategory = '';
@@ -106,18 +106,20 @@ async function loadUserRoleDisplay() {
       let categoryRef;
 
       if (office === "8") {
-        // ✅ Corrected capitalization: "Lab" not "lab"
+        // ✅ LAB
         categoryRef = db.collection("DataTable")
           .doc("Lab")
           .collection("LabDocs")
           .doc(category);
         console.log("Fetching category from /DataTable/Lab/LabDocs/", category);
       } else if (office === "1") {
+        // ✅ CLUBS
         categoryRef = db.collection("DataTable")
           .doc("Clubs")
           .collection("ClubsDocs")
           .doc(category);
       } else if (office === "5") {
+        // ✅ NSTP
         categoryRef = db.collection("DataTable")
           .doc("NSTP")
           .collection("NSTPDocs")
@@ -136,7 +138,7 @@ async function loadUserRoleDisplay() {
         console.log("Category data fetched:", catData);
 
         categoryName =
-          catData.lab || // ✅ Use "lab" field for Lab office
+          catData.lab || // ✅ For Labs
           catData.club ||
           catData.name ||
           catData.category ||
@@ -168,7 +170,10 @@ async function loadUserRoleDisplay() {
     // ---------------------------------------------------
     let displayText = "";
 
-    if (officeName && categoryName) {
+    if (office === "11") {
+      // ✅ If office is 11 → show office name from OfficeDocs only
+      displayText = officeName || "Program Coordinator";
+    } else if (officeName && categoryName) {
       displayText = `${officeName} - ${categoryName}`;
     } else if (officeName && departmentName) {
       displayText = `${departmentName} - ${officeName}`;
@@ -188,7 +193,3 @@ async function loadUserRoleDisplay() {
     if (emailDiv) emailDiv.textContent = "Designee";
   }
 }
-
-
-
-

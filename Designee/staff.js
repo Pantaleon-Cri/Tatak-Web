@@ -97,6 +97,7 @@ async function loadAllStaff() {
 function addRowToTable(data) {
   const tbody = document.querySelector("tbody");
   const row = document.createElement("tr");
+
   let actionButtons = "";
   if (window.currentUserRole === "designee") {
     actionButtons = `
@@ -104,15 +105,40 @@ function addRowToTable(data) {
       <button class="action-btn delete" onclick="deleteStaff('${data.id}')"><i class="fas fa-trash"></i></button>
     `;
   }
+
+  // 🔹 Password toggle: masked by default
+  const passwordId = `pw-${data.id}`;
+  const passwordHTML = `
+    <span id="${passwordId}" class="masked-password">••••••</span>
+    <button type="button" class="toggle-pw-btn" onclick="togglePassword('${passwordId}', '${data.password}')">
+  <i class="fas fa-eye"></i>
+</button>
+
+  `;
+
   row.innerHTML = `
     <td>${data.id}</td>
     <td>${data.firstName}</td>
     <td>${data.lastName}</td>
     <td>${data.email}</td>
-    <td>${data.password}</td>
+    <td>${passwordHTML}</td>
     <td>${actionButtons}</td>
   `;
+
   tbody.appendChild(row);
+}
+
+// -----------------------
+// Toggle password visibility
+function togglePassword(spanId, password) {
+  const span = document.getElementById(spanId);
+  if (!span) return;
+
+  if (span.textContent === "••••••") {
+    span.textContent = password;
+  } else {
+    span.textContent = "••••••";
+  }
 }
 
 // -----------------------
@@ -127,7 +153,7 @@ function editStaff(staffId) {
   document.getElementById("editFirstName").value = row.cells[1].innerText;
   document.getElementById("editLastName").value = row.cells[2].innerText;
   document.getElementById("editEmail").value = row.cells[3].innerText;
-  document.getElementById("editPassword").value = row.cells[4].innerText;
+  document.getElementById("editPassword").value = row.cells[4].querySelector("span").textContent;
 
   document.getElementById("editModalOverlay").style.display = "flex";
 }
@@ -152,7 +178,6 @@ document.getElementById("editSaveBtn").addEventListener("click", async () => {
   }
 
   try {
-    // Rebuild staffDocId
     const staffDocId = generateStaffDocId(window.selectedStaffId, window.userOffice, window.userDepartment, window.userCategory);
 
     const docRef = db.collection("User").doc("Designees")

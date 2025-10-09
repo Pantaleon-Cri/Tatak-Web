@@ -52,6 +52,19 @@ async function batchFetchDocuments(collection, ids) {
 // Optimized office name resolver with caching
 async function resolveOfficeName(designeeID, designeeData = null) {
   try {
+    // Special rule: if starts with 11 and second part is 21–28 → use OfficeDocs/11
+    if (designeeID.startsWith("11-")) {
+      const parts = designeeID.split("-");
+      const secondNum = parseInt(parts[1], 10);
+      if (secondNum >= 21 && secondNum <= 28) {
+        if (!dataCache.offices["11"]) {
+          const officeDoc = await db.collection("/DataTable/Office/OfficeDocs").doc("11").get();
+          if (officeDoc.exists) dataCache.offices["11"] = officeDoc.data();
+        }
+        return dataCache.offices["11"]?.office || "Office 11";
+      }
+    }
+
     // Use provided designeeData if available
     const designee = designeeData || dataCache.designees[designeeID];
     if (!designee) return designeeID;
@@ -130,6 +143,7 @@ async function resolveOfficeName(designeeID, designeeData = null) {
     return designeeID;
   }
 }
+
 
 
 // ========================== Load Current Semester ==========================

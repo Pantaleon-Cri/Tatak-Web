@@ -4,68 +4,144 @@ document.addEventListener("DOMContentLoaded", async () => {
   // -----------------------
   // Display designee info
   async function loadUserRoleDisplay() {
-  const userData = JSON.parse(localStorage.getItem("userData"));
-  if (!userData) return;
-
-  const userId = userData.id;
-  const emailDiv = document.getElementById("userRoleDisplay");
-
   try {
-    // Get the user document
-    const userDoc = await db.collection("User").doc("Designees")
-      .collection("DesigneesDocs").doc(userId).get();
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    if (!userData) return;
 
-    if (!userDoc.exists) return;
+    const designeeId = userData.role === "designee" ? userData.id : userData.createdByDesigneeID;
+    if (!designeeId) return;
+
+    const emailDiv = document.getElementById("userRoleDisplay");
+
+    // 🔹 Fetch designee document
+    const userDoc = await db.collection("User")
+      .doc("Designees")
+      .collection("DesigneesDocs")
+      .doc(designeeId)
+      .get();
+
+    if (!userDoc.exists) {
+      emailDiv.textContent = "Designee";
+      return;
+    }
 
     const data = userDoc.data();
-    let category = data.category || "";
-    let department = data.department || "";
-    let office = data.office || "";
+    const office = data.office || "";
+    const category = data.category || "";
+    const department = data.department || "";
 
-    // 1️⃣ Convert category code to readable club name
-    if (category) {
-      const catDoc = await db.collection("DataTable").doc("Clubs")
-        .collection("ClubsDocs").doc(category).get();
-      if (catDoc.exists) {
-        category = catDoc.data().club || category;
-      }
-    }
-
-    // 2️⃣ Convert department code to readable name
-    if (department) {
-      const deptDoc = await db.collection("DataTable").doc("Department")
-        .collection("DepartmentDocs").doc(department).get();
-      if (deptDoc.exists) {
-        department = deptDoc.data().code || department;
-      }
-    }
-
-    // 3️⃣ Convert office code to readable name
+    // ---------------------------------------------------
+    // 🔹 Step 1: Get Office Name
+    // ---------------------------------------------------
+    let officeName = "";
     if (office) {
-      const officeDoc = await db.collection("DataTable").doc("Office")
-        .collection("OfficeDocs").doc(office).get();
-      if (officeDoc.exists) {
-        office = officeDoc.data().office || office;
+      const officeSnap = await db.collection("DataTable")
+        .doc("Office")
+        .collection("OfficeDocs")
+        .doc(office)
+        .get();
+
+      if (officeSnap.exists) {
+        officeName = officeSnap.data().office || office;
       }
     }
 
-    // Build the display string
-    let displayText = "";
+    // ---------------------------------------------------
+    // 🔹 Step 2: Get Category Name (Office-based)
+    // ---------------------------------------------------
+    let categoryName = "";
     if (category) {
-      displayText = category;
-    } else if (department) {
-      displayText = `${department} - ${office}`;
+      let categoryRef;
+
+      if (office === "8") {
+        // ✅ LAB
+        categoryRef = db.collection("DataTable")
+          .doc("Lab")
+          .collection("LabDocs")
+          .doc(category);
+        console.log("Fetching category from /DataTable/Lab/LabDocs/", category);
+      } else if (office === "1") {
+        // ✅ CLUBS
+        categoryRef = db.collection("DataTable")
+          .doc("Clubs")
+          .collection("ClubsDocs")
+          .doc(category);
+      } else if (office === "5") {
+        // ✅ NSTP
+        categoryRef = db.collection("DataTable")
+          .doc("NSTP")
+          .collection("NSTPDocs")
+          .doc(category);
+      } else {
+        // fallback
+        categoryRef = db.collection("DataTable")
+          .doc("Clubs")
+          .collection("ClubsDocs")
+          .doc(category);
+      }
+
+      const catSnap = await categoryRef.get();
+      if (catSnap.exists) {
+        const catData = catSnap.data();
+        console.log("Category data fetched:", catData);
+
+        categoryName =
+          catData.lab || // ✅ For Labs
+          catData.club ||
+          catData.name ||
+          catData.category ||
+          catData.code ||
+          category;
+      } else {
+        categoryName = category;
+      }
+    }
+
+    // ---------------------------------------------------
+    // 🔹 Step 3: Get Department Name
+    // ---------------------------------------------------
+    let departmentName = "";
+    if (department) {
+      const deptSnap = await db.collection("DataTable")
+        .doc("Department")
+        .collection("DepartmentDocs")
+        .doc(department)
+        .get();
+
+      if (deptSnap.exists) {
+        departmentName = deptSnap.data().code || department;
+      }
+    }
+
+    // ---------------------------------------------------
+    // 🔹 Step 4: Build Display Text (Office-first)
+    // ---------------------------------------------------
+    let displayText = "";
+
+    if (office === "11") {
+      // ✅ If office is 11 → show office name from OfficeDocs only
+      displayText = officeName || "Program Coordinator";
+    } else if (officeName && categoryName) {
+      displayText = `${officeName} - ${categoryName}`;
+    } else if (officeName && departmentName) {
+      displayText = `${departmentName} - ${officeName}`;
+    } else if (officeName) {
+      displayText = officeName;
+    } else if (categoryName) {
+      displayText = categoryName;
     } else {
-      displayText = office;
+      displayText = "Designee";
     }
 
     emailDiv.textContent = displayText;
 
   } catch (err) {
     console.error("Error loading user role:", err);
-    emailDiv.textContent = "Designee";
+    const emailDiv = document.getElementById("userRoleDisplay");
+    if (emailDiv) emailDiv.textContent = "Designee";
   }
 }
+
 
 
   // Call display function

@@ -322,20 +322,39 @@ async function handleFileUpload(e) {
   };
   reader.readAsArrayBuffer(file);
 }
-// Download template CSV
+// ============================ Download Course Template ============================
 const downloadTemplateBtn = document.getElementById("downloadTemplate");
 
-downloadTemplateBtn.addEventListener("click", (e) => {
-  e.preventDefault();
+if (downloadTemplateBtn) {
+  downloadTemplateBtn.addEventListener("click", (e) => {
+    e.preventDefault();
 
-  const csvContent = "ID no.,Course,Dept Code ID, Club Code ID\n";
+    // 🔹 Header row
+    const header = "ID no.,Course,Dept Code ID,Club Code ID\n";
 
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", "Course_template.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-});
+    // 🔹 Example template row
+    const templateData =
+      "1,e.g (Bachelor of Arts in Philosophy),(Department ID),(Club ID)\n"; // Example: ID 1, course BSIT, department ENG-DEPT, club CEACSC
+
+    // 🔹 Combine header + example
+    const csvContent = header + templateData;
+
+    // 🔹 Create CSV file blob
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    // 🔹 Create hidden link for download
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Course_Template.csv";
+    document.body.appendChild(link);
+    link.click();
+
+    // 🔹 Cleanup
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    // ✅ Optional: small confirmation
+    alert("📥 Course Template downloaded successfully!");
+  });
+}

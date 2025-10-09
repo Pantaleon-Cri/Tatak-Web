@@ -210,87 +210,122 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // -------------------- Load Students --------------------
   async function loadStudents() {
-    studentsTableBody.innerHTML = "<tr><td colspan='10'>Loading...</td></tr>";
+  studentsTableBody.innerHTML = "<tr><td colspan='10'>Loading...</td></tr>";
 
-    try {
-      // Run queries in parallel
-      const [semesterSnapshot, snapshot] = await Promise.all([
-        db.collection("DataTable").doc("Semester").collection("SemesterDocs")
-          .where("currentSemester", "==", true).limit(1).get(),
-        db.collection("User").doc("Students").collection("StudentsDocs").get()
-      ]);
+  try {
+    // --- Run queries in parallel ---
+    const [semesterSnapshot, snapshot] = await Promise.all([
+      db.collection("DataTable").doc("Semester").collection("SemesterDocs")
+        .where("currentSemester", "==", true).limit(1).get(),
+      db.collection("User").doc("Students").collection("StudentsDocs").get()
+    ]);
 
-      if (semesterSnapshot.empty) {
-        studentsTableBody.innerHTML = "<tr><td colspan='10'>No current semester found.</td></tr>";
-        return;
-      }
-
-      const currentSemesterId = semesterSnapshot.docs[0].id;
-
-      let office, currentCategory, currentDepartment;
-      if (userDataObj) {
-        office = userDataObj.office;
-        currentCategory = userDataObj.category?.toLowerCase();
-        currentDepartment = userDataObj.department;
-      }
-
-      let students = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
-        return {
-          schoolID: doc.id,
-          fullName,
-          department: departmentMap[data.department] || data.department || "",
-          originalDepartmentId: data.department,
-          yearLevel: yearLevelMap[data.yearLevel] || data.yearLevel || "",
-          yearLevelId: data.yearLevel || doc.id,
-          email: data.institutionalEmail || data.gmail || "",
-          clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
-          semester: data.semester,
-          violations: Array.isArray(data.violations) ? data.violations : [],
-          officers: Array.isArray(data.officers) ? data.officers : [],
-          incomplete: Array.isArray(data.incompletes) ? data.incompletes : []
-        };
-      });
-
-      // Example Filtering per Office/Category
-      if (currentCategory === "39" || currentCategory === "41") {
-        students = students.filter(s => s.semester === currentSemesterId);
-      } else if (["2","3","5","6","9","10","12"].includes(office)) {
-        students = students.filter(s => s.semester === currentSemesterId);
-      } else if (["4","7","11"].includes(office)) {
-        students = students.filter(s => currentDepartment && s.originalDepartmentId === currentDepartment && s.semester === currentSemesterId);
-      } else if (["16","15","14","13","8"].includes(office)) {
-        if (!currentCategory) {
-          students = [];
-        } else {
-          const membershipRef = db.collection("Membership").doc(currentCategory).collection("Members");
-          const membershipSnapshot = await membershipRef.where("semester","==",currentSemesterId).get();
-          const allowedIDs = membershipSnapshot.docs.map(doc => doc.id);
-          students = students.filter(s => allowedIDs.includes(s.schoolID));
-        }
-      } else if (!isNaN(currentCategory) && Number(currentCategory) >= 1 && Number(currentCategory) <= 38) {
-        students = students.filter(s => Array.isArray(s.clubs) && s.clubs.includes(currentCategory) && s.semester === currentSemesterId);
-      } else {
-        students = [];
-      }
-
-      // ✅ RENDER IMMEDIATELY - Show table without waiting for validation
-      renderStudents(students);
-      populateHeaderFilters(students);
-
-      // ✅ THEN run validation in background in batches
-      if (designeeID && typeof autoValidateRequirements === "function") {
-        validateInBatches(students).catch(err => {
-          console.error("Batch validation error:", err);
-        });
-      }
-
-    } catch (err) {
-      console.error(err);
-      studentsTableBody.innerHTML = "<tr><td colspan='10'>Failed to load students.</td></tr>";
+    if (semesterSnapshot.empty) {
+      studentsTableBody.innerHTML = "<tr><td colspan='10'>No current semester found.</td></tr>";
+      return;
     }
+
+    const currentSemesterId = semesterSnapshot.docs[0].id;
+
+    // --- Extract Designee Info ---
+    let office, currentCategory, currentDepartment;
+    if (userDataObj) {
+      office = userDataObj.office;
+      currentCategory = userDataObj.category?.toLowerCase();
+      currentDepartment = userDataObj.department;
+    }
+
+    // --- Map Student Data ---
+    let students = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ");
+      return {
+        schoolID: doc.id,
+        fullName,
+        department: departmentMap[data.department] || data.department || "",
+        originalDepartmentId: data.department,
+        yearLevel: yearLevelMap[data.yearLevel] || data.yearLevel || "",
+        yearLevelId: data.yearLevel || doc.id,
+        email: data.institutionalEmail || data.gmail || "",
+        course: data.course || "", // ✅ include course field
+        clubs: Array.isArray(data.clubs) ? data.clubs.map(c => String(c).toLowerCase()) : [],
+        semester: data.semester,
+        violations: Array.isArray(data.violations) ? data.violations : [],
+        officers: Array.isArray(data.officers) ? data.officers : [],
+        incomplete: Array.isArray(data.incompletes) ? data.incompletes : []
+      };
+    });
+
+    // --- Filtering Logic per Office ---
+    if (currentCategory === "39" || currentCategory === "41") {
+      // Offices with fixed category (e.g., registrar/OSA)
+      students = students.filter(s => s.semester === currentSemesterId);
+
+    } else if (["2", "3", "5", "6", "9", "10", "12"].includes(office)) {
+      // General office-level filter
+      students = students.filter(s => s.semester === currentSemesterId);
+
+    } else if (["4", "7"].includes(office)) {
+      // Department-based filtering
+      students = students.filter(s =>
+        currentDepartment &&
+        s.originalDepartmentId === currentDepartment &&
+        s.semester === currentSemesterId
+      );
+
+    } else if (office === "11") {
+      // ✅ NEW: Course-based filtering
+      if (!currentCategory) {
+        students = [];
+      } else {
+        students = students.filter(s =>
+          s.course &&
+          String(s.course).toLowerCase() === String(currentCategory).toLowerCase() &&
+          s.semester === currentSemesterId
+        );
+      }
+
+    } else if (["16", "15", "14", "13", "8"].includes(office)) {
+      // Club or lab-based membership filter
+      if (!currentCategory) {
+        students = [];
+      } else {
+        const membershipRef = db.collection("Membership").doc(currentCategory).collection("Members");
+        const membershipSnapshot = await membershipRef.where("semester", "==", currentSemesterId).get();
+        const allowedIDs = membershipSnapshot.docs.map(doc => doc.id);
+        students = students.filter(s => allowedIDs.includes(s.schoolID));
+      }
+
+    } else if (!isNaN(currentCategory) && Number(currentCategory) >= 1 && Number(currentCategory) <= 38) {
+      // Category-based club filtering
+      students = students.filter(s =>
+        Array.isArray(s.clubs) &&
+        s.clubs.includes(currentCategory) &&
+        s.semester === currentSemesterId
+      );
+
+    } else {
+      // No match
+      students = [];
+    }
+
+    // --- Render students immediately ---
+    renderStudents(students);
+    populateHeaderFilters(students);
+
+    // --- Run validation in background ---
+    if (designeeID && typeof autoValidateRequirements === "function") {
+      validateInBatches(students).catch(err => {
+        console.error("Batch validation error:", err);
+      });
+    }
+
+  } catch (err) {
+    console.error(err);
+    studentsTableBody.innerHTML = "<tr><td colspan='10'>Failed to load students.</td></tr>";
   }
+}
+
 
   // -------------------- Update Student Role --------------------
   async function updateStudentRole(studentID, role, checked) {

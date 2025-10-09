@@ -37,6 +37,113 @@ th.filter-header select:focus {
     border-color: var(--primary-green);
     box-shadow: 0 0 3px rgba(76, 175, 80, 0.4);
 }
+/* =============== Member Container Overlay =============== */
+#membersContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none; /* Hidden until opened */
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  overflow-y: auto;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* =============== Popup Card Container =============== */
+#membersContainer.active {
+  display: flex;
+}
+
+.members-popup {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 700px;
+  width: 90%;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Header and Close Button */
+.members-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.members-popup-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #333;
+}
+.close-members-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #555;
+  transition: color 0.2s;
+}
+.close-members-btn:hover {
+  color: #000;
+}
+
+/* =============== Member Cards =============== */
+.members-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.member-card {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.member-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+}
+
+.member-card p {
+  margin: 0 0 8px;
+  color: #333;
+  font-weight: 500;
+}
+
+/* Delete Button */
+.delete-member-btn {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.85rem;
+}
+.delete-member-btn:hover {
+  background: #c0392b;
+}
+
   </style>
 </head>
 <body>
@@ -85,7 +192,10 @@ th.filter-header select:focus {
   <div class="header-top">
     <h1>Validate Requirements</h1>
     <input type="file" id="uploadInput" accept=".xlsx, .csv" style="display:none;" />
-  <button class="add-all-btn" id="uploadBtn"><i class="fas fa-upload"></i> Upload Sheet</button>
+  <button class="add-all-btn" id="uploadBtn"><i class="fas fa-upload"></i> Upload Members</button>
+  <button class="add-all-btn" id="downloadBtn"><i class="fas fa-download"></i> Download Template</button>
+  <button class="add-all-btn" id="UserEditBtn"><i class="fas fa-user"></i> Edit Members</button>
+  <div id="membersContainer" style="margin-top:20px;"></div>
   </div>
   
   
@@ -171,7 +281,20 @@ th.filter-header select:focus {
         </div>
       </div>
 
-     
+   <!-- Members Popup Container -->
+<div id="membersContainer">
+  <div class="members-popup">
+    <div class="members-popup-header">
+      <h2>Members List</h2>
+      <button class="close-members-btn" onclick="closeMembersPopup()">×</button>
+    </div>
+    <div class="members-list" id="membersList">
+      <!-- Member cards will populate here -->
+    </div>
+  </div>
+</div>
+
+
 
       <div class="info-section">
         <div>I.D No.: <span id="studentId">Loading...</span></div>
@@ -205,7 +328,7 @@ th.filter-header select:focus {
   <script src="modal_validate.js"></script>
   <script src="upload.js"></script>
   <script src="modal_view.js"></script>
-  <script src="flag.js"></script>
+ 
   <script src="user.js"></script>
  
 </body>

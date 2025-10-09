@@ -1,4 +1,3 @@
-// upload.js
 document.addEventListener("DOMContentLoaded", () => {
     console.log("upload.js loaded");
 
@@ -6,13 +5,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const uploadInput = document.getElementById("uploadInput");
     const studentsTableBody = document.getElementById("studentsTableBody");
     const usernameDisplay = document.getElementById("usernameDisplay");
+    const downloadBtn = document.getElementById("downloadBtn"); // Download Template button
+    const editMembersBtn = document.getElementById("UserEditBtn"); // Edit Members button
+    const membersContainer = document.getElementById("membersContainer"); // Popup container
 
     if (!uploadBtn || !uploadInput || !studentsTableBody) {
         console.error("Upload button, input, or table body not found in DOM");
         return;
     }
 
-    // Firebase initialization
+    // -------------------- Firebase Initialization --------------------
     const firebaseConfig = {
         apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
         authDomain: "tatak-mobile-web.firebaseapp.com",
@@ -25,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Get userData from localStorage
+    // -------------------- Get user data --------------------
     let userData = {};
     try {
         const userDataString = localStorage.getItem("userData");
@@ -35,89 +37,49 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const office = userData.office || null;
-    const category = userData.category || null; // used as Membership doc ID
+    const category = userData.category || null;
     const department = userData.department || null;
+    const designeeId = userData.id || null; // designee ID
 
-    // Hide upload button for restricted offices or category 39
-    const restrictedOffices = ["2","3","5","6","9","10","12","1","4","7","11"];
+    // -------------------- Hide buttons for restricted offices --------------------
+    const restrictedOffices = ["1","2","3","4","5","6","7","9","10","11","12"];
     const officeFromStorage = (office || "").toString().trim();
     const categoryFromStorage = (category || "").toString().trim();
 
     if (restrictedOffices.includes(officeFromStorage) || categoryFromStorage === "39") {
         uploadBtn.style.display = "none";
         uploadInput.style.display = "none";
-        console.log(`Upload button hidden for office ${officeFromStorage} or category ${categoryFromStorage}`);
+        if (downloadBtn) downloadBtn.style.display = "none";
+        if (editMembersBtn) editMembersBtn.style.display = "none";
+        console.log(`Buttons hidden for office ${officeFromStorage} or category ${categoryFromStorage}`);
     } else {
-        console.log(`Upload button visible for office ${officeFromStorage} and category ${categoryFromStorage}`);
+        console.log(`Buttons visible for office ${officeFromStorage} and category ${categoryFromStorage}`);
     }
 
-    // Resolve collection name (for logging)
-    async function resolveCollectionName() {
-        try {
-            if (category) {
-                // 🔹 Clubs
-                const clubSnap = await db.collection("DataTable").doc("Clubs")
-                    .collection("ClubsDocs").doc(category).get();
-                if (clubSnap.exists) return clubSnap.data().codeName || category;
-
-                // 🔹 Labs
-                const labSnap = await db.collection("DataTable").doc("Labs")
-                    .collection("LabsDocs").doc(category).get();
-                if (labSnap.exists) return labSnap.data().lab || category;
-
-                return category;
-            } else if (department) {
-                const deptSnap = await db.collection("DataTable").doc("Department")
-                    .collection("DepartmentDocs").doc(department).get();
-                if (deptSnap.exists) return deptSnap.data().department || department;
-                return department;
-            } else if (office) {
-                const officeSnap = await db.collection("DataTable").doc("Office")
-                    .collection("OfficeDocs").doc(office).get();
-                if (officeSnap.exists) return officeSnap.data().office || office;
-                return office;
-            } else {
-                return "Students"; // fallback
+    // -------------------- Download Template --------------------
+    if (downloadBtn) {
+        downloadBtn.addEventListener("click", () => {
+            try {
+                const ws = XLSX.utils.aoa_to_sheet([["ID No."]]);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Template");
+                XLSX.writeFile(wb, "Student_Template.xlsx");
+                console.log("📥 Template downloaded successfully");
+            } catch (err) {
+                console.error("Error generating template:", err);
+                alert("Failed to download template.");
             }
-        } catch (err) {
-            console.error("Error resolving collection:", err);
-            return "Students";
-        }
+        });
     }
 
-    // Get the current semester ID
-    async function getCurrentSemesterId() {
-        try {
-            const snapshot = await db.collection("DataTable").doc("Semester")
-                .collection("SemesterDocs")
-                .where("currentSemester", "==", true)
-                .limit(1)
-                .get();
-
-            if (!snapshot.empty) {
-                return snapshot.docs[0].id || null; // <-- use the ID
-            } else {
-                console.warn("⚠️ No active semester found in SemesterDocs");
-                return null;
-            }
-        } catch (err) {
-            console.error("Error fetching current semester:", err);
-            return null;
-        }
-    }
-
-    // Open file dialog
+    // -------------------- File Upload --------------------
     uploadBtn.addEventListener("click", () => uploadInput.click());
 
-    // Handle file upload
     uploadInput.addEventListener("change", async (event) => {
         const file = event.target.files[0];
         if (!file) return;
 
         try {
-            const collectionName = await resolveCollectionName();
-            console.log("📂 Using Membership collection for:", collectionName);
-
             const currentSemesterId = await getCurrentSemesterId();
             if (!currentSemesterId) {
                 alert("No active semester found. Please contact admin.");
@@ -134,38 +96,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 if (!rows || rows.length < 2) return;
 
-                // Extract studentId (first column)
                 const studentIds = rows.slice(1)
                     .map(row => row[0] ? row[0].toString().trim() : null)
                     .filter(id => id);
 
-                if (!category) {
-                    alert("No category found in user data. Cannot upload.");
-                    return;
-                }
-
-                // Membership structure
                 const membershipDocRef = db.collection("Membership").doc(category);
-
-                // Ensure membership document exists
                 const membershipDoc = await membershipDocRef.get();
                 if (!membershipDoc.exists) {
                     await membershipDocRef.set({ id: category });
                     console.log(`✅ Created Membership document for category ID "${category}"`);
                 }
 
-                // Upload students to subcollection Members with semester ID
                 const subCollectionRef = membershipDocRef.collection("Members");
                 for (const studentId of studentIds) {
                     await subCollectionRef.doc(studentId).set({
                         studentId,
-                        semester: currentSemesterId  // <-- semester ID
+                        semester: currentSemesterId
                     });
                 }
 
-                console.log(`✅ Uploaded ${studentIds.length} student IDs under Membership/${category}/Members with semester ID ${currentSemesterId}`);
+                console.log(`✅ Uploaded ${studentIds.length} student IDs`);
                 alert(`Uploaded ${studentIds.length} students successfully for the current semester!`);
-                uploadInput.value = ""; // reset
+                uploadInput.value = "";
             };
             reader.readAsArrayBuffer(file);
         } catch (err) {
@@ -174,5 +126,103 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Note: Loading students will read from Membership/{category}/Members
+    // -------------------- EDIT MEMBERS POPUP --------------------
+    if (editMembersBtn && membersContainer) {
+        editMembersBtn.addEventListener("click", async () => {
+            membersContainer.innerHTML = `
+                <div class="members-popup">
+                    <div class="members-popup-header">
+                        <h2>Members List</h2>
+                        <button class="close-members-btn">×</button>
+                    </div>
+                    <div class="members-list">
+                        <p>Loading members...</p>
+                    </div>
+                </div>
+            `;
+            membersContainer.classList.add("active");
+
+            const closeBtn = membersContainer.querySelector(".close-members-btn");
+            closeBtn.addEventListener("click", () => membersContainer.classList.remove("active"));
+
+            try {
+                const membersList = membersContainer.querySelector(".members-list");
+                const membersSnapshot = await db.collection("Membership")
+                    .doc(category)
+                    .collection("Members")
+                    .get();
+
+                if (membersSnapshot.empty) {
+                    membersList.innerHTML = "<p>No members found.</p>";
+                    return;
+                }
+
+                membersList.innerHTML = "";
+
+                membersSnapshot.forEach(doc => {
+                    const member = doc.data();
+                    const card = document.createElement("div");
+                    card.className = "member-card";
+                    card.innerHTML = `
+                        <p><strong>ID:</strong> ${member.studentId}</p>
+                        <button class="delete-member-btn" data-id="${member.studentId}">Delete</button>
+                    `;
+                    membersList.appendChild(card);
+                });
+
+                // -------------------- Attach delete buttons --------------------
+                membersList.querySelectorAll(".delete-member-btn").forEach(btn => {
+                    btn.addEventListener("click", async (e) => {
+                        const studentId = e.target.dataset.id;
+                        if (!confirm(`Are you sure you want to delete member ${studentId}?`)) return;
+
+                        try {
+                            // Delete from Membership
+                            await db.collection("Membership")
+                                .doc(category)
+                                .collection("Members")
+                                .doc(studentId)
+                                .delete();
+                            console.log(`Deleted member ${studentId} from Membership`);
+
+                            // Delete from Validation (if designeeId exists)
+                            if (designeeId) {
+                                const validationRef = db.collection("Validation").doc(designeeId).collection(studentId);
+                                const validationSnapshot = await validationRef.get();
+                                validationSnapshot.forEach(doc => doc.ref.delete());
+                                console.log(`Deleted Validation records for student ${studentId}`);
+                            }
+
+                            // Remove card from DOM
+                            e.target.closest(".member-card").remove();
+
+                        } catch (err) {
+                            console.error(`Failed to delete member ${studentId}:`, err);
+                            alert("Failed to delete member. Check console.");
+                        }
+                    });
+                });
+
+            } catch (err) {
+                console.error("Failed to load members:", err);
+                membersContainer.querySelector(".members-list").innerHTML = "<p>Error loading members.</p>";
+            }
+        });
+    }
+
+    // -------------------- Helper: Get Current Semester --------------------
+    async function getCurrentSemesterId() {
+        try {
+            const snapshot = await db.collection("DataTable").doc("Semester")
+                .collection("SemesterDocs")
+                .where("currentSemester", "==", true)
+                .limit(1)
+                .get();
+            if (!snapshot.empty) return snapshot.docs[0].id;
+            return null;
+        } catch (err) {
+            console.error(err);
+            return null;
+        }
+    }
 });

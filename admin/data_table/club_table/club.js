@@ -295,19 +295,39 @@ async function handleFileUpload(e) {
   reader.readAsArrayBuffer(file);
 }
 // Download template CSV
+// ============================ Download Club Template ============================
 const downloadTemplateBtn = document.getElementById("downloadTemplate");
 
-downloadTemplateBtn.addEventListener("click", (e) => {
-  e.preventDefault();
+if (downloadTemplateBtn) {
+  downloadTemplateBtn.addEventListener("click", (e) => {
+    e.preventDefault();
 
-  const csvContent = "ID no.,Club Code Name,Club Name,Office Type\n";
+    // 🔹 Header row
+    const header = "ID no.,Club Code Name,Club Name,Office Type\n";
 
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", "Club_template.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-});
+    // 🔹 Example data row (sample template)
+    const templateData =
+      "1,CEACSC,College of Engineering, Architecture and Computing Student Council,Academic-Club\n";
+
+    // 🔹 Combine header + example
+    const csvContent = header + templateData;
+
+    // 🔹 Create CSV file as a Blob
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    // 🔹 Create a hidden <a> element to trigger download
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Club_Template.csv";
+    document.body.appendChild(link);
+    link.click();
+
+    // 🔹 Cleanup
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    // Optional: confirmation message
+    alert("📥 Club Template downloaded successfully!");
+  });
+}

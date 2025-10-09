@@ -1,4 +1,4 @@
-// Initialize Firebase v8 (if not already initialized)
+// ============================ Firebase Init ============================
 if (!firebase.apps.length) {
   firebase.initializeApp({
     apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
@@ -12,84 +12,104 @@ if (!firebase.apps.length) {
 }
 const db = firebase.firestore();
 
-// --- Helper: Sync a student's course/club/department ---
+// ============================ Helper: Sync Course/Club/Dept ============================
 async function syncStudentCourseInfo(studentDocId, studentData, coursesMap, clubsMap, departmentsMap) {
   const updates = {};
 
-  // Match course (could be string or already ID)
+  // --- Match course (by ID or name) ---
   let courseDoc = null;
   if (studentData.course) {
     if (coursesMap[studentData.course]) {
       courseDoc = coursesMap[studentData.course];
     } else {
-      courseDoc = Object.values(coursesMap).find(c => c.course === studentData.course);
+      courseDoc = Object.values(coursesMap).find(c => String(c.course).trim() === String(studentData.course).trim());
     }
   }
 
   if (courseDoc) {
     updates.course = courseDoc.id;
 
-    // Clubs via courseDoc.clubCodeName
-    if (courseDoc.clubCodeName) {
-      const clubCodes = courseDoc.clubCodeName.split(",").map(c => c.trim());
+    // --- Clubs (handle both string and array) ---
+    let clubCodes = [];
+    if (Array.isArray(courseDoc.clubCodeName)) {
+      clubCodes = courseDoc.clubCodeName.map(c => String(c).trim());
+    } else if (typeof courseDoc.clubCodeName === "string") {
+      clubCodes = courseDoc.clubCodeName.split(",").map(c => c.trim());
+    } else if (courseDoc.clubCodeName) {
+      clubCodes = [String(courseDoc.clubCodeName).trim()];
+    }
+
+    if (clubCodes.length > 0) {
       updates.clubs = Object.values(clubsMap)
-        .filter(club => clubCodes.includes(club.codeName))
+        .filter(club =>
+          clubCodes.includes(String(club.codeName)) ||
+          clubCodes.includes(String(club.id)) ||
+          clubCodes.includes(String(club.code))
+        )
         .map(club => club.id);
     } else {
       updates.clubs = [];
     }
 
-    // Department via courseDoc.deptCodeName (match by "code")
+    // --- Department (robust matching) ---
     if (courseDoc.deptCodeName) {
-      const deptDoc = Object.values(departmentsMap)
-        .find(d => d.code === courseDoc.deptCodeName);
+      let deptCandidates = [];
+
+      if (Array.isArray(courseDoc.deptCodeName)) {
+        deptCandidates = courseDoc.deptCodeName.map(d => String(d).trim());
+      } else if (typeof courseDoc.deptCodeName === "object") {
+        const values = Object.values(courseDoc.deptCodeName);
+        deptCandidates = values.map(v => String(v).trim());
+      } else {
+        deptCandidates = [String(courseDoc.deptCodeName).trim()];
+      }
+
+      const deptDoc = Object.values(departmentsMap).find(d =>
+        deptCandidates.includes(String(d.id)) ||
+        deptCandidates.includes(String(d.code)) ||
+        deptCandidates.includes(String(d.codeName)) ||
+        deptCandidates.includes(String(d.department))
+      );
+
       if (deptDoc) {
         updates.department = deptDoc.id;
       }
     }
   }
 
+  // --- Save updates if any ---
   if (Object.keys(updates).length > 0) {
     await db.collection("/User/Students/StudentsDocs").doc(studentDocId).update(updates);
-    console.log(`Synced student ${studentData.schoolId || studentDocId}`, updates);
+    console.log(`✅ Synced student ${studentData.schoolId || studentDocId}`, updates);
   }
 }
 
-// Wait for DOM to load
+// ============================ DOM Content ============================
 document.addEventListener("DOMContentLoaded", async () => {
   // --- Logout ---
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
-    logoutBtn.addEventListener("click", function (e) {
+    logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      const keysToRemove = [
-        "userData",
-        "studentName",
-        "schoolID",
-        "studentID",
-        "staffID",
-        "designeeID",
-        "category",
-        "office",
-        "department",
-        "adminID"
-      ];
-      keysToRemove.forEach(key => localStorage.removeItem(key));
+      [
+        "userData", "studentName", "schoolID", "studentID",
+        "staffID", "designeeID", "category", "office",
+        "department", "adminID"
+      ].forEach(key => localStorage.removeItem(key));
       window.location.href = "../../../logout.html";
     });
   }
 
-  // --- User display ---
+  // --- Display Logged In User ---
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
   usernameDisplay.textContent = storedAdminID || "Unknown";
 
-  // --- Dropdown menu ---
+  // --- Dropdown Menu ---
   const dropdownToggle = document.getElementById("userDropdownToggle");
   const dropdownMenu = document.getElementById("dropdownMenu");
   dropdownToggle.addEventListener("click", () => {
-    dropdownMenu.style.display =
-      dropdownMenu.style.display === "block" ? "none" : "block";
+    dropdownMenu.style.display = dropdownMenu.style.display === "block" ? "none" : "block";
   });
   document.addEventListener("click", (event) => {
     if (!dropdownToggle.contains(event.target) && !dropdownMenu.contains(event.target)) {
@@ -99,66 +119,74 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // --- Student Table ---
   const tbody = document.querySelector(".log-table tbody");
-  if (!tbody) return console.error("Table body not found");
+  if (!tbody) return console.error("❌ Table body not found");
 
   try {
-    // --- Fetch lookup tables ---
-    const [clubsSnap, coursesSnap, departmentsSnap, yearLevelsSnap, studentsSnap] = await Promise.all([
+    // --- Fetch Lookup Tables ---
+    const [clubsSnap, coursesSnap, departmentsSnap, yearLevelsSnap] = await Promise.all([
       db.collection("/DataTable/Clubs/ClubsDocs").get(),
       db.collection("/DataTable/Course/CourseDocs").get(),
       db.collection("/DataTable/Department/DepartmentDocs").get(),
-      db.collection("/DataTable/YearLevel/YearLevelDocs").get(),
-      db.collection("/User/Students/StudentsDocs").get()
+      db.collection("/DataTable/YearLevel/YearLevelDocs").get()
     ]);
 
-    // Build lookup maps
+    // Build Maps
     const clubsMap = {}, coursesMap = {}, departmentsMap = {}, yearLevelsMap = {};
     clubsSnap.forEach(doc => clubsMap[doc.id] = { id: doc.id, ...doc.data() });
     coursesSnap.forEach(doc => coursesMap[doc.id] = { id: doc.id, ...doc.data() });
     departmentsSnap.forEach(doc => departmentsMap[doc.id] = { id: doc.id, ...doc.data() });
     yearLevelsSnap.forEach(doc => yearLevelsMap[doc.id] = { id: doc.id, ...doc.data() });
 
-    const students = studentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    // --- Render students ---
-    tbody.innerHTML = "";
-    students.forEach(student => {
-      const courseName = student.course && coursesMap[student.course]
-        ? coursesMap[student.course].course
-        : student.course || "";
-
-      const deptName = student.department && departmentsMap[student.department]
-        ? departmentsMap[student.department].department
-        : student.department || "";
-
-      const yearLevelName = student.yearLevel && yearLevelsMap[student.yearLevel]
-        ? yearLevelsMap[student.yearLevel].yearLevel
-        : student.yearLevel || "";
-
-      // Convert club IDs to readable codes
-      const clubsNames = Array.isArray(student.clubs)
-        ? student.clubs.map(id => clubsMap[id]?.code || id).join(", ")
-        : "";
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${student.schoolId || ""}</td>
-        <td>${student.firstName || ""}</td>
-        <td>${student.lastName || ""}</td>
-        <td>${courseName}</td>
-        <td>${yearLevelName}</td>
-        <td>${deptName}</td>
-        <td>${clubsNames}</td>
-        <td>${student.institutionalEmail || ""}</td>
-        <td>
-          <button class="action-btn edit" data-id="${student.id}"><i class="fas fa-edit"></i></button>
-          <button class="action-btn delete" data-id="${student.id}"><i class="fas fa-trash-alt"></i></button>
-        </td>
-      `;
-      tbody.appendChild(tr);
+    // --- Real-time Student Listener ---
+    db.collection("/User/Students/StudentsDocs").onSnapshot(snapshot => {
+      const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderTable(students, coursesMap, departmentsMap, yearLevelsMap, clubsMap);
     });
 
-    // --- Modal Elements ---
+    // --- Render Table Function ---
+    function renderTable(students, coursesMap, departmentsMap, yearLevelsMap, clubsMap) {
+      tbody.innerHTML = "";
+      students.forEach(student => {
+        const courseName = student.course && coursesMap[student.course]
+          ? coursesMap[student.course].course
+          : student.course || "";
+
+        const deptName = student.department && departmentsMap[student.department]
+          ? departmentsMap[student.department].department
+          : student.department || "";
+
+        const yearLevelName = student.yearLevel && yearLevelsMap[student.yearLevel]
+          ? yearLevelsMap[student.yearLevel].yearLevel
+          : student.yearLevel || "";
+
+        const clubsNames = Array.isArray(student.clubs)
+          ? student.clubs.map(id => clubsMap[id]?.code || id).join(", ")
+          : "";
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${student.schoolId || ""}</td>
+          <td>${student.firstName || ""}</td>
+          <td>${student.lastName || ""}</td>
+          <td>${courseName}</td>
+          <td>${yearLevelName}</td>
+          <td>${deptName}</td>
+          <td>${clubsNames}</td>
+          <td>${student.institutionalEmail || ""}</td>
+          <td>
+            <button class="action-btn edit" data-id="${student.id}">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="action-btn delete" data-id="${student.id}">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ==================== Edit Modal ====================
     const editModal = document.getElementById("editModalOverlay");
     const deleteModal = document.getElementById("deleteModalOverlay");
     const editStudentId = document.getElementById("editStudentId");
@@ -169,20 +197,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
     let currentEditId = null, currentDeleteId = null;
 
-    // --- Edit ---
+    // --- Edit Button ---
     tbody.addEventListener("click", (e) => {
       if (e.target.closest(".edit")) {
         const id = e.target.closest(".edit").dataset.id;
-        const student = students.find(s => s.id === id);
-        if (!student) return;
-
         currentEditId = id;
+        const student = { ...students.find(s => s.id === id) };
+        if (!student) return;
         editStudentId.value = student.schoolId || "";
-        editStudentName.value = student.firstName + " " + student.lastName;
+        editStudentName.value = `${student.firstName || ""} ${student.lastName || ""}`;
         editModal.style.display = "flex";
       }
     });
+
     editCancelBtn.addEventListener("click", () => { editModal.style.display = "none"; });
+
     editSaveBtn.addEventListener("click", async () => {
       if (!currentEditId) return;
       const [firstName, ...rest] = editStudentName.value.trim().split(" ");
@@ -192,35 +221,56 @@ document.addEventListener("DOMContentLoaded", async () => {
           firstName: firstName || "",
           lastName: lastName || ""
         });
-        alert("Student updated successfully!");
-        window.location.reload();
+        alert("✅ Student updated successfully!");
+        editModal.style.display = "none";
       } catch (err) {
         console.error("Error updating student:", err);
-        alert("Failed to update student");
+        alert("❌ Failed to update student");
       }
     });
 
-    // --- Delete ---
+    // ==================== Delete Modal ====================
     tbody.addEventListener("click", (e) => {
       if (e.target.closest(".delete")) {
         currentDeleteId = e.target.closest(".delete").dataset.id;
         deleteModal.style.display = "flex";
       }
     });
+
     deleteCancelBtn.addEventListener("click", () => { deleteModal.style.display = "none"; });
+
     deleteConfirmBtn.addEventListener("click", async () => {
       if (!currentDeleteId) return;
       try {
         await db.collection("/User/Students/StudentsDocs").doc(currentDeleteId).delete();
-        alert("Student deleted successfully!");
-        window.location.reload();
+        alert("✅ Student deleted successfully!");
+        deleteModal.style.display = "none";
       } catch (err) {
         console.error("Error deleting student:", err);
-        alert("Failed to delete student");
+        alert("❌ Failed to delete student");
       }
     });
+// ============================ Download Template ============================
+document.getElementById("DownloadTemplateBtn").addEventListener("click", () => {
+  // Create sample data (header only)
+  const templateData = [
+    { "Student ID": "e.g (2022309)", "Course": "(CourseID)", "Year Level": "(YearID)" }
+  ];
 
-    // --- Excel Upload Integration ---
+  // Convert JSON to worksheet
+  const worksheet = XLSX.utils.json_to_sheet(templateData);
+
+  // Create a new workbook and append the sheet
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+
+  // Generate Excel file
+  XLSX.writeFile(workbook, "Student_Update_Template.xlsx");
+
+  alert("📥 Template downloaded successfully!");
+});
+
+    // ==================== Excel Upload ====================
     const updateBtn = document.getElementById("updateStudentInfoBtn");
     if (updateBtn) {
       const fileInput = document.createElement("input");
@@ -234,6 +284,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       fileInput.addEventListener("change", async (event) => {
         const file = event.target.files[0];
         if (!file) return;
+
         try {
           const data = await file.arrayBuffer();
           const workbook = XLSX.read(data, { type: "array" });
@@ -257,7 +308,6 @@ document.addEventListener("DOMContentLoaded", async () => {
               const studentDoc = snap.docs[0];
               await db.collection("/User/Students/StudentsDocs").doc(studentDoc.id).update(updates);
 
-              // --- Normalize course, clubs, department ---
               await syncStudentCourseInfo(
                 studentDoc.id,
                 { ...studentDoc.data(), ...updates },
@@ -268,11 +318,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
           }
 
-          alert("Student info updated and synced successfully from Excel!");
-          window.location.reload();
+          alert("✅ Student info updated and synced successfully from Excel!");
         } catch (error) {
-          console.error("Error processing Excel:", error);
-          alert("Failed to process Excel file.");
+          console.error("❌ Error processing Excel:", error);
+          alert("❌ Failed to process Excel file.");
         }
       });
     }
@@ -283,20 +332,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   initSidebarDropdowns();
 });
 
-// Sidebar dropdowns
+// ============================ Sidebar ============================
 function initSidebarDropdowns() {
-  const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+  const dropdownToggles = document.querySelectorAll(".dropdown-toggle");
   dropdownToggles.forEach(toggle => {
-    toggle.addEventListener('click', function (e) {
+    toggle.addEventListener("click", function (e) {
       e.preventDefault();
-      const parentLi = this.parentElement;
-      const submenu = parentLi.querySelector('.submenu');
-      if (submenu.style.display === 'block') {
-        submenu.style.display = 'none';
-        this.querySelector('.arrow')?.classList.remove('rotated');
+      const submenu = this.parentElement.querySelector(".submenu");
+      const arrow = this.querySelector(".arrow");
+      if (submenu.style.display === "block") {
+        submenu.style.display = "none";
+        arrow?.classList.remove("rotated");
       } else {
-        submenu.style.display = 'block';
-        this.querySelector('.arrow')?.classList.add('rotated');
+        submenu.style.display = "block";
+        arrow?.classList.add("rotated");
       }
     });
   });

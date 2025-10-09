@@ -82,13 +82,11 @@ function formatTimestampTo12Hr(dateString) {
 // Resolve designee/office name and image using cached data (NO DATABASE CALLS)
 function resolveOfficeNameWithImageCached(designeeId) {
   let officeName = null;
-  let imageId = "default";
+  let imageId = designeeId; // always same as designeeId
 
   try {
     if (/^\d+$/.test(designeeId)) {
       officeName = officeCache?.[designeeId] || designeeId;
-      imageId = designeeId === "7" ? "001" : designeeId;
-      if (designeeId === "12") imageId = "default";
 
     } else if (/^\d+-\d+$/.test(designeeId)) {
       const [firstNum, secondNum] = designeeId.split("-");
@@ -110,19 +108,14 @@ function resolveOfficeNameWithImageCached(designeeId) {
       } else {
         officeName = designeeId;
       }
-
-      if (first === 7) imageId = "001";
-      else if (first === 12) imageId = "default";
-      else imageId = `${firstNum}${secondNum}`;
     } else {
       officeName = designeeId;
-      imageId = designeeId;
     }
 
-    return { officeName: officeName || designeeId, imageId: imageId || "default" };
+    return { officeName: officeName || designeeId, imageId };
   } catch (err) {
     console.error("Error resolving office name:", err);
-    return { officeName: designeeId, imageId: "default" };
+    return { officeName: designeeId, imageId: designeeId };
   }
 }
 
@@ -132,13 +125,11 @@ async function resolveOfficeNameWithImage(db, designeeId) {
 
   try {
     let officeName = null;
-    let imageId = "default";
+    let imageId = designeeId; // always same as designeeId
 
     if (/^\d+$/.test(designeeId)) {
       const officeDoc = await db.collection(COLLECTIONS.office).doc(designeeId).get();
       if (officeDoc.exists) officeName = officeDoc.data().office || officeDoc.data().name;
-      imageId = designeeId === "7" ? "001" : designeeId;
-      if (designeeId === "12") imageId = "default";
 
     } else if (/^\d+-\d+$/.test(designeeId)) {
       const [firstNum, secondNum] = designeeId.split("-").map(Number);
@@ -170,21 +161,17 @@ async function resolveOfficeNameWithImage(db, designeeId) {
       } else {
         officeName = designeeId;
       }
-
-      if (firstNum === 7) imageId = "001";
-      else if (firstNum === 12) imageId = "default";
-      else imageId = `${firstNum}${secondNum}`;
     } else {
       officeName = designeeId;
-      imageId = designeeId;
     }
 
-    return { officeName: officeName || designeeId, imageId: imageId || "default" };
+    return { officeName: officeName || designeeId, imageId };
   } catch (err) {
     console.error("Error resolving office name:", err);
-    return { officeName: designeeId, imageId: "default" };
+    return { officeName: designeeId, imageId: designeeId };
   }
 }
+
 
 // -------------------- Modal Handling --------------------
 document.addEventListener("DOMContentLoaded", () => {

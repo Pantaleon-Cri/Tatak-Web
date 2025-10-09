@@ -1,4 +1,67 @@
-// ===================== prereq.js =====================
+// ===================== prereq.js (OPTIMIZED) =====================
+
+// -------------------- CACHE for reference data --------------------
+const cache = {
+  semester: null,
+  clubs: null,
+  labs: null,
+  departments: null,
+  offices: null,
+  initialized: false
+};
+
+// -------------------- Initialize Cache --------------------
+async function initializeCache(db) {
+  if (cache.initialized) return;
+
+  try {
+    const [semesterSnapshot, clubsSnapshot, labSnapshot, deptSnapshot, officeSnapshot] = await Promise.all([
+      db.collection("DataTable").doc("Semester").collection("SemesterDocs")
+        .where("currentSemester", "==", true).limit(1).get(),
+      db.collection("DataTable").doc("Clubs").collection("ClubsDocs").get(),
+      db.collection("DataTable").doc("Lab").collection("LabDocs").get(),
+      db.collection("DataTable").doc("Department").collection("DepartmentDocs").get(),
+      db.collection("DataTable").doc("Office").collection("OfficeDocs").get()
+    ]);
+
+    // Semester
+    cache.semester = semesterSnapshot.empty ? null : semesterSnapshot.docs[0].id;
+
+    // Clubs map
+    cache.clubs = {};
+    clubsSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      cache.clubs[doc.id] = data.code || data.name || doc.id;
+    });
+
+    // Labs map
+    cache.labs = {};
+    labSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      cache.labs[doc.id] = data.lab || data.code || doc.id;
+    });
+
+    // Departments map (code -> id and id -> data)
+    cache.departments = { byCode: {}, byId: {} };
+    deptSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      cache.departments.byCode[data.code] = doc.id;
+      cache.departments.byId[doc.id] = data;
+    });
+
+    // Offices map
+    cache.offices = {};
+    officeSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      cache.offices[doc.id] = data.office || `Office ${doc.id}`;
+    });
+
+    cache.initialized = true;
+    console.log("✅ Cache initialized successfully");
+  } catch (err) {
+    console.error("❌ Error initializing cache:", err);
+  }
+}
 
 // -------------------- Populate Student Prerequisites --------------------
 async function getStudentPrereqs(student, userData) {
@@ -7,220 +70,190 @@ async function getStudentPrereqs(student, userData) {
   const db = window.db;
   const office = userData.office;
   const category = String(userData.category || "");
-  const department = String(student.department || ""); // use student's actual department
+  const department = String(student.department || "");
 
   try {
-    // 🔹 Get current semester
-    const semesterSnapshot = await db
-      .collection("DataTable")
-      .doc("Semester")
-      .collection("SemesterDocs")
-      .where("currentSemester", "==", true)
-      .limit(1)
-      .get();
+    // Initialize cache if not done
+    await initializeCache(db);
 
-    if (semesterSnapshot.empty)
-      return "<span style='color:gray;'>No semester</span>";
+    const semesterID = cache.semester;
+    if (!semesterID) return "<span style='color:gray;'>No semester</span>";
 
-    const semesterID = semesterSnapshot.docs[0].id;
-
-    // ============================================================
-    // 🔹 Skip offices that should have no prereqs (like Office 8)
-    // ============================================================
+    // Skip offices with no prereqs
     const officesWithNoPrereqs = ["8"];
-    if (officesWithNoPrereqs.includes(office)) {
-      return "N/A";
-    }
+    if (officesWithNoPrereqs.includes(office)) return "N/A";
 
     // ============================================================
     // 🔹 CATEGORY-BASED PREREQS (1, 11, 18, 28, 36)
     // ============================================================
     const clubCategories = ["1", "11", "18", "28", "36"];
-    if (!officesWithNoPrereqs.includes(office) && clubCategories.includes(category)) {
+    if (clubCategories.includes(category)) {
       const studentClubs = Array.isArray(student.clubs) ? student.clubs : [];
-
-      // ✅ Exclude themselves from prereqs
       const filteredClubs = studentClubs.filter(clubID => clubID !== category);
 
       if (filteredClubs.length === 0) {
         return "<span style='color:gray;'>No clubs</span>";
       }
 
-      const clubsSnapshot = await db
-        .collection("DataTable")
-        .doc("Clubs")
-        .collection("ClubsDocs")
-        .get();
-
-      const clubsMap = {};
-      clubsSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        clubsMap[doc.id] = data.code || doc.id;
-      });
-
-      const results = [];
-      for (const clubID of filteredClubs) {
-        let cleared = false;
-        const validationDoc = await db
-          .collection("Validation")
+      // Parallel validation checks
+      const validationPromises = filteredClubs.map(clubID =>
+        db.collection("Validation")
           .doc(`1-${clubID}`)
           .collection(student.schoolID)
           .doc(semesterID)
-          .get();
+          .get()
+          .then(doc => ({
+            clubID,
+            cleared: doc.exists && 
+              (doc.data()?.requirements || []).length > 0 &&
+              doc.data().requirements.every(r => r.status === true)
+          }))
+      );
 
-        if (validationDoc.exists) {
-          const requirements = validationDoc.data()?.requirements || [];
-          cleared = requirements.length > 0 && requirements.every(r => r.status === true);
-        }
-
-        const displayName = clubsMap[clubID] || `Club ${clubID}`;
-        results.push(`<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`);
-      }
+      const validations = await Promise.all(validationPromises);
+      const results = validations.map(({ clubID, cleared }) => {
+        const displayName = cache.clubs[clubID] || `Club ${clubID}`;
+        return `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`;
+      });
 
       return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
     }
 
     // ============================================================
-    // 🔹 OFFICE 12 — Combined prereqs with memberships (4-dept & 7-dept)
+    // 🔹 OFFICE 12 — Combined prereqs with memberships
     // ============================================================
     if (office === "12") {
-      const baseOffices = ["2", "3", "5", "6", "9", "10"]; // removed 7
+      const baseOffices = ["2", "3", "5", "6", "9", "10"];
       const offices = [...baseOffices];
-      const results = [];
 
-      // --- Map department code to Firestore doc ID ---
-      let departmentID = "";
-      if (student.department) {
-        const deptSnapshot = await db
-          .collection("DataTable")
-          .doc("Department")
-          .collection("DepartmentDocs")
-          .where("code", "==", student.department)
-          .limit(1)
-          .get();
-
-        if (!deptSnapshot.empty) {
-          departmentID = deptSnapshot.docs[0].id;
-          // Prepend both 4-department and 7-department
-          offices.unshift(`4-${departmentID}`, `7-${departmentID}`);
-        } else {
-          console.warn(`❌ Department code "${student.department}" not found in Firestore`);
-        }
+      // Get department ID from cache
+      const departmentID = cache.departments.byCode[student.department];
+      if (departmentID) {
+        offices.unshift(`4-${departmentID}`, `7-${departmentID}`);
       }
 
-      console.log("=== OFFICE 12 PREREQS DEBUG ===");
-      console.log("Offices to check (Firestore IDs):", offices);
-
-      // ------------------ Check Office prerequisites ------------------
-      for (const off of offices) {
-        let cleared = false;
-
-        const validationDoc = await db
-          .collection("Validation")
-          .doc(off)
-          .collection(student.schoolID)
-          .doc(semesterID)
-          .get();
-
-        if (validationDoc.exists) {
-          const requirements = validationDoc.data()?.requirements || [];
-          cleared = requirements.length > 0 && requirements.every(r => r.status === true);
-        } else {
-          console.warn(`❌ Validation doc NOT found for ${off}`);
-        }
-
-        // ------------------ Get readable office name ------------------
-        let displayName = "";
-        if (off.startsWith("4-") || off.startsWith("7-")) {
-          const [officeNum, deptNum] = off.split("-");
-
-          const [officeDoc, deptDoc] = await Promise.all([
-            db.collection("DataTable").doc("Office").collection("OfficeDocs").doc(officeNum).get(),
-            db.collection("DataTable").doc("Department").collection("DepartmentDocs").doc(deptNum).get()
-          ]);
-
-          const officeName = officeDoc.exists && officeDoc.data().office
-            ? officeDoc.data().office
-            : `Office ${officeNum}`;
-
-          displayName = `${officeName}`;
-        } else {
-          const officeDoc = await db
-            .collection("DataTable")
-            .doc("Office")
-            .collection("OfficeDocs")
+      // Parallel validation checks for offices
+      const officeValidations = await Promise.all(
+        offices.map(async off => {
+          const validationDoc = await db.collection("Validation")
             .doc(off)
+            .collection(student.schoolID)
+            .doc(semesterID)
             .get();
 
-          displayName = officeDoc.exists
-            ? officeDoc.data().office || `Office ${off}`
-            : `Office ${off}`;
-        }
+          const cleared = validationDoc.exists &&
+            (validationDoc.data()?.requirements || []).length > 0 &&
+            validationDoc.data().requirements.every(r => r.status === true);
 
-        results.push(
-          `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
-        );
-      }
+          // Get display name
+          let displayName = "";
+          if (off.startsWith("4-") || off.startsWith("7-")) {
+            const [officeNum] = off.split("-");
+            displayName = cache.offices[officeNum] || `Office ${officeNum}`;
+          } else {
+            displayName = cache.offices[off] || `Office ${off}`;
+          }
 
-      // ------------------ Check Memberships ------------------
-      const [membershipSnapshot, clubsSnapshot] = await Promise.all([
-        db.collection("Membership").get(),
-        db.collection("DataTable").doc("Clubs").collection("ClubsDocs").get()
-      ]);
+          return { displayName, cleared };
+        })
+      );
 
-      const clubsMap = {};
-      clubsSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        clubsMap[doc.id] = data.code || data.name || doc.id;
-      });
+      const results = officeValidations.map(({ displayName, cleared }) =>
+        `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
+      );
+
+      // Check Memberships (parallel)
+      const membershipSnapshot = await db.collection("Membership").get();
+      const membershipChecks = [];
 
       for (const categoryDoc of membershipSnapshot.docs) {
         const categoryID = categoryDoc.id;
-
         if (Number(categoryID) >= 1 && Number(categoryID) <= 6) continue;
 
-        const memberDoc = await db
-          .collection("Membership")
+        membershipChecks.push(
+          db.collection("Membership")
+            .doc(categoryID)
+            .collection("Members")
+            .doc(student.schoolID)
+            .get()
+            .then(async memberDoc => {
+              if (!memberDoc.exists) return null;
+
+              const possibleValidationIDs = [
+                `8-${categoryID}`,
+                `13-${categoryID}`,
+                `14-${categoryID}`,
+                `15-${categoryID}`,
+                `16-${categoryID}`
+              ];
+
+              const validationDocs = await Promise.all(
+                possibleValidationIDs.map(id =>
+                  db.collection("Validation")
+                    .doc(id)
+                    .collection(student.schoolID)
+                    .doc(semesterID)
+                    .get()
+                )
+              );
+
+              const validationDoc = validationDocs.find(doc => doc.exists);
+              const cleared = validationDoc &&
+                (validationDoc.data()?.requirements || []).length > 0 &&
+                validationDoc.data().requirements.every(r => r.status === true);
+
+              const displayName = cache.clubs[categoryID] || `Membership ${categoryID}`;
+              return { displayName, cleared };
+            })
+        );
+      }
+
+      const membershipResults = (await Promise.all(membershipChecks))
+        .filter(r => r !== null)
+        .map(({ displayName, cleared }) =>
+          `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
+        );
+
+      results.push(...membershipResults);
+      return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
+    }
+
+    // ============================================================
+    // 🔹 OFFICE 11 — Show Memberships (CategoryID 1–6 only)
+    // ============================================================
+    if (office === "11") {
+      const categoryIDs = ["1", "2", "3", "4", "5", "6"];
+
+      const membershipChecks = categoryIDs.map(async categoryID => {
+        const memberDoc = await db.collection("Membership")
           .doc(categoryID)
           .collection("Members")
           .doc(student.schoolID)
           .get();
 
-        if (!memberDoc.exists) continue;
+        if (!memberDoc.exists) return null;
 
-        const possibleValidationIDs = [
-          `8-${categoryID}`,
-          `13-${categoryID}`,
-          `14-${categoryID}`,
-          `15-${categoryID}`,
-          `16-${categoryID}`
-        ];
+        const validationDoc = await db.collection("Validation")
+          .doc(`8-${categoryID}`)
+          .collection(student.schoolID)
+          .doc(semesterID)
+          .get();
 
-        const validationDocs = await Promise.all(
-          possibleValidationIDs.map(id =>
-            db.collection("Validation")
-              .doc(id)
-              .collection(student.schoolID)
-              .doc(semesterID)
-              .get()
-          )
-        );
+        const cleared = validationDoc.exists &&
+          (validationDoc.data()?.requirements || []).length > 0 &&
+          validationDoc.data().requirements.every(r => r.status === true);
 
-        const validationDoc = validationDocs.find(doc => doc.exists);
-        let cleared = false;
-        if (validationDoc) {
-          const requirements = validationDoc.data()?.requirements || [];
-          cleared = requirements.length > 0 && requirements.every(r => r.status === true);
-        }
+        const displayName = cache.labs[categoryID] || `Lab ${categoryID}`;
+        return { displayName, cleared };
+      });
 
-        const displayName = clubsMap[categoryID] || `Membership ${categoryID}`;
-        results.push(
+      const results = (await Promise.all(membershipChecks))
+        .filter(r => r !== null)
+        .map(({ displayName, cleared }) =>
           `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
         );
-      }
 
-      console.log("Final results for OFFICE 12:", results.join(", "));
-      return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
+      return results.join(", ") || "<span style='color:gray;'>N/A</span>";
     }
 
     // ============================================================
@@ -229,99 +262,71 @@ async function getStudentPrereqs(student, userData) {
     if (office === "4") {
       const results = [];
 
-      // LAB prerequisite
-      const labSnapshot = await db
-        .collection("DataTable")
-        .doc("Lab")
-        .collection("LabDocs")
-        .get();
-      const labMap = {};
-      labSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        labMap[doc.id] = data.code || data.lab || doc.id;
-      });
+      // Program Coordinator
+      let pcCleared = false;
+      if (student.course) {
+        const pcDoc = await db.collection("Validation")
+          .doc(`11-${student.course}`)
+          .collection(student.schoolID)
+          .doc(semesterID)
+          .get();
 
-      let labCleared = false;
-      let labName = "No Lab";
-      let isMember = false;
+        if (pcDoc.exists) {
+          const requirements = pcDoc.data()?.requirements || [];
+          pcCleared = requirements.length > 0 && requirements.every(r => r.status === true);
+        }
+      }
+      results.push(`<span style="color:${pcCleared ? "green" : "red"}">Program Coordinator</span>`);
 
-      for (const categoryID of Object.keys(labMap)) {
-        const memberDoc = await db
-          .collection("Membership")
+      // Department-specific council
+      const councilMap = { "2": "11", "3": "28", "4": "36", "5": "1" };
+      const clubID = councilMap[department];
+      
+      if (clubID && (student.clubs || []).includes(clubID)) {
+        const councilDoc = await db.collection("Validation")
+          .doc(`13-${clubID}`)
+          .collection(student.schoolID)
+          .doc(semesterID)
+          .get();
+
+        const councilCleared = councilDoc.exists &&
+          (councilDoc.data()?.requirements || []).length > 0 &&
+          councilDoc.data().requirements.every(r => r.status === true);
+
+        const councilName = cache.clubs[clubID] || "Council";
+        results.push(`<span style="color:${councilCleared ? "green" : "red"}">${councilName}</span>`);
+      }
+
+      // Lab prerequisite (parallel check all labs)
+      const labChecks = Object.keys(cache.labs).map(async categoryID => {
+        const memberDoc = await db.collection("Membership")
           .doc(categoryID)
           .collection("Members")
           .doc(student.schoolID)
           .get();
 
-        if (memberDoc.exists) {
-          isMember = true;
-          labName = labMap[categoryID];
+        if (!memberDoc.exists) return null;
 
-          const validationDoc = await db
-            .collection("Validation")
-            .doc(`8-${categoryID}`)
-            .collection(student.schoolID)
-            .doc(semesterID)
-            .get();
+        const validationDoc = await db.collection("Validation")
+          .doc(`8-${categoryID}`)
+          .collection(student.schoolID)
+          .doc(semesterID)
+          .get();
 
-          if (validationDoc.exists) {
-            const requirements = validationDoc.data()?.requirements || [];
-            labCleared = requirements.length > 0 && requirements.every(r => r.status === true);
-          }
-          break;
-        }
-      }
+        const cleared = validationDoc.exists &&
+          (validationDoc.data()?.requirements || []).length > 0 &&
+          validationDoc.data().requirements.every(r => r.status === true);
 
-      results.push(`<span style="color:${isMember ? (labCleared ? "green" : "red") : "green"}">${labName}</span>`);
+        return { labName: cache.labs[categoryID], cleared };
+      });
 
-      // DEPARTMENT-SPECIFIC COUNCIL + PROGRAM COORDINATOR
-      if (department === "2") await handleCouncilAndPC("11", "11-2");
-      if (department === "3") await handleCouncilAndPC("28", "11-3");
-      if (department === "4") await handleCouncilAndPC("36", null);
-      if (department === "5") await handleCouncilAndPC("1", null);
-
-      async function handleCouncilAndPC(clubID, pcID) {
-        if ((student.clubs || []).includes(clubID)) {
-          let councilCleared = false;
-          const councilDoc = await db
-            .collection("Validation")
-            .doc(`13-${clubID}`)
-            .collection(student.schoolID)
-            .doc(semesterID)
-            .get();
-
-          if (councilDoc.exists) {
-            const requirements = councilDoc.data()?.requirements || [];
-            councilCleared = requirements.length > 0 && requirements.every(r => r.status === true);
-          }
-
-          const councilData = await db
-            .collection("DataTable")
-            .doc("Clubs")
-            .collection("ClubsDocs")
-            .doc(clubID)
-            .get();
-          const councilName = councilData.exists ? councilData.data().code || "Council" : "Council";
-
-          results.push(`<span style="color:${councilCleared ? "green" : "red"}">${councilName}</span>`);
-        }
-
-        if (pcID) {
-          let pcCleared = false;
-          const pcDoc = await db
-            .collection("Validation")
-            .doc(pcID)
-            .collection(student.schoolID)
-            .doc(semesterID)
-            .get();
-
-          if (pcDoc.exists) {
-            const requirements = pcDoc.data()?.requirements || [];
-            pcCleared = requirements.length > 0 && requirements.every(r => r.status === true);
-          }
-
-          results.push(`<span style="color:${pcCleared ? "green" : "red"}">Program Coordinator</span>`);
-        }
+      const labResults = (await Promise.all(labChecks)).filter(r => r !== null);
+      
+      if (labResults.length > 0) {
+        const { labName, cleared } = labResults[0];
+        results.push(`<span style="color:${cleared ? "green" : "red"}">${labName}</span>`);
+      } else {
+        results.push(`<span style="color:green">No Lab</span>`);
       }
 
       return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
@@ -331,85 +336,47 @@ async function getStudentPrereqs(student, userData) {
     // 🔹 OFFICE 6 — Department-specific records (4 & 7 only)
     // ============================================================
     if (office === "6") {
-      const results = [];
-
-      // --- Map department code to Firestore doc ID ---
-      let departmentID = "";
-      if (student.department) {
-        const deptSnapshot = await db
-          .collection("DataTable")
-          .doc("Department")
-          .collection("DepartmentDocs")
-          .where("code", "==", student.department)
-          .limit(1)
-          .get();
-
-        if (!deptSnapshot.empty) {
-          departmentID = deptSnapshot.docs[0].id;
-        } else {
-          console.warn(`❌ Department code "${student.department}" not found in Firestore`);
-        }
+      const departmentID = cache.departments.byCode[student.department];
+      if (!departmentID) {
+        return "<span style='color:gray;'>No department</span>";
       }
 
-      // Only check 4-department and 7-department
-      const offices = [];
-      if (departmentID) {
-        offices.push(`4-${departmentID}`, `7-${departmentID}`);
-      }
+      const offices = [`4-${departmentID}`, `7-${departmentID}`];
 
-      console.log("=== OFFICE 6 PREREQS DEBUG ===");
-      console.log("Offices to check (Firestore IDs):", offices);
+      const validations = await Promise.all(
+        offices.map(async off => {
+          const validationDoc = await db.collection("Validation")
+            .doc(off)
+            .collection(student.schoolID)
+            .doc(semesterID)
+            .get();
 
-      // ------------------ Check Office prerequisites ------------------
-      for (const off of offices) {
-        let cleared = false;
+          const cleared = validationDoc.exists &&
+            (validationDoc.data()?.requirements || []).length > 0 &&
+            validationDoc.data().requirements.every(r => r.status === true);
 
-        const validationDoc = await db
-          .collection("Validation")
-          .doc(off)
-          .collection(student.schoolID)
-          .doc(semesterID)
-          .get();
+          const [officeNum] = off.split("-");
+          const displayName = cache.offices[officeNum] || `Office ${officeNum}`;
 
-        if (validationDoc.exists) {
-          const requirements = validationDoc.data()?.requirements || [];
-          cleared = requirements.length > 0 && requirements.every(r => r.status === true);
-        } else {
-          console.warn(`❌ Validation doc NOT found for ${off}`);
-        }
+          return { displayName, cleared };
+        })
+      );
 
-        // ------------------ Get readable office name ------------------
-        const [officeNum, deptNum] = off.split("-");
-        const [officeDoc, deptDoc] = await Promise.all([
-          db.collection("DataTable").doc("Office").collection("OfficeDocs").doc(officeNum).get(),
-          db.collection("DataTable").doc("Department").collection("DepartmentDocs").doc(deptNum).get()
-        ]);
+      const results = validations.map(({ displayName, cleared }) =>
+        `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
+      );
 
-        const officeName = officeDoc.exists && officeDoc.data().office
-          ? officeDoc.data().office
-          : `Office ${officeNum}`;
-
-        const displayName = `${officeName}`;
-
-        results.push(
-          `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
-        );
-      }
-
-      console.log("Final results for OFFICE 6:", results.join(", "));
       return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
     }
 
     // ============================================================
-    // 🔹 OFFICE 5 — Student Org prerequisites (UPDATED)
+    // 🔹 OFFICE 5 — Student Org prerequisites
     // ============================================================
     if (office === "5") {
-      // Always include 13-39
       const mainPrereqs = ["13-39"];
 
-      // ✅ Only include 13-40 if student is a member of Membership categoryID 40
-      const member40Doc = await db
-        .collection("Membership")
+      // Check membership 40
+      const member40Doc = await db.collection("Membership")
         .doc("40")
         .collection("Members")
         .doc(student.schoolID)
@@ -419,59 +386,44 @@ async function getStudentPrereqs(student, userData) {
         mainPrereqs.push("13-40");
       }
 
-      // Clubs that need to be checked
+      // Add club prereqs
       const clubCheckIDs = ["1", "11", "18", "28", "36"];
       const matchedClubs = (student.clubs || []).filter(c => clubCheckIDs.includes(c));
-
-      // Prefix each club with '1-' for Validation lookup
       const matchedClubPrereqs = matchedClubs.map(c => `1-${c}`);
-
-      // Combine main prereqs with club prereqs
       const allPrereqs = [...mainPrereqs, ...matchedClubPrereqs];
 
-      // Get all club display names
-      const clubsSnapshot = await db
-        .collection("DataTable")
-        .doc("Clubs")
-        .collection("ClubsDocs")
-        .get();
+      // Parallel validation checks
+      const validations = await Promise.all(
+        allPrereqs.map(async prID => {
+          const prereqDoc = await db.collection("Validation")
+            .doc(prID)
+            .collection(student.schoolID)
+            .doc(semesterID)
+            .get();
 
-      const clubsMap = {};
-      clubsSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        clubsMap[doc.id] = data.code || data.name || doc.id;
-      });
+          const cleared = prereqDoc.exists &&
+            ((prereqDoc.data()?.requirements || []).length === 0 ||
+             prereqDoc.data().requirements.every(r => r.status === true));
 
-      const results = [];
-      for (const prID of allPrereqs) {
-        let cleared = false;
-        const prereqDoc = await db
-          .collection("Validation")
-          .doc(prID)
-          .collection(student.schoolID)
-          .doc(semesterID)
-          .get();
+          // Get display name
+          let displayName = prID;
+          if (prID.startsWith("13-")) {
+            displayName = cache.clubs[prID.replace("13-", "")] || prID;
+          } else if (prID.startsWith("1-")) {
+            displayName = cache.clubs[prID.replace("1-", "")] || prID;
+          }
 
-        if (prereqDoc.exists) {
-          const requirements = prereqDoc.data()?.requirements || [];
-          cleared = requirements.length === 0 || requirements.every(r => r.status === true);
-        }
+          return { displayName, cleared };
+        })
+      );
 
-        // Display name: remove prefix '13-' or '1-' for clubs
-        let displayName = prID;
-        if (prID.startsWith("13-")) {
-          displayName = clubsMap[prID.replace("13-", "")] || prID;
-        } else if (prID.startsWith("1-")) {
-          displayName = clubsMap[prID.replace("1-", "")] || prID;
-        }
-
-        results.push(`<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`);
-      }
+      const results = validations.map(({ displayName, cleared }) =>
+        `<span style="color:${cleared ? "green" : "red"}">${displayName}</span>`
+      );
 
       return results.join(", ") || "<span style='color:gray;'>No prereqs</span>";
     }
 
-    // 🔹 Default
     return "N/A";
 
   } catch (err) {
@@ -485,11 +437,12 @@ async function populatePrerequisites(students, userDataObj) {
   if (!students || !userDataObj) return;
 
   const cells = document.querySelectorAll(".prereq-cell");
-
-  for (const cell of cells) {
+  
+  // Process all students in parallel
+  const updatePromises = Array.from(cells).map(async cell => {
     const studentID = cell.getAttribute("data-studentid");
-    const student = students.find((s) => s.schoolID === studentID);
-    if (!student) continue;
+    const student = students.find(s => s.schoolID === studentID);
+    if (!student) return;
 
     try {
       const prereqHTML = await getStudentPrereqs(student, userDataObj);
@@ -498,5 +451,19 @@ async function populatePrerequisites(students, userDataObj) {
       console.error("Error loading prerequisites for", studentID, err);
       cell.innerHTML = "<span style='color:gray;'>Error</span>";
     }
-  }
+  });
+
+  await Promise.all(updatePromises);
+  console.log("✅ All prerequisites loaded");
+}
+
+// -------------------- Clear Cache (call when data changes) --------------------
+function clearCache() {
+  cache.semester = null;
+  cache.clubs = null;
+  cache.labs = null;
+  cache.departments = null;
+  cache.offices = null;
+  cache.initialized = false;
+  console.log("🗑️ Cache cleared");
 }

@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    const doc = await db.collection('Students').doc(studentId).get();
+    const doc = await db.collection('/User/Students/StudentsDocs').doc(studentId).get();
     if (!doc.exists) {
       alert('Student record not found.');
       return;
@@ -67,11 +67,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('profileFullName').textContent = `${student.firstName} ${student.lastName}` || 'N/A';
     document.getElementById('profileEmail').textContent = student.institutionalEmail || 'N/A';
     document.getElementById('profileYearLevel').textContent = student.yearLevel || 'N/A';
-
+   // 🎓 Year Level from YearLevelDocs
+    let yearLevelName = student.yearLevel || 'N/A';
+    if (student.yearLevel) {
+      const yearDoc = await db.collection('/DataTable/YearLevel/YearLevelDocs').doc(student.yearLevel).get();
+      if (yearDoc.exists) {
+        yearLevelName = yearDoc.data().yearLevel || student.yearLevel;
+      }
+    }
+    document.getElementById('profileYearLevel').textContent = yearLevelName;
     // 🎓 Course Name
     let courseName = student.course;
     if (student.course) {
-      const courseDoc = await db.collection('courseTable').doc(student.course).get();
+      const courseDoc = await db.collection('/DataTable/Course/CourseDocs').doc(student.course).get();
       if (courseDoc.exists) {
         courseName = courseDoc.data().course || student.course;
       }
@@ -81,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🏛 Department Name
     let departmentName = student.department;
     if (student.department) {
-      const deptDoc = await db.collection('departmentTable').doc(student.department).get();
+      const deptDoc = await db.collection('/DataTable/Department/DepartmentDocs').doc(student.department).get();
       if (deptDoc.exists) {
         departmentName = deptDoc.data().department || student.department;
       }
@@ -94,9 +102,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (Array.isArray(student.clubs)) {
       const clubNamesArr = [];
       for (const clubId of student.clubs) {
-        const clubDoc = await db.collection('acadClubTable').doc(clubId).get();
+        const clubDoc = await db.collection('/DataTable/Clubs/ClubsDocs').doc(clubId).get();
         if (clubDoc.exists) {
-          clubNamesArr.push(clubDoc.data().club);
+          clubNamesArr.push(clubDoc.data().code);
         }
       }
       clubNames = clubNamesArr.length ? clubNamesArr.join(", ") : "N/A";
