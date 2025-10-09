@@ -110,8 +110,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     try {
-      // 🔹 Reference the student document
-      const studentDocRef = db.collection("Students").doc(schoolID);
+      // 🔹 Reference the student document (updated collection path)
+      const studentDocRef = db.collection("/User/Students/StudentsDocs").doc(schoolID);
       const docSnapshot = await studentDocRef.get();
 
       if (!docSnapshot.exists) {

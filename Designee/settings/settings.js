@@ -1,4 +1,3 @@
-
 // ✅ Initialize Firebase v8 (only once)
 if (!firebase.apps.length) {
   firebase.initializeApp({
@@ -60,29 +59,29 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // 🔽 Display username dynamically
- const usernameDisplay = document.getElementById("usernameDisplay");
-let displayFullName = "";
-let userRole = "";
-let userDataObj = null;
+  const usernameDisplay = document.getElementById("usernameDisplay");
+  let displayFullName = "";
+  let userRole = "";
+  let userDataObj = null;
 
-const userDataString = localStorage.getItem("userData");
-if (userDataString) {
-  try {
-    userDataObj = JSON.parse(userDataString);
-    const firstName = userDataObj.firstName || "";
-    const lastName = userDataObj.lastName || "";
-    displayFullName = `${firstName} ${lastName}`.trim();
-    userRole = userDataObj.role || "";
-  } catch (err) {
-    console.error("Error parsing userData:", err);
+  const userDataString = localStorage.getItem("userData");
+  if (userDataString) {
+    try {
+      userDataObj = JSON.parse(userDataString);
+      const firstName = userDataObj.firstName || "";
+      const lastName = userDataObj.lastName || "";
+      displayFullName = `${firstName} ${lastName}`.trim();
+      userRole = userDataObj.role || "";
+    } catch (err) {
+      console.error("Error parsing userData:", err);
+    }
   }
-}
 
-if (usernameDisplay) {
-  usernameDisplay.textContent = displayFullName;
-} else {
-  console.warn("usernameDisplay element not found");
-}
+  if (usernameDisplay) {
+    usernameDisplay.textContent = displayFullName;
+  } else {
+    console.warn("usernameDisplay element not found");
+  }
 
   // 🔽 Change Password Logic
   const currentPasswordInput = document.getElementById("currentPassword");
@@ -124,16 +123,16 @@ if (usernameDisplay) {
 
       try {
         // ✅ Select collection & ID field
-        let collectionName = "";
+        let collectionPath = "";
         let fieldName = "";
         let docValue = "";
 
         if (userRole === "designee") {
-          collectionName = "Designees";
+          collectionPath = "User/Designees/DesigneesDocs";
           fieldName = "userID";
           docValue = userDataObj.userID;
         } else if (userRole === "staff") {
-          collectionName = "staffTable";
+          collectionPath = "User/Designees/StaffDocs";
           fieldName = "id";
           docValue = userDataObj.id;
         } else {
@@ -142,7 +141,7 @@ if (usernameDisplay) {
         }
 
         // ✅ Build query with multiple filters to avoid duplicate ID conflicts
-        let queryRef = db.collection(collectionName).where(fieldName, "==", docValue);
+        let queryRef = db.collection(collectionPath).where(fieldName, "==", docValue);
 
         if (userDataObj.office) {
           queryRef = queryRef.where("office", "==", userDataObj.office);
@@ -190,4 +189,3 @@ if (usernameDisplay) {
     });
   }
 });
-

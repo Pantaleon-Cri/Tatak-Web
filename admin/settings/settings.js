@@ -26,11 +26,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Close dropdown when clicking outside
     document.addEventListener("click", (event) => {
-      if (!dropdownToggle.contains(event.target) && !dropdownMenu.contains(event.target)) {
+      if (
+        !dropdownToggle.contains(event.target) &&
+        !dropdownMenu.contains(event.target)
+      ) {
         dropdownMenu.style.display = "none";
       }
     });
   }
+
   // 🔁 Display Admin Username / ID
   const usernameDisplay = document.getElementById("usernameDisplay");
   const currentAdminIDSpan = document.getElementById("currentAdminID");
@@ -42,11 +46,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (currentAdminIDSpan) currentAdminIDSpan.textContent = displayID;
   };
 
-  if (storedAdminID) {
-    updateAdminUI(storedAdminID);
-  } else {
-    updateAdminUI("Unknown");
-  }
+  updateAdminUI(storedAdminID || "Unknown");
 
   // 🔁 Modal handling
   const openBtn = document.getElementById("openModalBtn");
@@ -61,13 +61,17 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // 🔁 Change Password (Firestore only)
+  // 🔁 Change Password (Firestore)
   const changePasswordBtn = document.getElementById("changePasswordBtn");
   if (changePasswordBtn) {
     changePasswordBtn.addEventListener("click", async () => {
-      const currentPassword = document.getElementById("currentPassword").value.trim();
+      const currentPassword = document
+        .getElementById("currentPassword")
+        .value.trim();
       const newPassword = document.getElementById("newPassword").value.trim();
-      const confirmPassword = document.getElementById("confirmPassword").value.trim();
+      const confirmPassword = document
+        .getElementById("confirmPassword")
+        .value.trim();
 
       if (!storedAdminID) {
         alert("No admin is logged in.");
@@ -87,7 +91,8 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       try {
-        const docRef = db.collection("adminAccount").doc(storedAdminID);
+        // ✅ Firestore reference to Admin document
+        const docRef = db.collection("User").doc("Admin");
         const docSnap = await docRef.get();
 
         if (!docSnap.exists) {
@@ -101,21 +106,19 @@ document.addEventListener("DOMContentLoaded", function () {
           return;
         }
 
-        // ✅ Update Firestore password
         await docRef.update({ password: newPassword });
         alert("Password changed successfully!");
 
-        // ✅ Clear fields
+        // Clear input fields
         document.getElementById("currentPassword").value = "";
         document.getElementById("newPassword").value = "";
         document.getElementById("confirmPassword").value = "";
 
-        // ✅ Close modal (if open)
+        // Close modal
         if (modal) modal.style.display = "none";
 
-        // ✅ Refresh UI so hidden password display is updated
+        // Refresh UI
         updateAdminUI(storedAdminID);
-
       } catch (error) {
         console.error("Error changing password:", error);
         alert(error.message || "Something went wrong.");
@@ -123,49 +126,44 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // 🔁 Change Admin ID (Firestore doc move)
-const changeAdminIDBtn = document.getElementById("changeAdminIDBtn");
-if (changeAdminIDBtn) {
-  changeAdminIDBtn.addEventListener("click", async () => {
-    const newAdminID = document.getElementById("newAdminID").value.trim();
-    if (!newAdminID) {
-      alert("Enter a new Admin ID.");
-      return;
-    }
-
-    try {
-      const oldDocRef = db.collection("adminAccount").doc(storedAdminID);
-      const oldDocSnap = await oldDocRef.get();
-      if (!oldDocSnap.exists) {
-        alert("Admin account not found.");
+  // 🔁 Change Admin ID (update field only, doc remains Admin)
+  const changeAdminIDBtn = document.getElementById("changeAdminIDBtn");
+  if (changeAdminIDBtn) {
+    changeAdminIDBtn.addEventListener("click", async () => {
+      const newAdminID = document.getElementById("newAdminID").value.trim();
+      if (!newAdminID) {
+        alert("Enter a new Admin ID.");
         return;
       }
 
-      const data = oldDocSnap.data();
+      try {
+        const docRef = db.collection("User").doc("Admin");
+        const docSnap = await docRef.get();
 
-      // ✅ Update the adminID field along with moving the doc
-      data.adminID = newAdminID;
+        if (!docSnap.exists) {
+          alert("Admin account not found.");
+          return;
+        }
 
-      // Create new doc with updated ID + preserve data
-      await db.collection("adminAccount").doc(newAdminID).set(data);
-      await oldDocRef.delete();
+        const data = docSnap.data();
+        data.adminID = newAdminID; // ✅ Update field only
 
-      // Update localStorage + UI
-      localStorage.setItem("adminID", newAdminID);
-      storedAdminID = newAdminID;
-      updateAdminUI(newAdminID);
+        await docRef.update(data); // Keep document ID as "Admin"
 
-      // ✅ Clear field
-      document.getElementById("newAdminID").value = "";
+        // Update localStorage + UI
+        localStorage.setItem("adminID", newAdminID);
+        storedAdminID = newAdminID;
+        updateAdminUI(newAdminID);
 
-      alert("Admin ID changed successfully!");
-    } catch (error) {
-      console.error("Error changing Admin ID:", error);
-      alert(error.message || "Something went wrong.");
-    }
-  });
-}
+        document.getElementById("newAdminID").value = "";
 
+        alert("Admin ID updated successfully!");
+      } catch (error) {
+        console.error("Error changing Admin ID:", error);
+        alert(error.message || "Something went wrong.");
+      }
+    });
+  }
 
   // 🔁 Logout handling
   const logoutBtn = document.getElementById("logoutBtn");
