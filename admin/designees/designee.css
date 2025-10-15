@@ -336,7 +336,7 @@ html, body {
 .card p {
   font-size: 24px;
   font-weight: bold;
-  color: #195212;
+  color: #26a69a;
 }
 
 /* =======================
@@ -483,4 +483,29 @@ html, body {
   .logs-container {
     margin-top: 15px;
   }
+}
+
+/* =======================
+   ACTION BUTTONS (SEND + DELETE)
+======================= */
+.status-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  font-size: 14px;
+}
+
+.status-btn:hover {
+  background-color: #218838;
+}
+
+.status-btn i {
+  font-size: 14px;
 }

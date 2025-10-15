@@ -170,7 +170,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         <td>${designee.institutionalEmail || ""}</td>
         <td class="status-cell">${designee.status || "Pending"}</td>
         <td>
-          <button class="status-btn" data-id="${designee.id}" data-name="${designee.firstName} ${designee.lastName}" data-email="${designee.institutionalEmail}">Send Approval Email</button>
+          <button class="status-btn" data-id="${designee.id}" data-name="${designee.firstName} ${designee.lastName}" data-email="${designee.institutionalEmail}">
+          <i class="fa-solid fa-paper-plane"></i>
+          </button>
           <button class="action-btn delete" data-id="${designee.id}">
             <i class="fas fa-trash-alt"></i>
           </button>
