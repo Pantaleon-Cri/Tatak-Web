@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Forgot Password — Students</title>
+  <meta name="description" content="Request a password reset link by entering your account email." />
+  <link rel="stylesheet" href="forgot.css" />
+  <link rel="icon" href="data:;base64,iVBORw0KGgo="> 
+
+  <!-- Firebase v8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+</head>
+<body>
+<main class="container">
+  <header>
+    <h1>Forgot your password?</h1>
+    <p class="lead">Enter your school ID and email to receive a reset link.</p>
+  </header>
+
+  <form id="forgot-form" novalidate>
+    <div class="field">
+      <label for="schoolId">School ID</label>
+      <input id="schoolId" type="text" placeholder="Enter your school ID" required class="focus-ring" />
+    </div>
+    <div class="field">
+      <label for="email">Email address</label>
+      <input id="email" type="email" placeholder="you@school.com" required class="focus-ring" />
+      <div class="tip">We will send a one-time link — it expires after 1 hour.</div>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn">Send reset link</button>
+    </div>
+    <div id="msg" role="status" aria-live="polite" class="message"></div>
+    <p class="notice">For security, we do not reveal whether an account exists.</p>
+  </form>
+
+  <div class="footer">
+    Remembered your password? <a href="login/student_login.html">Sign in</a>
+  </div>
+</main>
+
+<script>
+  // Firebase v8 configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
+    authDomain: "tatak-mobile-web.firebaseapp.com",
+    projectId: "tatak-mobile-web",
+    storageBucket: "tatak-mobile-web.appspot.com",
+    messagingSenderId: "771908675869",
+    appId: "1:771908675869:web:88e68ca51ed7ed4da019f4",
+    measurementId: "G-CENPP29LKQ"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  (function() {
+    const form = document.getElementById('forgot-form');
+    const schoolIdInput = document.getElementById('schoolId');
+    const emailInput = document.getElementById('email');
+    const msg = document.getElementById('msg');
+
+    function showMessage(text, type){
+      msg.textContent = text;
+      msg.className = 'message show ' + (type === 'error' ? 'error' : 'success');
+    }
+
+    function clearMessage(){
+      msg.textContent = '';
+      msg.className = 'message';
+    }
+
+    function validateEmail(value){
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    }
+
+    form.addEventListener('submit', async function(e){
+      e.preventDefault();
+      clearMessage();
+
+      const schoolId = schoolIdInput.value.trim();
+      const email = emailInput.value.trim();
+
+      if (!schoolId) { showMessage('Please enter your school ID.', 'error'); schoolIdInput.focus(); return; }
+      if (!email) { showMessage('Please enter your email address.', 'error'); emailInput.focus(); return; }
+      if (!validateEmail(email)) { showMessage('Please provide a valid email address.', 'error'); emailInput.focus(); return; }
+
+      try {
+        // Query Firestore for matching student
+        const snapshot = await db.collection('User').doc('Students')
+          .collection('StudentsDocs')
+          .where('schoolId', '==', schoolId)
+          .where('institutionalEmail', '==', email)
+          .get();
+
+        // Always show generic success message
+        showMessage('If an account exists, a reset link has been sent.', 'success');
+
+        if (!snapshot.empty) {
+          const student = snapshot.docs[0];
+          const firstName = student.data().firstName;
+          const schoolId = student.data().schoolId;
+
+          // Build the reset password link with query parameter
+          const link = `http://127.0.0.1:5500/change_password.html?schoolId=${schoolId}`;
+
+          // Call Cloud Function to send reset email
+          await fetch("http://localhost:5001/tatak-mobile-web/us-central1/sendResetEmail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, firstName, link })
+          })
+          .then(res => res.json())
+          .then(data => console.log("Reset email sent:", data))
+          .catch(err => console.error("Cloud Function error:", err));
+        }
+
+        form.reset();
+      } catch (err) {
+        console.error(err);
+        showMessage('Network error. Try again.', 'error');
+      }
+    });
+  })();
+</script>
+</body>
+</html>
