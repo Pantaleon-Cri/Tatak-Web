@@ -22,7 +22,9 @@ async function syncStudentCourseInfo(studentDocId, studentData, coursesMap, club
     if (coursesMap[studentData.course]) {
       courseDoc = coursesMap[studentData.course];
     } else {
-      courseDoc = Object.values(coursesMap).find(c => String(c.course).trim() === String(studentData.course).trim());
+      courseDoc = Object.values(coursesMap).find(c =>
+        String(c.course).trim() === String(studentData.course).trim()
+      );
     }
   }
 
@@ -71,9 +73,7 @@ async function syncStudentCourseInfo(studentDocId, studentData, coursesMap, club
         deptCandidates.includes(String(d.department))
       );
 
-      if (deptDoc) {
-        updates.department = deptDoc.id;
-      }
+      if (deptDoc) updates.department = deptDoc.id;
     }
   }
 
@@ -121,6 +121,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const tbody = document.querySelector(".log-table tbody");
   if (!tbody) return console.error("❌ Table body not found");
 
+  let students = []; // ✅ global reference for modals
+
   try {
     // --- Fetch Lookup Tables ---
     const [clubsSnap, coursesSnap, departmentsSnap, yearLevelsSnap] = await Promise.all([
@@ -139,7 +141,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- Real-time Student Listener ---
     db.collection("/User/Students/StudentsDocs").onSnapshot(snapshot => {
-      const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       renderTable(students, coursesMap, departmentsMap, yearLevelsMap, clubsMap);
     });
 
@@ -186,7 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
     }
 
-    // ==================== Edit Modal ====================
+    // ==================== Edit & Delete Modal ====================
     const editModal = document.getElementById("editModalOverlay");
     const deleteModal = document.getElementById("deleteModalOverlay");
     const editStudentId = document.getElementById("editStudentId");
@@ -199,10 +201,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- Edit Button ---
     tbody.addEventListener("click", (e) => {
-      if (e.target.closest(".edit")) {
-        const id = e.target.closest(".edit").dataset.id;
+      const editBtn = e.target.closest(".edit");
+      if (editBtn) {
+        const id = editBtn.dataset.id;
         currentEditId = id;
-        const student = { ...students.find(s => s.id === id) };
+        const student = students.find(s => s.id === id);
         if (!student) return;
         editStudentId.value = student.schoolId || "";
         editStudentName.value = `${student.firstName || ""} ${student.lastName || ""}`;
@@ -210,7 +213,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    editCancelBtn.addEventListener("click", () => { editModal.style.display = "none"; });
+    editCancelBtn.addEventListener("click", () => {
+      editModal.style.display = "none";
+    });
 
     editSaveBtn.addEventListener("click", async () => {
       if (!currentEditId) return;
@@ -229,10 +234,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    // ==================== Delete Modal ====================
+    // --- Delete Button ---
     tbody.addEventListener("click", (e) => {
-      if (e.target.closest(".delete")) {
-        currentDeleteId = e.target.closest(".delete").dataset.id;
+      const delBtn = e.target.closest(".delete");
+      if (delBtn) {
+        currentDeleteId = delBtn.dataset.id;
         deleteModal.style.display = "flex";
       }
     });
@@ -250,25 +256,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         alert("❌ Failed to delete student");
       }
     });
-// ============================ Download Template ============================
-document.getElementById("DownloadTemplateBtn").addEventListener("click", () => {
-  // Create sample data (header only)
-  const templateData = [
-    { "Student ID": "e.g (2022309)", "Course": "(CourseID)", "Year Level": "(YearID)" }
-  ];
 
-  // Convert JSON to worksheet
-  const worksheet = XLSX.utils.json_to_sheet(templateData);
-
-  // Create a new workbook and append the sheet
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
-
-  // Generate Excel file
-  XLSX.writeFile(workbook, "Student_Update_Template.xlsx");
-
-  alert("📥 Template downloaded successfully!");
-});
+    // ==================== Download Template ====================
+    document.getElementById("DownloadTemplateBtn").addEventListener("click", () => {
+      const templateData = [
+        { "Student ID": "e.g (2022309)", "Course": "(CourseID)", "Year Level": "(YearID)" }
+      ];
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+      XLSX.writeFile(workbook, "Student_Update_Template.xlsx");
+      alert("📥 Template downloaded successfully!");
+    });
 
     // ==================== Excel Upload ====================
     const updateBtn = document.getElementById("updateStudentInfoBtn");

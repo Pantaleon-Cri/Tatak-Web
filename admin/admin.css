@@ -8,6 +8,7 @@ html, body {
   height: 100%;
   max-width: 100%;
   overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* =======================
@@ -31,12 +32,16 @@ html, body {
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .logo {
   width: 48px;
   height: 48px;
   object-fit: contain;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .title {
@@ -46,6 +51,9 @@ html, body {
   font-size: 18px;
   color: #333;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .system-name {
@@ -57,44 +65,46 @@ html, body {
 }
 
 .header-right {
-  position: relative;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: left;
   margin-right: 50px;
-  max-width: 100%;
+  gap: 8px;
+  position: relative;
+  z-index: 2;
   overflow: visible;
+  min-width: 0;
+  flex-shrink: 1;
+  justify-content: flex-end;
 }
 
 /* =======================
    USER INFO (HEADER)
 ======================= */
 .user-info {
-  text-align: right;
+  text-align: left;
   line-height: 1.1;
+  max-width: 150px;
+  overflow: hidden;
+  flex-shrink: 1;
+  min-width: 40px;
 }
 
 .username {
   font-weight: 600;
   color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 .email {
   font-size: 12px;
   color: #777;
-}
-
-
-
-.status {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 10px;
-  height: 10px;
-  background-color: green;
-  border: 2px solid #fff;
-  border-radius: 50%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 /* =======================
@@ -106,26 +116,29 @@ html, body {
   gap: 8px;
   cursor: pointer;
   position: relative;
-  z-index: 2;
-  max-width: 100%;
-  overflow: visible;
+  z-index: 10; /* raised for safety */
+  min-width: 0;
 }
 
 .dropdown-menu {
   position: absolute;
   top: 100%;
   right: 0;
+  margin-top: 10px;
   background-color: #fff;
-  border: 1px solid #ddd;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  border-radius: 6px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   padding: 8px 0;
-  display: none;
   min-width: 160px;
-  z-index: 100;
-  box-sizing: border-box;
-  overflow: hidden;
+  display: none;
+  z-index: 2000; /* ensures visible above header */
+  overflow: visible;
   white-space: nowrap;
+  animation: fadeInUp 0.25s ease;
+}
+
+.dropdown-menu.show {
+  display: block;
 }
 
 .dropdown-menu a {
@@ -133,21 +146,36 @@ html, body {
   padding: 10px 16px;
   text-decoration: none;
   color: #333;
-  transition: background 0.2s;
+  font-size: 14px;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .dropdown-menu a:hover {
-  background-color: #f0f0f0;
+  background-color: #f3f4f6;
+  color: #000;
 }
 
 .dropdown-arrow {
   font-size: 14px;
   color: #555;
   transition: transform 0.3s ease;
+  flex-shrink: 0;
 }
 
 .user-dropdown.active .dropdown-arrow {
   transform: rotate(180deg);
+}
+
+/* Smooth fade animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* =======================
@@ -155,10 +183,7 @@ html, body {
 ======================= */
 .content-wrapper {
   display: flex;
-  flex-grow: 1;
-  min-height: calc(100vh - 72px); /* adjust if header height differs */
-  margin-top: 0;
-  padding-top: 0;
+  min-height: calc(100vh - 72px);
 }
 
 .logs-container {
@@ -180,14 +205,19 @@ html, body {
 }
 
 .activity-log ul {
-  list-style-type: disc;
-  padding-left: 20px;
+  list-style: none;
+  padding-left: 0;
 }
 
 .activity-log ul li {
-  margin-bottom: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
   font-size: 14px;
   color: #333;
+}
+
+.activity-log ul li:last-child {
+  border-bottom: none;
 }
 
 /* =======================
@@ -202,22 +232,10 @@ html, body {
   flex-shrink: 0;
   overflow-y: auto;
   position: fixed;
-  top: 72px; /* ✅ below header */
+  top: 72px;
   left: 0;
-  height: calc(100vh - 72px); /* ✅ fits under header */
-}
-
-
-.sidebar-header {
-  text-align: center;
-  margin-bottom: 24px;
-}
-
-.sidebar-header img {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  margin-bottom: 8px;
+  height: calc(100vh - 72px);
+  transition: transform 0.3s ease;
 }
 
 .sidebar nav ul {
@@ -242,7 +260,6 @@ html, body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Active & hover state */
 .sidebar nav ul li a.active,
 .sidebar nav ul li a:hover {
   background-color: #008000;
@@ -266,10 +283,6 @@ html, body {
   color: #fff;
 }
 
-nav ul ul.submenu > li:first-child {
-  margin-top: 8px;
-}
-
 .submenu {
   display: none;
   padding-left: 20px;
@@ -284,22 +297,15 @@ nav ul ul.submenu > li:first-child {
   transform: rotate(180deg);
 }
 
-.submenu .has-submenu > a {
-  padding-left: 10px;
-}
-
-.submenu .submenu {
-  padding-left: 16px;
-}
-
 /* =======================
    MAIN CONTENT STYLES
 ======================= */
 .main {
   flex: 1;
   padding: 32px;
-  margin-left: 250px; /* ✅ Push main content to the right of fixed sidebar */
+  margin-left: 250px;
   box-sizing: border-box;
+  width: calc(100% - 250px);
 }
 
 /* =======================
@@ -334,69 +340,6 @@ nav ul ul.submenu > li:first-child {
 }
 
 /* =======================
-   ACTIVITY LOG STYLES
-======================= */
-.activity-log {
-  background-color: #ffffff;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.activity-log h3 {
-  font-size: 20px;
-  color: #333;
-  margin-bottom: 16px;
-}
-
-.activity-log ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.activity-log ul li {
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
-  color: #555;
-}
-
-/* =======================
-   RESPONSIVE STYLES - DESKTOP ONLY
-======================= */
-@media (max-width: 1440px) {
-  .main {
-    padding: 24px;
-  }
-
-  .cards {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  }
-}
-
-@media (max-width: 1200px) {
-  .main {
-    padding: 20px;
-  }
-
-  .cards {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  }
-}
-
-@media (max-width: 1024px) {
-  .main {
-    padding: 16px;
-  }
-
-  .cards {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  }
-}
-
-/* =======================
    LOG HEADER BUTTON
 ======================= */
 .log-header {
@@ -423,17 +366,9 @@ nav ul ul.submenu > li:first-child {
   color: #fff;
 }
 
-.scrollable-horizontal {
-  display: flex;             /* Keep sidebar and main side by side */
-  width: 100%;
-  overflow-x: auto;          /* Always allow horizontal scroll if needed */
-  overflow-y: hidden;        /* Hide vertical scrollbar for this container */
-  white-space: nowrap;       /* Prevent inner content from wrapping */
-  box-sizing: border-box;
-  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
-}
-
-/* Modal Overlay */
+/* =======================
+   MODAL STYLES
+======================= */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -441,14 +376,12 @@ nav ul ul.submenu > li:first-child {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.4);
-  display: flex;
+  display: none;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
-  display: none; /* Hidden by default */
+  z-index: 2000;
 }
 
-/* Modal Content Box */
 .modal-content {
   background: #ffffff;
   padding: 20px 25px;
@@ -459,84 +392,95 @@ nav ul ul.submenu > li:first-child {
   text-align: center;
 }
 
-/* Modal Title */
-.modal-content h3 {
-  margin-top: 0;
-  font-size: 1.2rem;
-  font-weight: 600;
-}
-
-/* Modal Name / Description */
-.modal-content p {
-  margin: 10px 0 15px;
-  font-size: 1rem;
-  color: #555;
-}
-
-/* Select Dropdown */
-#statusSelect {
-  width: 100%;
-  padding: 8px 10px;
-  margin-bottom: 15px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-  font-size: 1rem;
-}
-
-/* Modal Buttons Container */
 .modal-buttons {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
 }
 
-/* Modal Buttons Styling */
-.modal-buttons button {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 0.95rem;
-  transition: background 0.2s;
+.status-btn {
+  display: none;
 }
 
-/* Cancel Button */
-#statusCancelBtn {
-  background-color: #ccc;
-  color: #333;
-}
-#statusCancelBtn:hover {
-  background-color: #b3b3b3;
-}
+/* =======================
+   RESPONSIVENESS
+======================= */
+@media (max-width: 1024px) {
+  .user-info {
+    max-width: 100px;
+  }
+  .dashboard-title {
+    display: none;
+  }
+  .user-info .email {
+    display: none;
+  }
 
-/* Confirm/Save Button */
-#statusConfirmBtn {
-  background-color: #4CAF50;
-  color: #fff;
-}
-#statusConfirmBtn:hover {
-  background-color: #45a049;
-}
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    top: auto;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    padding: 10px 24px;
+    overflow-x: hidden;
+  }
 
-/* Optional: smaller select for mobile */
-@media (max-width: 480px) {
-  .modal-content {
-    padding: 15px 20px;
-    width: 90%;
+  .sidebar nav {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+  }
+
+  .sidebar.open nav {
+    max-height: 500px;
+    transition: max-height 0.5s ease-in;
+  }
+
+  .content-wrapper {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .main {
+    margin-left: 0;
+    padding: 20px;
+    width: 100%;
+  }
+
+  .cards {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .logs-container {
+    flex-direction: column;
+    gap: 16px;
   }
 }
 
-.status-btn {
-  background-color: #28a745; /* Green background */
-  color: #fff;               /* White text */
-  border: none;
-  border-radius: 5px;
-  padding: 5px 12px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.status-btn:hover {
-  background-color: #1c501f; /* Darker green on hover */
+@media (max-width: 480px) {
+  .header {
+    padding: 10px 15px;
+  }
+  .header-left {
+    gap: 10px;
+  }
+  .title {
+    font-size: 16px;
+  }
+  .user-info {
+    max-width: 80px;
+  }
+  .card h3 {
+    font-size: 16px;
+  }
+  .card p {
+    font-size: 20px;
+  }
+  .main {
+    padding: 15px;
+  }
+  .logs-container {
+    margin-top: 15px;
+  }
 }

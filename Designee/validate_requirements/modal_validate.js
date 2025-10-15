@@ -1,4 +1,4 @@
-// ================= validate_modal.js (OPTIMIZED) =================
+// ================= validate_modal.js (FULLY OPTIMIZED) =================
 
 let checklistModal, modalBody, cancelBtn, saveBtn, approveBtn;
 let currentStudentID = null;
@@ -24,6 +24,7 @@ async function getCurrentSemester() {
     .where("currentSemester", "==", true)
     .limit(1)
     .get();
+
   if (!snapshot.empty) {
     const semDoc = snapshot.docs[0].data();
     return { id: snapshot.docs[0].id, semester: semDoc.semester };
@@ -56,24 +57,22 @@ async function autoValidateRequirements(designeeID, studentID, cachedData = {}) 
     const studentData = cachedData.students?.[studentID] || await getStudentData(studentID);
     if (!studentData) return;
 
-    const hasOfficer = Array.isArray(studentData?.officers) && 
-                       studentData.officers.includes(designeeID);
-    const hasViolation = Array.isArray(studentData?.violations) && 
-                         studentData.violations.includes(designeeID);
-    const hasIncomplete = Array.isArray(studentData?.incompletes) && 
-                          studentData.incompletes.includes(designeeID);
+    const hasOfficer = Array.isArray(studentData?.officers) && studentData.officers.includes(designeeID);
+    const hasViolation = Array.isArray(studentData?.violations) && studentData.violations.includes(designeeID);
+    const hasIncomplete = Array.isArray(studentData?.incompletes) && studentData.incompletes.includes(designeeID);
 
-    // Use cached requirements
-    const masterRequirements = cachedData.requirements || 
-      (await dbInstance
+    // Use cached requirements if provided
+    const masterRequirements = cachedData.requirements || (
+      await dbInstance
         .collection("RequirementsAndNotes")
         .doc("RequirementsList")
         .collection(designeeID)
         .get()
-      ).docs.map((doc) => doc.data());
+    ).docs.map((doc) => doc.data());
 
     const studentYear = studentData?.yearLevel?.toString().trim().toLowerCase() || "";
 
+    // Filter requirements by student attributes
     const filteredRequirements = masterRequirements
       .filter((d) => {
         if (d.semester && d.semester !== currentSemesterId) return false;
@@ -115,22 +114,23 @@ async function autoValidateRequirements(designeeID, studentID, cachedData = {}) 
       return savedReq ? { ...masterReq, ...savedReq } : masterReq;
     });
 
-    // ONLY WRITE IF CHANGED - this is critical for performance
-    const hasChanges = JSON.stringify(mergedRequirements) !== 
-                       JSON.stringify(existingRequirements);
-    
+    // Compare to avoid unnecessary writes
+    const hasChanges = JSON.stringify(mergedRequirements) !== JSON.stringify(existingRequirements);
+
     if (hasChanges || !valDoc.exists) {
       await valDocRef.set({
         studentID,
         semester: currentSemesterId,
         requirements: mergedRequirements,
       });
-      return true; // Return true if updated
+      return { updated: true, requirements: mergedRequirements };
     }
-    return false; // Return false if no changes
+
+    // Return existing data if no update needed
+    return { updated: false, requirements: existingRequirements };
   } catch (err) {
     console.error("Error in autoValidateRequirements:", err);
-    return false;
+    return { updated: false, requirements: [] };
   }
 }
 
@@ -141,11 +141,9 @@ async function batchAutoValidate(students, designeeID) {
 
   console.log(`Starting validation for ${students.length} students...`);
 
-  // Fetch shared data once
   const currentSemesterData = await getCurrentSemester();
   if (!currentSemesterData) return;
 
-  // Fetch all requirements once
   const reqSnapshot = await dbInstance
     .collection("RequirementsAndNotes")
     .doc("RequirementsList")
@@ -153,35 +151,29 @@ async function batchAutoValidate(students, designeeID) {
     .get();
   const masterRequirements = reqSnapshot.docs.map((doc) => doc.data());
 
-  // Build student data map
   const studentDataMap = {};
   for (const student of students) {
     studentDataMap[student.schoolID] = student;
   }
 
-  // Prepare cached data
   const cachedData = {
     semester: currentSemesterData,
     requirements: masterRequirements,
     students: studentDataMap
   };
 
-  // Process in parallel batches
   const batchSize = 10;
-  let processed = 0;
-  let updated = 0;
+  let processed = 0, updated = 0;
 
   for (let i = 0; i < students.length; i += batchSize) {
     const batch = students.slice(i, i + batchSize);
     const results = await Promise.all(
-      batch.map(student => 
-        autoValidateRequirements(designeeID, student.schoolID, cachedData)
-      )
+      batch.map(student => autoValidateRequirements(designeeID, student.schoolID, cachedData))
     );
-    
+
     processed += batch.length;
-    updated += results.filter(r => r).length;
-    console.log(`Progress: ${processed}/${students.length} students processed, ${updated} updated`);
+    updated += results.filter(r => r.updated).length;
+    console.log(`Progress: ${processed}/${students.length}, ${updated} updated`);
   }
 
   console.log(`Validation complete: ${updated} students updated out of ${students.length}`);
@@ -233,54 +225,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     const currentSemesterId = currentSemesterData.id;
 
     let office, currentCategory, currentDepartment;
-    const userDataString = localStorage.getItem("userData");
-    if (userDataString) {
-      const userDataObj = JSON.parse(userDataString);
-      office = userDataObj.office;
-      currentCategory = userDataObj.category?.toLowerCase();
-      currentDepartment = userDataObj.department;
-    }
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    office = userData.office;
+    currentCategory = userData.category?.toLowerCase();
+    currentDepartment = userData.department;
 
     let students = studentsSnapshot.docs.map(doc => ({ schoolID: doc.id, ...doc.data() }));
 
-    // --- FILTERING LOGIC (matches loadStudents) ---
+    // --- FILTERING LOGIC ---
     if (currentCategory === "39" || currentCategory === "41") {
-      students = students.filter(student => student.semester === currentSemesterId);
-    } else {
-      if (office === "1") {
-        students = students.filter(student => currentCategory && 
-          student.clubs?.map(c => c.toLowerCase()).includes(currentCategory) && 
-          student.semester === currentSemesterId);
-      } else if (["2","3","5","6","9","10","12"].includes(office)) {
-        students = students.filter(student => student.semester === currentSemesterId);
-      } else if (["4","7","11"].includes(office)) {
-        students = students.filter(student => currentDepartment && 
-          student.department === currentDepartment && 
-          student.semester === currentSemesterId);
-      } else if (["16","15","14","13","8"].includes(office)) {
-        if (!currentCategory) {
-          students = [];
-        } else {
-          const membershipRef = dbInstance.collection("Membership")
-            .doc(currentCategory).collection("Members");
-          const membershipSnapshot = await membershipRef
-            .where("semester", "==", currentSemesterId).get();
-          const allowedIDs = membershipSnapshot.docs.map(doc => doc.id);
-          students = students.filter(student => allowedIDs.includes(student.schoolID));
-        }
+      students = students.filter(s => s.semester === currentSemesterId);
+    } else if (office === "1") {
+      students = students.filter(s =>
+        currentCategory && s.clubs?.map(c => c.toLowerCase()).includes(currentCategory) &&
+        s.semester === currentSemesterId
+      );
+    } else if (["2","3","5","6","9","10","12"].includes(office)) {
+      students = students.filter(s => s.semester === currentSemesterId);
+    } else if (["4","7","11"].includes(office)) {
+      students = students.filter(s =>
+        currentDepartment && s.department === currentDepartment &&
+        s.semester === currentSemesterId
+      );
+    } else if (["16","15","14","13","8"].includes(office)) {
+      if (currentCategory) {
+        const membershipSnapshot = await dbInstance
+          .collection("Membership").doc(currentCategory)
+          .collection("Members")
+          .where("semester", "==", currentSemesterId).get();
+        const allowedIDs = membershipSnapshot.docs.map(doc => doc.id);
+        students = students.filter(s => allowedIDs.includes(s.schoolID));
       } else {
         students = [];
       }
+    } else {
+      students = [];
     }
 
-    // ---------------- OPTIMIZED AUTO-VALIDATION ----------------
-    // Run in background without blocking
     if (students.length > 0) {
       batchAutoValidate(students, currentDesigneeID).catch(err => {
         console.error("Background validation failed:", err);
       });
     }
-
   } catch (err) {
     console.error("Initialization failed:", err);
   }
@@ -290,7 +276,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 window.openRequirementsModal = async function (studentID, designeeIDParam, db, options = {}) {
   const { autoRun = false } = options;
-
   currentStudentID = studentID;
   dbInstance = db;
 
@@ -320,16 +305,14 @@ window.openRequirementsModal = async function (studentID, designeeIDParam, db, o
     currentDesigneeID = linkedDesigneeID;
 
     const studentData = await getStudentData(studentID);
-    const hasOfficer = Array.isArray(studentData?.officers) && 
-                       studentData.officers.includes(currentDesigneeID);
-    const hasViolation = Array.isArray(studentData?.violations) && 
-                         studentData.violations.includes(currentDesigneeID);
-    const hasIncomplete = Array.isArray(studentData?.incompletes) && 
-                          studentData.incompletes.includes(currentDesigneeID);
+    const hasOfficer = Array.isArray(studentData?.officers) && studentData.officers.includes(currentDesigneeID);
+    const hasViolation = Array.isArray(studentData?.violations) && studentData.violations.includes(currentDesigneeID);
+    const hasIncomplete = Array.isArray(studentData?.incompletes) && studentData.incompletes.includes(currentDesigneeID);
 
-    // Auto-validate the selected student before rendering modal
-    await autoValidateRequirements(currentDesigneeID, studentID);
+    // Run auto-validation (no re-render, just ensure data)
+    const { requirements } = await autoValidateRequirements(currentDesigneeID, studentID);
 
+    // Even if no changes, still fetch and show
     const currentSemesterData = await getCurrentSemester();
     if (!currentSemesterData) return;
     const currentSemesterId = currentSemesterData.id;
@@ -341,23 +324,20 @@ window.openRequirementsModal = async function (studentID, designeeIDParam, db, o
       .doc(currentSemesterId);
 
     const valDoc = await valDocRef.get();
-    let requirements = valDoc.exists ? valDoc.data().requirements || [] : [];
+    let finalReqs = valDoc.exists ? valDoc.data().requirements || [] : requirements || [];
 
     const studentYear = studentData?.yearLevel?.toString().trim().toLowerCase() || "";
 
-    // Filter based on officer/violation/incomplete roles and yearLevel
-    requirements = requirements.filter((r) => {
+    finalReqs = finalReqs.filter((r) => {
       if (r.officer && !hasOfficer) return false;
       if (r.violation && !hasViolation) return false;
       if (r.incomplete && !hasIncomplete) return false;
-
       const reqYear = r.yearLevel ? r.yearLevel.toString().trim().toLowerCase() : "all";
       if (reqYear !== "all" && reqYear !== studentYear) return false;
-
       return true;
     });
 
-    renderRequirementsChecklist(requirements, { autoRun });
+    renderRequirementsChecklist(finalReqs, { autoRun });
   } catch (err) {
     console.error("Error loading validation requirements:", err);
     if (!autoRun) modalBody.innerHTML = "<p>Failed to load requirements.</p>";
@@ -368,6 +348,11 @@ window.openRequirementsModal = async function (studentID, designeeIDParam, db, o
 
 function renderRequirementsChecklist(requirements, { autoRun = false } = {}) {
   modalBody.innerHTML = "";
+  if (!requirements.length) {
+    modalBody.innerHTML = "<p>No requirements found for this student.</p>";
+    return;
+  }
+
   requirements.forEach((req, i) => {
     const checkedClass = req.status ? "checked" : "";
     const checkedAttr = req.status ? "checked" : "";
@@ -421,46 +406,39 @@ async function saveRequirements() {
 
     const studentData = await getStudentData(currentStudentID);
 
-    const updatedRequirements = [];
-    checkboxes.forEach((checkbox, i) => {
+    const updatedRequirements = Array.from(checkboxes).map((checkbox) => {
       const span = checkbox.parentElement.querySelector("span");
-      const requirementText = span.textContent.replace(/\s*\(checked by .*?\)$/, "");
+      const reqText = span.textContent.replace(/\s*\(checked by .*?\)$/, "");
       const isChecked = checkbox.checked;
 
-      const existingReq = existingRequirements.find(
-        (r) => r.requirement?.toLowerCase() === requirementText?.toLowerCase()
+      const existing = existingRequirements.find(
+        (r) => r.requirement?.toLowerCase() === reqText?.toLowerCase()
       );
 
-      let newCheckedBy = null;
-      let newCheckedAt = null;
-      const normalizedCurrentUser = currentUserFullName?.trim().toLowerCase() || "";
-      const normalizedCheckedBy = existingReq?.checkedBy?.trim().toLowerCase() || "";
+      let checkedBy = existing?.checkedBy || null;
+      let checkedAt = existing?.checkedAt || null;
 
       if (isChecked) {
-        if (existingReq && existingReq.checkedBy && normalizedCheckedBy !== normalizedCurrentUser) {
-          newCheckedBy = existingReq.checkedBy;
-          newCheckedAt = existingReq.checkedAt || null;
-        } else {
-          newCheckedBy = currentUserFullName;
-          newCheckedAt = currentTimestamp;
-        }
-      } else {
-        if (existingReq) {
-          newCheckedBy = normalizedCheckedBy === normalizedCurrentUser ? null : existingReq.checkedBy || null;
-          newCheckedAt = normalizedCheckedBy === normalizedCurrentUser ? null : existingReq.checkedAt || null;
-        }
+        checkedBy = currentUserFullName;
+        checkedAt = currentTimestamp;
+      } else if (existing?.checkedBy === currentUserFullName) {
+        checkedBy = null;
+        checkedAt = null;
       }
 
-      updatedRequirements[i] = {
-        requirement: requirementText,
+      return {
+        requirement: reqText,
         status: isChecked,
-        checkedBy: newCheckedBy,
-        checkedAt: newCheckedAt,
+        checkedBy,
+        checkedAt,
         semester: currentSemesterId,
-        yearLevel: existingReq?.yearLevel?.toLowerCase() === "all" ? studentData.yearLevel : existingReq?.yearLevel || "All",
-        officer: existingReq?.officer || false,
-        violation: existingReq?.violation || false,
-        incomplete: existingReq?.incomplete || false,
+        yearLevel:
+          existing?.yearLevel?.toLowerCase() === "all"
+            ? studentData.yearLevel
+            : existing?.yearLevel || "All",
+        officer: existing?.officer || false,
+        violation: existing?.violation || false,
+        incomplete: existing?.incomplete || false,
       };
     });
 

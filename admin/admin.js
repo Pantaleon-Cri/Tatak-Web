@@ -1,4 +1,4 @@
-// ✅ Firebase v8 config + init
+// ======================= 🔥 Firebase v8 Config + Init =======================
 var firebaseConfig = {
   apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
   authDomain: "tatak-mobile-web.firebaseapp.com",
@@ -12,99 +12,83 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-document.addEventListener('DOMContentLoaded', () => {
+// ======================= ⚙️ DOM Ready =======================
+document.addEventListener("DOMContentLoaded", () => {
   const usernameDisplay = document.getElementById("usernameDisplay");
   const storedAdminID = localStorage.getItem("adminID");
 
-  if (storedAdminID) {
-    usernameDisplay.textContent = storedAdminID; // show saved ID
-  } else {
-    usernameDisplay.textContent = "Unknown"; // fallback
-  }
+  usernameDisplay.textContent = storedAdminID || "Unknown";
 
-  // ✅ Logout button
+  // ✅ Logout
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
-    logoutBtn.addEventListener("click", function (e) {
+    logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
 
       const keysToRemove = [
-        "userData",
-        "studentName",
-        "schoolID",
-        "studentID",
-        "staffID",
-        "designeeID",
-        "category",
-        "office",
-        "department",
-        "adminID"
+        "userData", "studentName", "schoolID", "studentID",
+        "staffID", "designeeID", "category", "office", "department", "adminID"
       ];
-
       keysToRemove.forEach(key => localStorage.removeItem(key));
       window.location.href = "../../logout.html";
     });
   }
 
-  // ✅ Toggle submenu
-  function toggleSubMenu(id) {
-    const submenu = document.getElementById(id);
-    submenu.style.display = submenu.style.display === 'block' ? 'none' : 'block';
+  // ✅ User dropdown toggle (compatible with new CSS)
+  const userToggle = document.getElementById("userDropdownToggle");
+  const dropdownMenu = document.getElementById("dropdownMenu");
 
-    const chevron = document.getElementById('accountsChevron');
-    if (chevron) {
-      chevron.classList.toggle('rotated');
-    }
-  }
+  if (userToggle && dropdownMenu) {
+    userToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
 
-  // ✅ User dropdown toggle
-  const toggle = document.getElementById('userDropdownToggle');
-  const menu = document.getElementById('dropdownMenu');
-
-  if (toggle && menu) {
-    toggle.addEventListener('click', () => {
-      toggle.classList.toggle('active');
-      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+      // Toggle classes instead of inline display
+      userToggle.classList.toggle("active");
+      dropdownMenu.classList.toggle("show");
     });
 
-    // ✅ Hide dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!toggle.contains(e.target) && !menu.contains(e.target)) {
-        menu.style.display = 'none';
+    // ✅ Close dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!userToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
+        userToggle.classList.remove("active");
+        dropdownMenu.classList.remove("show");
       }
     });
   }
 
-  // ✅ Fetch dynamic counts from Firestore
+  // ✅ Sidebar dropdown toggle
+  document.querySelectorAll(".dropdown-toggle").forEach(toggle => {
+    toggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      const parentLi = toggle.parentElement;
+      parentLi.classList.toggle("open");
+    });
+  });
+
+  // ✅ Load Firestore dashboard counts
   updateDashboardCounts();
 });
 
-// ✅ Sidebar dropdown toggle
-document.querySelectorAll('.dropdown-toggle').forEach(toggle => {
-  toggle.addEventListener('click', function (e) {
-    e.preventDefault();
-    const parentLi = this.parentElement;
-    parentLi.classList.toggle('open');
-  });
-});
-
-// ✅ Get counts and update dashboard
+// ======================= 📊 Firestore Dashboard Counts =======================
 async function updateDashboardCounts() {
+  const studentCount = document.getElementById("studentCount");
+  const designeeCount = document.getElementById("designeeCount");
+  const staffCount = document.getElementById("staffCount");
+
   try {
-    // 🔹 Updated Firestore paths
-    const studentsSnap = await db.collection("/User/Students/StudentsDocs").get();
-    const designeeSnap = await db.collection("/User/Designees/DesigneesDocs").get();
-    const staffSnap = await db.collection("/User/Designees/StaffDocs").get();
+    const [studentsSnap, designeesSnap, staffSnap] = await Promise.all([
+      db.collection("User/Students/StudentsDocs").get(),
+      db.collection("User/Designees/DesigneesDocs").get(),
+      db.collection("User/Designees/StaffDocs").get()
+    ]);
 
-    // 🔹 Update DOM counts
-    const studentCount = document.getElementById("studentCount");
-    const designeeCount = document.getElementById("designeeCount");
-    const staffCount = document.getElementById("staffCount");
-
-    if (studentCount) studentCount.textContent = studentsSnap.size;
-    if (designeeCount) designeeCount.textContent = designeeSnap.size;
-    if (staffCount) staffCount.textContent = staffSnap.size;
+    if (studentCount) studentCount.textContent = studentsSnap.size || 0;
+    if (designeeCount) designeeCount.textContent = designeesSnap.size || 0;
+    if (staffCount) staffCount.textContent = staffSnap.size || 0;
   } catch (error) {
-    console.error("Error fetching counts:", error);
+    console.error("❌ Error fetching Firestore counts:", error);
+    if (studentCount) studentCount.textContent = "-";
+    if (designeeCount) designeeCount.textContent = "-";
+    if (staffCount) staffCount.textContent = "-";
   }
 }
