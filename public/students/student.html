@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TATAK - Student</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="student.css" />
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <img src="../logo.png" alt="Logo" class="logo" />
+      <div class="title">
+        <span class="system-name">TATAK</span>
+        <span class="divider">|</span>
+         <span class="semester" id="semesterDisplay">Semester</span>
+
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="user-dropdown" id="userDropdownToggle">
+        <div class="user-info">
+          <div class="username" id="usernameDisplay">Crizwa</div>
+          <div class="email">Student</div>
+        </div>
+        <i class="fas fa-angle-down dropdown-arrow"></i>
+      </div>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="profile/profile.html">Profile</a>
+        <a href="settings/settings.html">Settings</a>
+        <a href="#" id="logoutBtn">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <div class="content-wrapper scrollable-horizontal">
+    <aside class="sidebar">
+      <nav>
+        <ul>
+          <li><a href="" class="active"><i class="fas fa-tachometer-alt"></i>Home Page</a></li>
+          <li><a href="view_clearance/view.html"><i class="fas fa-table"></i>View Clearance Status</a></li>
+          <li><a href="view_past_clearance_log/view_past.html"><i class="fa-solid fa-file-invoice"></i>View Past Clearance Logs</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content will be dynamically filled -->
+    <main class="student-main-content">
+      <!-- JavaScript will insert requirement sections here -->
+    </main>
+  </div>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="dropdown.js"></script>
+  <script src="requirements.js"></script>
+   
+</body>
+</html>

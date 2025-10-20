@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login</title>
+    <!-- Link to the external CSS file -->
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="login.css">
+ <!-- Firebase App (the core Firebase SDK) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+
+<!-- Firebase Firestore -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyDdSSYjX1DHKskbjDOnnqq18yXwLpD3IpQ",
+    authDomain: "tatak-mobile-web.firebaseapp.com",
+    projectId: "tatak-mobile-web",
+    storageBucket: "tatak-mobile-web.firebasestorage.app",
+    messagingSenderId: "771908675869",
+    appId: "1:771908675869:web:88e68ca51ed7ed4da019f4",
+    measurementId: "G-CENPP29LKQ"
+  };
+
+  // ✅ Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+
+  // ✅ Initialize Firestore and make it global
+  var db = firebase.firestore();
+</script>
+
+</head>
+<body>
+    <div class="registration-container">
+        <a href="../logout.html" class="back-icon"><i class="fas fa-arrow-left"></i></a>
+        <h2>Admin - Login</h2>
+        <form id="registrationForm">
+            <!-- Admin ID Text Field -->
+            <div class="form-group">
+                <label for="adminID">Admin ID:</label>
+                <input type="text" id="adminID" name="adminID" required>
+            </div>
+
+            <!-- Password Field -->
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+    
+
+            <!-- Register Button -->
+            <button type="submit">Login</button>
+            
+        </form>
+        <div id="messageBox" class="message-box" style="display: none;"></div>
+    </div>
+
+    <!-- Link to the external JavaScript file -->
+    <script src="admin_login.js"></script>
+</body>
+</html>

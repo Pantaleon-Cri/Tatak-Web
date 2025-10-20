@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Options</title>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+   <link rel="stylesheet" href="logout.css">
+    
+</head>
+<body>
+   <div class="logo-wrapper">
+        <img src="Tatak.png" alt="Logo" class="logo-img" />
+    </div>
+
+    
+    <div class="logout-container">
+        <h1 class="logout-title">Login Options</h1>
+        <div class="options-grid">
+            <div class="option-box" onclick="location.href='login/admin_login.html'">
+                <i class="fas fa-user-shield option-icon"></i> <!-- Admin icon -->
+                <span class="option-text">Log in as Admin</span>
+            </div>
+            <div class="option-box" onclick="location.href='login/designee_login.html'">
+                <i class="fas fa-user-tie option-icon"></i> <!-- Designee icon -->
+                <span class="option-text">Log in as Designee</span>
+            </div>
+            <div class="option-box" onclick="location.href='login/student_login.html'">
+                <i class="fas fa-user-graduate option-icon"></i> <!-- Student icon -->
+                <span class="option-text">Log in as Student</span>
+            </div>
+        </div>
+        <div class="create-account">
+    Don’t have an account? <a href="create_account.html">Create Account</a>
+</div>
+    </div>
+</body>
+</html>

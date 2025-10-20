@@ -1,0 +1,376 @@
+
+/* =======================
+   GENERAL STYLES
+======================= */
+html, body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #D9D9D9;
+  height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* =======================
+   HEADER STYLES
+======================= */
+.header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #fff;
+  padding: 12px 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  color: #333;
+  font-weight: 600;
+}
+
+.system-name {
+  color: #008000;
+}
+
+.divider {
+  color: #bbb;
+}
+
+.header-right {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 50px;
+  max-width: 100%;
+  overflow: visible;
+}
+
+/* =======================
+   USER INFO (HEADER)
+======================= */
+.user-info {
+  text-align: right;
+  line-height: 1.1;
+}
+
+.username {
+  font-weight: 600;
+  color: #333;
+}
+
+.email {
+  font-size: 12px;
+  color: #777;
+}
+
+
+
+.avatar {
+  position: relative;
+}
+
+.avatar img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #26a69a;
+}
+
+.status {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  background-color: green;
+  border: 2px solid #fff;
+  border-radius: 50%;
+}
+
+/* =======================
+   DROPDOWN MENU STYLES
+======================= */
+.user-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-radius: 6px;
+  padding: 8px 0;
+  display: none;
+  min-width: 160px;
+  z-index: 100;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.dropdown-menu a {
+  display: block;
+  padding: 10px 16px;
+  text-decoration: none;
+  color: #333;
+  transition: background 0.2s;
+}
+
+.dropdown-menu a:hover {
+  background-color: #f0f0f0;
+}
+
+.dropdown-arrow {
+  font-size: 14px;
+  color: #555;
+  transition: transform 0.3s ease;
+}
+
+.user-dropdown.active .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 400px) {
+  .dropdown-menu {
+    right: auto;
+    left: 0;
+  }
+}
+
+/* =======================
+   SIDEBAR + MAIN WRAPPER
+======================= */
+.content-wrapper {
+  display: flex;
+  flex-grow: 1;
+  min-height: calc(100vh - 72px); /* adjust if header height differs */
+  margin-top: 10; /* ensure no top margin */
+  padding-top: 0;
+}
+
+.logs-container {
+  display: flex;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.activity-log {
+  flex: 1;
+  background-color: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.activity-log h3 {
+  margin-bottom: 12px;
+}
+
+.activity-log ul {
+  list-style-type: disc;
+  padding-left: 20px;
+}
+
+.activity-log ul li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+/* =======================
+   SIDEBAR STYLES
+======================= */
+.sidebar {
+  position: fixed;
+  top: 60px;   /* same as .header height */
+  left: 0;
+  width: 250px;
+  height: calc(100% - 60px); /* fill the screen but leave space for header */
+  background: #fff;
+  box-shadow: inset -1px 0 0 rgba(0,0,0,0.1);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.sidebar-header img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin-bottom: 8px;
+}
+
+.sidebar nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar nav ul li {
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.sidebar nav ul li a {
+  text-decoration: none;
+  color: #333;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Active & hover state - text and icon turn white */
+.sidebar nav ul li a.active,
+.sidebar nav ul li a:hover {
+  background-color: #008000;
+  color: #fff;
+}
+
+.sidebar nav ul li a.active i,
+.sidebar nav ul li a:hover i {
+  color: #fff;
+}
+
+/* Arrow icon aligned to right */
+.sidebar nav ul li a .arrow {
+  margin-left: auto;
+  font-size: 0.8rem;
+  transition: transform 0.3s ease, color 0.2s ease;
+  color: #333;
+}
+
+/* Arrow icon turns white too on hover/active */
+.sidebar nav ul li a.active .arrow,
+.sidebar nav ul li a:hover .arrow {
+  color: #fff;
+}
+nav ul ul.submenu > li:first-child {
+  margin-top: 8px; /* Adjust the value as needed */
+}
+/* Submenu hidden by default */
+.submenu {
+  display: none;
+  padding-left: 20px;
+  margin-top: 4px;
+}
+
+/* Show submenu when parent is open */
+.has-submenu.open > .submenu {
+  display: block;
+}
+
+/* Rotate arrow when open */
+.has-submenu.open > a .arrow {
+  transform: rotate(180deg);
+}
+
+/* Nested submenu styling */
+.submenu .has-submenu > a {
+  padding-left: 10px;
+}
+
+.submenu .submenu {
+  padding-left: 16px;
+}
+
+
+
+
+/* =======================
+   MAIN CONTENT STYLES
+======================= */
+.main {
+  flex: 1;
+  padding: 15px;
+  margin-left: 290px; /* ✅ offset for sidebar width */
+  box-sizing: border-box;
+}
+
+#generateBtn{
+  background-color: #28a745; /* Bootstrap green */
+  color: white;
+  padding: 1px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+/* =======================
+   RESPONSIVE STYLES
+======================= */
+
+
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.show-all-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  background-color: transparent;
+  color: #28a745; /* Bootstrap green */
+  border: 1px solid #28a745;
+  border-radius: 9999px; /* fully rounded */
+  text-decoration: none;
+  transition: all 0.3s ease;
+  margin-left: 20px; /* spacing from the heading */
+}
+
+.show-all-btn:hover {
+  background-color: #28a745;
+  color: #fff;
+}
+.scrollable-horizontal {
+  display: flex;             /* Keep sidebar and main side by side */
+  width: 100%;
+  overflow-x: auto;          /* Always allow horizontal scroll if needed */
+  overflow-y: hidden;        /* Hide vertical scrollbar for this container */
+  white-space: nowrap;       /* Prevent inner content from wrapping */
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+}

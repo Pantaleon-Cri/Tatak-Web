@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Profile</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="../student.css" />
+  <link rel="stylesheet" href="profile.css">
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <img src="../../logo.png" alt="Logo" class="logo" />
+      <div class="title">
+        <span class="system-name">TATAK</span>
+        <span class="divider">|</span>
+        <span class="dashboard-title">Student - Profile</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="user-dropdown" id="userDropdownToggle">
+        <div class="user-info">
+          <div class="username" id="headerUsername">Student</div>
+          <div class="email">Profile</div>
+        </div>
+        <i class="fas fa-angle-down dropdown-arrow"></i>
+      </div>
+
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="../settings/settings.html">Settings</a>
+        <a href="#" id="logoutBtn">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content-wrapper">
+    <div class="container">
+      <div class="back-button-wrapper">
+        <a href="../student.html" class="back-button">
+          <svg xmlns="http://www.w3.org/2000/svg" class="back-button-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          <span class="back-button-text">Back to Homepage</span>
+        </a>
+      </div>
+
+      <h1 class="main-title">Student Profile</h1>
+
+      <div class="profile-section">
+        <div class="profile-item">
+          <strong>Student ID:</strong>
+          <div class="profile-value-display"><span id="profileUserID">Loading...</span></div>
+        </div>
+        <div class="profile-item">
+          <strong>Full Name:</strong>
+          <div class="profile-value-display"><span id="profileFullName">Loading...</span></div>
+        </div>
+        <div class="profile-item">
+          <strong>Institutional Email:</strong>
+          <div class="profile-value-display"><span id="profileEmail">Loading...</span></div>
+        </div>
+        <div class="profile-item">
+          <strong>Department:</strong>
+          <div class="profile-value-display"><span id="profileDepartment">Loading...</span></div>
+        </div>
+        <div class="profile-item">
+          <strong>Course:</strong>
+          <div class="profile-value-display"><span id="profileCourse">Loading...</span></div>
+        </div>
+        <div class="profile-item">
+          <strong>Year Level:</strong>
+          <div class="profile-value-display"><span id="profileYearLevel">Loading...</span></div>
+        </div>
+        <div class="profile-item">
+          <strong>Clubs:</strong>
+          <div class="profile-value-display"><span id="profileClubs">Loading...</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- Your JS -->
+  <script src="profile.js"></script>
+  
+</body>
+</html>

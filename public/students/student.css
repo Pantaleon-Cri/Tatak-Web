@@ -1,0 +1,224 @@
+:root {
+  --primary-green: #4CAF50;
+  --dark-green: #388E3C;
+  --light-grey-bg: #f5f6fa;
+  --medium-grey-text: #616161;
+  --dark-grey-text: #333;
+  --card-bg: #fff;
+  --border-color: #e0e0e0;
+  --box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+/* =======================
+   GENERAL STYLES
+======================= */
+html, body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--light-grey-bg);
+  height: 100%;
+  overflow-x: hidden; /* Prevent horizontal scrolling globally */
+}
+
+/* =======================
+   HEADER STYLES
+======================= */
+.header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #008000;
+  padding: 12px 24px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-sizing: border-box;
+}
+
+.header-left { display: flex; align-items: center; gap: 16px; }
+.logo { width: 48px; height: 48px; object-fit: contain; }
+.title { font-size: 18px; color: #fff; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.system-name { color: #fff; }
+.divider { color: #bbb; }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+/* =======================
+   USER INFO + DROPDOWN
+======================= */
+.user-info { text-align: right; line-height: 1.1; }
+.username{
+  color: #000000;
+} .email { color: #fff; }
+.email { font-size: 12px; }
+
+.user-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 0;
+  display: none;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 100;
+  box-sizing: border-box;
+}
+
+.dropdown-menu a {
+  display: block;
+  padding: 10px 16px;
+  text-decoration: none;
+  color: #333;
+  transition: background 0.2s;
+}
+.dropdown-menu a:hover { background-color: #f0f0f0; }
+
+.dropdown-arrow { font-size: 14px; color: #fff; transition: transform 0.3s ease; }
+.user-dropdown.active .dropdown-arrow { transform: rotate(180deg); }
+
+/* =======================
+   SIDEBAR
+======================= */
+.sidebar {
+  width: 250px;
+  background-color: var(--card-bg);
+  padding: 24px;
+  box-shadow: inset -1px 0 0 rgba(0,0,0,0.05);
+  position: fixed;
+  top: 72px;
+  left: 0;
+  height: calc(100vh - 72px);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.sidebar nav ul { list-style: none; padding: 0; margin: 0; }
+.sidebar nav ul li { margin-bottom: 12px; }
+.sidebar nav ul li a {
+  text-decoration: none;
+  color: #333;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.sidebar nav ul li a.active,
+.sidebar nav ul li a:hover {
+  background-color: var(--primary-green);
+  color: #fff;
+}
+
+/* =======================
+   MAIN CONTENT
+======================= */
+.main, .student-main-content {
+  flex: 1;
+  padding: 25px;
+  margin-left: 250px; /* Account for fixed sidebar */
+  box-sizing: border-box;
+  overflow-x: auto; /* Allow horizontal scroll if needed */
+  overflow-y: auto;
+}
+
+/* =======================
+   CLEARANCE CARDS
+======================= */
+.clearance-section-card {
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: var(--box-shadow);
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 2fr 1fr; /* Requirements left, notes right */
+  gap: 20px;
+  grid-template-rows: auto 1fr;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-bottom: 20px;
+}
+
+.section-header {
+  grid-column: 1 / -1;
+  font-size: 1.1em;
+  font-weight: 500;
+  color: var(--dark-grey-text);
+  margin-bottom: 10px;
+}
+
+.requirements-list { list-style: none; padding: 0; margin: 0; }
+.requirement-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 1.1em;
+  color: var(--medium-grey-text);
+}
+.requirement-item:last-child { margin-bottom: 0; }
+.requirement-item input[type="checkbox"] {
+  margin-right: 10px;
+  transform: scale(1.2);
+  accent-color: var(--primary-green);
+  cursor: default;
+}
+
+/* =======================
+   NOTES SECTION
+======================= */
+.notes-section {
+  background-color: var(--light-grey-bg);
+  border-radius: 5px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  /* Align height almost same as requirements */
+  align-self: start;
+  max-height: 95%;  /* Slightly shorter than the requirements column */
+  overflow-y: auto;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+.notes-section h4 { font-size: 1.1em; color: var(--dark-grey-text); margin-top: 0; }
+.notes-section p {
+  font-size: 0.9em;
+  color: var(--medium-grey-text);
+  line-height: 1.4;
+  margin: 5px 0 0 10px;
+}
+
+/* =======================
+   RESPONSIVE ADJUSTMENTS
+======================= */
+@media (max-width: 992px) {
+  .sidebar { width: 200px; }
+  .main, .student-main-content { margin-left: 200px; padding: 20px; }
+}
+
+@media (max-width: 768px) {
+  .sidebar { position: relative; width: 100%; height: auto; top: 0; }
+  .main, .student-main-content { margin-left: 0; padding: 15px; }
+  .clearance-section-card { grid-template-columns: 1fr; gap: 15px; 
+  margin-bottom: 100px;}
+  .notes-section { max-height: 150px; }
+}

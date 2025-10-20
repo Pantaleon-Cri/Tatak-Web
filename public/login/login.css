@@ -1,0 +1,129 @@
+/* Basic styling for the body */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #e0f2f7; /* Light blue background - this will be visible if the image doesn't load or is transparent */
+    background-image: url('../background.png'); /* Add this line to specify your image */
+    background-size: cover; /* This makes the image cover the entire body, cropping if necessary */
+    background-position: center center; /* Centers the image */
+    background-repeat: no-repeat; /* Prevents the image from repeating */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh; /* Full viewport height */
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box; /* Include padding in element's total width and height */
+}
+/* Container for the registration form */
+.registration-container {
+     position: relative;
+    background-color: #ffffff;
+    padding: 35px 40px;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1); /* Soft shadow */
+    width: 100%;
+    max-width: 480px; /* Maximum width for the form */
+    box-sizing: border-box;
+}
+
+/* Heading styling */
+h2 {
+    text-align: center;
+    color: #2c3e50; /* Dark blue-grey color */
+    margin-bottom: 30px;
+    font-size: 1.8em;
+    font-weight: 600;
+}
+
+/* Styling for each form group (label + input) */
+.form-group {
+    margin-bottom: 20px;
+}
+
+/* Styling for labels */
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: #34495e; /* Slightly lighter dark blue-grey */
+    font-weight: 500;
+    font-size: 0.95em;
+}
+
+/* Styling for all text inputs and select dropdowns */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+select {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid #cce7ee; /* Light blue border */
+    border-radius: 8px;
+    box-sizing: border-box;
+    font-size: 1em;
+    color: #333;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+select:focus {
+    border-color: #007bff; /* Blue focus border */
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); /* Light blue glow on focus */
+    outline: none; /* Remove default outline */
+}
+
+/* Styling for the Register button */
+button[type="submit"] {
+    width: 100%;
+    padding: 14px;
+    background-color: #28a745; /* Green button */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    margin-top: 25px;
+}
+
+button[type="submit"]:hover {
+    background-color: #218838; /* Darker green on hover */
+    transform: translateY(-2px); /* Slight lift effect */
+}
+
+button[type="submit"]:active {
+    background-color: #1e7e34; /* Even darker green on active */
+    transform: translateY(0); /* Return to original position */
+}
+
+/* Message box for displaying alerts/feedback */
+.message-box {
+    background-color: #ffe0b2; /* Light orange for warnings/errors */
+    color: #e65100; /* Dark orange text */
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 20px;
+    text-align: center;
+    font-weight: 500;
+    border: 1px solid #ffab40;
+}
+
+p{
+    text-align: center;
+}
+
+.back-icon {
+    position: absolute;
+    top: 20px;
+    left: 30px;
+    color: #333;
+    font-size: 1.5rem;
+    text-decoration: none;
+    z-index: 1;
+}
+
+.back-icon:hover {
+    color: #007bff;
+}

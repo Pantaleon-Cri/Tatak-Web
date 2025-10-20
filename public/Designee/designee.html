@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TATAK - Designee</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="designee.css" />
+  <link rel="stylesheet" href="designee_table.css">
+  <style>
+    /* ----------------------------- */
+/* Password toggle styling */
+/* ----------------------------- */
+
+/* Container for password cell */
+td .masked-password {
+  font-family: monospace;
+  letter-spacing: 2px;
+  margin-right: 5px;
+}
+
+/* Toggle button */
+.toggle-pw-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  vertical-align: middle;
+  color: #555;
+  padding: 2px 5px;
+  transition: color 0.2s;
+}
+
+.toggle-pw-btn:hover {
+  color: #000; /* darken on hover */
+}
+
+
+
+  </style>
+</head>
+   
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <img src="../logo.png" alt="Logo" class="logo" />
+      <div class="title">
+        <span class="system-name">TATAK</span>
+        <span class="divider">|</span>
+        <span class="dashboard-title">Designee - Manage Staff</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="user-dropdown" id="userDropdownToggle">
+        <div class="user-info">
+          <div class="username" id="usernameDisplay"></div>
+          <div class="email" id="userRoleDisplay"></div>
+        </div>
+        <i class="fas fa-angle-down dropdown-arrow"></i>
+      </div>
+      <div class="dropdown-menu" id="dropdownMenu">
+      <a href="settings/settings.html">Settings</a>
+      <a href="#" id="logoutBtn">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <div class="content-wrapper scrollable-horizontal">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+       
+      </div>
+      <nav>
+        <ul>
+          <li><a href="#" class="active"><i class="fas fa-tachometer-alt"></i>Manage Staff</a></li>
+          <li><a href="add_requirements/add_requirements.html"><i class="fas fa-table"></i>Add Requirements</a></li>
+          <li><a href="validate_requirements/validate_requirements.html"><i class="fas fa-table"></i>Validate Requirements</a></li>
+            </ul>
+      </nav>
+    </aside>
+
+    <!-- TABLES -->
+   <main class="main">
+  <div class="logs-container">
+    <!-- STUDENT -->
+    <div class="activity-log">
+      <div class="log-header">
+        <h3>Staff Management</h3>
+        <button class="add-all-btn" id="openModalBtn">Add New</button>
+      </div>
+
+      <!-- Wrap this block with staffTableContainer -->
+      <div id="staffTableContainer">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>ID No.</th>
+              <th>First Name</th>
+              <th>Last Name</th>
+              <th>Institutional Email</th>
+              <th>Generated Password</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Rows added dynamically -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Message for non-designees -->
+      <div id="notDesigneeMessage" style="display: none; color: red; font-weight: bold; text-align: center; margin-top: 20px;">
+        🔒 Only designees can manage staff.
+      </div>
+
+    </div>
+  </div>
+</main>
+
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Add Staff</h2>
+    </div>
+    <div class="modal-content">
+      <label for="staffId">ID no.:</label>
+      <input type="text" id="staffId" placeholder="e.g., 202501" />
+
+      <label for="firstName">First Name:</label>
+      <input type="text" id="firstName" placeholder="e.g., John" />
+
+      <label for="lastName">Last Name:</label>
+      <input type="text" id="lastName" placeholder="e.g., Doe" />
+
+      <label for="institutionalEmail">Institutional Email:</label>
+      <input type="email" id="institutionalEmail" placeholder="e.g., john.doe@tatak.edu.ph" />
+
+      <label for="generatedPassword">Generated Password:</label>
+      <div style="display: flex; gap: 10px;">
+        <input type="text" id="generatedPassword" readonly placeholder="Click to generate" />
+        <button type="button" id="generateBtn">Generate</button>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="cancel-btn" id="cancelBtn">Cancel</button>
+        <button class="save-btn" id="saveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModalOverlay" style="display: none;">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Edit Staff</h2>
+    </div>
+    <div class="modal-content">
+      <label for="editStaffId">ID No.:</label>
+      <input type="text" id="editStaffId" disabled />
+
+      <label for="editFirstName">First Name:</label>
+      <input type="text" id="editFirstName" placeholder="e.g., John" />
+
+      <label for="editLastName">Last Name:</label>
+      <input type="text" id="editLastName" placeholder="e.g., Doe" />
+
+      <label for="editEmail">Institutional Email:</label>
+      <input type="email" id="editEmail" placeholder="e.g., john.doe@tatak.edu.ph" />
+
+      <label for="editPassword">Password:</label>
+      <input type="text" id="editPassword" placeholder="Enter password" />
+
+      <div class="modal-buttons">
+        <button class="cancel-btn" id="editCancelBtn">Cancel</button>
+        <button class="save-btn" id="editSaveBtn">Update</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal-overlay" id="deleteModalOverlay" style="display: none;">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Confirm Delete</h2>
+    </div>
+    <div class="modal-content">
+      <p>Are you sure you want to delete this staff?</p>
+      <div class="modal-buttons">
+        <button class="cancel-btn" id="deleteCancelBtn">Cancel</button>
+        <button class="save-btn" id="deleteConfirmBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+<script src="firebaseConfig.js"></script>
+<script src="uiHelpers.js"></script>
+<script src="auth.js"></script>
+<script src="staff.js"></script>
+<script src="main.js"></script>
+
+
+  
+
+
+</body>
+</html>
